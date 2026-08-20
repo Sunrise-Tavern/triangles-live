@@ -200,22 +200,53 @@ real depth in the layout, so a group-level sweep would have somewhere to
 travel. (The offline generator's per-arch stagger is still the better tool; the
 statement of *why* is what was wrong.)
 
-### M4 · Streaming analysis + beat clock
-- `live/audio.py` — capture abstraction with two backends: **file streamer**
-  (reads an mp3 and yields blocks in real time — the simulation input) and
-  `sounddevice` line-in. Same interface, so the rest never knows.
-- `live/analysis.py` — aubio onset + tempo per block; band energies; rolling
-  RMS with a slow (30–60 s) baseline.
-- `live/clock.py` — tempo/phase estimate, **next-beat prediction**, confidence;
-  free-runs on last tempo when the tracker loses lock, decays, re-locks.
-- Beat detection sits behind a small `BeatBackend` interface (emit beat events +
-  tempo estimate) so aubio can later be swapped/AB-tested against BeatNet or
-  BTrack without touching the clock.
-- **Verify — against ground truth**: stream the mp3s we already have through
-  it and compare predicted beats to the offline librosa grid for the same file
-  (median error, % within 30 ms, drift over 90 s). Stream the synthetic
-  `test_track.wav` (known 128 BPM) for an exact reference. Inject a 4-bar
-  silence and a tempo nudge; confirm free-run and re-lock.
+### M4 · Streaming analysis + beat clock — **done, with a caveat**
+- `live/audio.py` — one interface, two sources: an ffmpeg file streamer (the
+  simulation input, pace-able or as-fast-as-possible) and `sounddevice`
+  line-in. Auto-gain lives here, because every threshold downstream is
+  relative and must not track the DJ's gain knob.
+- `live/analysis.py` — causal per-block features at 40 µs/block (150× real
+  time on the Mac): band energies, spectral flux, a **kick** detector (bass
+  *flux*, not bass level), RMS over a 45 s baseline.
+- `live/beats.py` — `BeatBackend` with aubio as default and a metronome
+  backend, so a clock failure can be told apart from a detection failure.
+- `live/clock.py` — the model: tempo, phase, **next beat**, confidence,
+  free-run and re-lock.
+- `live/listener.py` — the chain on a thread. `live/verify.py` — ground truth.
+
+**Verified against exact ground truth**: `test_track.wav` (synthesised 128 BPM)
+**100 % of beats within 30 ms**, median 2.3 ms, drift +1.9 ms/min, no octave or
+polarity errors; the same track through mp3, 97.3 %. Faults: 16 beats free-run
+through a 7.5 s silence, confidence decays 0.89 → 0.50, re-lock to **11 ms**; a
+128 → 140 step settles at 140.2 in about 16 s.
+
+**Not verified on real DJ material — 15–38 % within 30 ms** against librosa on
+four real tracks, mostly polarity rather than timing noise. librosa is not
+truth here (on one track *it* is the one on the offbeat, by a 2.3× margin on
+kick energy), so `verify.py` also reports how much kick lands on each grid as
+an objective tiebreaker. By that measure we win one, tie one, lose two. This is
+the open item for M6, and the reason `BeatBackend` exists: the BeatNet spike
+now has a number to beat.
+
+Three findings worth carrying:
+- **aubio's BPM readout is biased** (129.8 for a track that is exactly 128.0).
+  It is used only to pick the octave and to spot a real tempo change; the
+  period comes from the loop's residuals plus a least-squares fit over the last
+  64 beats.
+- **A phase loop alone cannot follow a tempo change** — the phase term absorbs
+  the error, leaving nothing to drive frequency. It reached 130.9 on a 128 →
+  140 step and stalled, tracking every beat while predicting the next one
+  116 ms wrong.
+- **An offbeat detection is still a phase reference**, just half a period out.
+  Discarding them left the model with nothing to correct against and it
+  free-ran into exactly the half-beat error it was avoiding. Using them took
+  the test track from 58 % to 100 % within 30 ms. Which half is the beat is a
+  separate question, settled on bass *flux* where the on-beat window carries
+  6–8× the offbeat window.
+
+Installing aubio needed two build flags (its 2019 release predates FFmpeg 5 and
+modern numpy); `setup.sh` records them, and notes `apt install python3-aubio`
+as the easier path on the Pi.
 
 ### M5 · State machine + live arranger
 - `live/state.py` — quiet/cruising/building/hot from energy vs baseline with

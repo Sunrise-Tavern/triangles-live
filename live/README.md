@@ -4,8 +4,10 @@ Real-time lighting for the Triangles rig: audio in, DDP out, no pre-rendered
 sequence.  The plan and its milestones live in [`../LIVE_PLAN.md`](../LIVE_PLAN.md).
 This file is the operator's guide to what exists **now**.
 
-Status: **M1–M3 complete** — DDP out, fake Falcon, `.fseq`, the renderer and
-its effect vocabulary, and the browser UI.  M4–M7 pending.
+Status: **M1–M4 complete** — DDP out, fake Falcon, `.fseq`, the renderer and its
+effect vocabulary, the browser UI, and streaming analysis with a predictive
+beat clock.  The clock is not yet wired into the show (that is M6).
+M5–M7 pending.
 
 ## Quick start
 
@@ -184,6 +186,110 @@ and one saved after must not break an older build at the rig.
 Articulation at 0.5 reproduces the scripted show exactly; turning it up or down
 slides the corridor-pattern choice along the same density table the offline
 arranger uses.
+
+## What M4 adds
+
+```
+line-in / mp3 ──► Analyzer ──► BeatBackend ──► BeatClock ──► (phase, next beat)
+```
+
+| Module | Job |
+|---|---|
+| `audio.py` | one interface, two sources: ffmpeg file streamer and line-in |
+| `analysis.py` | causal per-block features: bands, flux, kick, energy vs baseline |
+| `beats.py` | `BeatBackend` — aubio, plus a metronome for testing the clock alone |
+| `clock.py` | tempo, phase, **the next beat**, confidence, free-run and re-lock |
+| `listener.py` | the chain on its own thread, publishing state |
+| `verify.py` | ground-truth measurement and fault injection |
+
+```bash
+./live.sh listen track.mp3          # watch features and the clock, live
+./live.sh listen --devices          # find the USB interface at the rig
+./live.sh beats .cache/test_track.wav --bpm 128
+./live.sh beats --faults            # silent break and tempo change
+```
+
+### The clock predicts; it does not report
+
+By the time audio is captured, analysed, rendered and pushed over DDP, a light
+fired *on detection* lands visibly behind the room.  So the clock keeps a model
+— a tempo and an anchor — and the renderer asks "where are we now" rather than
+being told "a beat just happened".  Three consequences:
+
+* **Detection latency stops mattering for firing.**  A beat noticed 40 ms late
+  refines the same model, and the model's next prediction is on time.  The
+  tracker has to be accurate, not prompt.
+* **Losing the tracker is survivable.**  Silence means "keep going at the last
+  known tempo", not "stop".  Free-run and re-lock are the normal case in a DJ
+  set, not the error case.
+* **Confidence is an output.**  M5's arranger can lean on the grid when it is
+  trustworthy and fall back to energy when it is not.
+
+### Three things the measurements forced
+
+**aubio's BPM readout is biased.**  It reports 129.8 for a track that is
+exactly 128.0 — 1.4 %, about 6 ms on every prediction.  So its readout is used
+only to pick the octave and to spot a genuine tempo change; the period itself
+comes from the loop's own residuals plus a least-squares fit over the last 64
+beats.  Fitting a line through every beat rather than differencing the two ends
+is roughly five times quieter.
+
+**A phase loop alone cannot follow a tempo change.**  The phase term absorbs
+the error each beat, leaving almost nothing to drive the frequency term.
+Measured on a 128 → 140 step it reached 130.9 and stalled — tracking every beat
+while predicting the next one 116 ms wrong.  A coarse term, gated on the
+tracker disagreeing by more than bias could explain and *keeping* it up, fixes
+that: 140.2 within about 16 seconds.
+
+**Half-beat slips are the failure that matters.**  The grid stays plausible,
+the tempo stays right, and every effect fires on the wrong half.  On the test
+track aubio itself jumped to the offbeat at t≈90 s.  Two mechanisms handle it:
+
+* An offbeat detection is *not* evidence of a tempo change, so it never counts
+  toward a re-lock — but it **is** a phase reference half a period out, so it
+  is used as one.  Discarding those outright left the model with nothing to
+  correct against, and it free-ran into exactly the half-beat error it was
+  avoiding: measured, 45 seconds to get there.  Using them took the test track
+  from 58 % to 100 % of beats within 30 ms.
+* Which half is the beat is settled on the **low end**, where the kick is —
+  not on level (a bassline plays continuously, so a kick barely moves it) but
+  on transient flux in the bass band, where the on-beat window carries 6–8×
+  the offbeat window.
+
+### Where it stands, measured
+
+Against exact ground truth — a synthesised 128 BPM grid, and the same track
+through mp3:
+
+| | within 30 ms | median | offbeat | drift |
+|---|---|---|---|---|
+| `test_track.wav` | **100 %** | 2.3 ms | 0 % | +1.9 ms/min |
+| `smoke_test.mp3` | **97.3 %** | 17.0 ms | 0 % | −2.9 ms/min |
+
+Faults: 16 beats free-run through a 7.5 s silence (expected ~16), confidence
+decays 0.89 → 0.50, re-locks to **11 ms**.  A 128 → 140 step settles at 140.2.
+
+Against librosa on four real tracks, it is **mixed — 15–38 % within 30 ms**,
+with most of the disagreement being polarity rather than timing noise.  But
+librosa is not truth here, which is why `verify.py` also reports how much kick
+lands on each grid:
+
+| track | kick @ ours | kick @ librosa | kick @ our offbeat |
+|---|---|---|---|
+| Children | **4.04** | 1.75 | 2.06 |
+| Midnight Vampires | 5.08 | 5.32 | 2.34 |
+| Opus | 3.91 | **4.49** | 3.51 |
+| Tove Styrke | 2.45 | 2.63 | **2.93** |
+
+So on Children librosa is the one on the offbeat and its 81 % "error" is
+meaningless; on Midnight Vampires the two agree; on Opus and Tove Styrke we are
+genuinely worse.  Tove Styrke is the weakest case — the clock settles at
+124.6 BPM against a 127.8 reference and reports confidence 0.61, which is at
+least honest about it.
+
+**Real DJ material is not solved.**  That is the open item going into M6, and
+the reason `BeatBackend` exists: the plan's BeatNet spike has something to
+prove against these same numbers.
 
 ### Colour
 

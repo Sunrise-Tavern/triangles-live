@@ -277,6 +277,62 @@ def cmd_serve(args) -> int:
     return 0
 
 
+def cmd_beats(args) -> int:
+    """Measure the beat clock against ground truth."""
+    from .verify import main as verify_main
+
+    argv = [*(str(f) for f in args.files), "--fps", str(args.fps),
+            "--backend", args.backend]
+    if args.bpm:
+        argv += ["--bpm", str(args.bpm)]
+    if args.faults:
+        argv += ["--faults"]
+    return verify_main(argv)
+
+
+def cmd_listen(args) -> int:
+    """Watch the analysis and the clock, live, in the terminal."""
+    from .audio import AutoGain, FileSource, LineInSource, devices
+    from .listener import Listener
+
+    if args.devices:
+        print("input devices:")
+        print(devices())
+        return 0
+
+    if args.file:
+        source = FileSource(args.file, realtime=not args.fast,
+                            gain=AutoGain() if args.autogain else None)
+    else:
+        source = LineInSource(device=args.device)
+    listener = Listener(source, backend=args.backend)
+    print(f"{'time':>7} {'rms':>6} {'energy':>7} {'onset':>6} {'kick':>6} "
+          f"{'tempo':>7} {'conf':>5} {'beat':>6} {'phase':>6}  state")
+    last = -1.0
+    try:
+        for block in source.blocks():
+            features = listener.step(block)
+            if features.t - last < 0.25:
+                continue
+            last = features.t
+            state = listener.clock.state(features.t)
+            flag = ("free-run" if state.free_running else
+                    "locked" if state.locked else "seeking")
+            print(f"{features.t:7.2f} {features.rms:6.3f} {features.energy:7.2f} "
+                  f"{features.onset:6.2f} {features.kick:6.2f} "
+                  f"{state.tempo:7.2f} {state.confidence:5.2f} "
+                  f"{state.beat:6d} {state.beat_phase:6.2f}  {flag}")
+    except KeyboardInterrupt:
+        pass
+    finally:
+        source.close()
+    clock = listener.clock
+    print(f"\n{listener.stats.blocks} blocks, {clock.beats_seen} beats, "
+          f"{clock.relocks} relocks, {clock.slips} half-beat corrections, "
+          f"{clock.offbeat_events} offbeat detections used for phase")
+    return 0
+
+
 def cmd_inspect(args) -> int:
     for path in args.files:
         h = read_header(path)
@@ -378,6 +434,25 @@ def build_parser() -> argparse.ArgumentParser:
                    help="preview pixel density; 1.0 is ~3300 dots, 2.0 doubles "
                         "it and the bandwidth")
     p.set_defaults(func=cmd_serve)
+
+    p = sub.add_parser("beats", help="measure the beat clock against ground truth")
+    p.add_argument("files", nargs="*")
+    p.add_argument("--bpm", type=float, help="known tempo: compare to an exact grid")
+    p.add_argument("--fps", type=float, default=40.0)
+    p.add_argument("--backend", default="aubio")
+    p.add_argument("--faults", action="store_true",
+                   help="silence and tempo-change tests")
+    p.set_defaults(func=cmd_beats)
+
+    p = sub.add_parser("listen", help="watch analysis + clock in the terminal")
+    p.add_argument("file", nargs="?", help="audio file; omit to use line-in")
+    p.add_argument("--device", help="input device index or name")
+    p.add_argument("--devices", action="store_true", help="list inputs and exit")
+    p.add_argument("--backend", default="aubio")
+    p.add_argument("--fast", action="store_true",
+                   help="run a file as fast as possible instead of in real time")
+    p.add_argument("--autogain", action="store_true")
+    p.set_defaults(func=cmd_listen)
 
     p = sub.add_parser("inspect", help="print an fseq header")
     p.add_argument("files", nargs="+")

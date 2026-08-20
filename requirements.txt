@@ -6,3 +6,5 @@ yt-dlp>=2024.1.1
 
 # live/ engine (M1): numpy only, already pulled in by librosa above.
 aiohttp>=3.9          # live/ M3: the daemon's browser UI
+sounddevice>=0.4.6    # live/ M4: line-in capture at the rig
+# aubio is NOT listed here: it needs build flags, so setup.sh installs it.

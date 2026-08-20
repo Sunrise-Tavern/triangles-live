@@ -560,6 +560,159 @@ async def _web(layout: Layout) -> str:
             f"presets round-trip, reconnect clean")
 
 
+def test_analysis(layout: Layout) -> str:
+    """Features must be finite, level-independent, and spot a kick."""
+    from .analysis import Analyzer
+    from .audio import ArraySource
+    from .verify import click_track
+
+    audio, grid = click_track([(128.0, 12.0)])
+    series: dict[str, np.ndarray] = {}
+    for scale, label in ((1.0, "unity"), (0.05, "quiet"), (4.0, "hot")):
+        analyzer = Analyzer()
+        rows = [analyzer.push(b) for b in ArraySource(audio * scale).blocks()]
+        settled = rows[len(rows) // 4:]
+        for f in settled:
+            check(all(np.isfinite(v) for v in vars(f).values()),
+                  f"{label}: non-finite feature at t={f.t:.2f}")
+        series[label] = np.array([f.energy for f in settled])
+        # Averaged over the blocks the baseline actually learns from, energy
+        # is 1.0 by construction.  Not over *all* blocks: a click track is
+        # three-quarters digital silence, which is gated out on purpose.
+        audible = series[label][np.array([f.rms for f in settled]) > 0]
+        check(0.7 < audible.mean() < 1.4,
+              f"{label}: mean energy over audible blocks should be near 1.0, "
+              f"got {audible.mean():.2f} -- the baseline is not tracking level")
+
+        # The kick detector must fire on beats and not between them, at any
+        # input level.  That is the whole basis of the clock's polarity check.
+        times = np.array([f.t for f in settled])
+        kicks = np.array([f.kick for f in settled])
+        period = 60.0 / 128.0
+        phase = ((times - grid[0]) / period) % 1.0
+        on = kicks[np.minimum(phase, 1 - phase) < 0.12]
+        off = kicks[np.abs(phase - 0.5) < 0.12]
+        check(on.mean() > 2.0 * off.mean(),
+              f"{label}: kick strength on the beat ({on.mean():.2f}) is not "
+              f"clearly above the offbeat ({off.mean():.2f})")
+    # The point of dividing by a baseline: the same music at any input level
+    # must produce the same numbers, because every threshold downstream is
+    # relative.  Otherwise the show reacts to the mixer's gain knob.
+    for label in ("quiet", "hot"):
+        spread = np.abs(series[label] - series["unity"]).max()
+        check(spread < 0.05,
+              f"{label} differs from unity by up to {spread:.3f} -- energy is "
+              "not level-independent")
+    return ("features finite and identical across an 80x level range; "
+            "kick spikes on the beat")
+
+
+def test_clock(layout: Layout) -> str:
+    """The PLL: prediction under jitter, free-run, re-lock, tempo change."""
+    from .beats import BeatEvent
+    from .clock import BeatClock
+
+    period = 60.0 / 128.0
+    rng = np.random.default_rng(0)
+
+    # 1. Predictions must be better than the observations they are built from.
+    clock = BeatClock()
+    errors = []
+    for k in range(300):
+        beat = k * period
+        if k > 20:
+            ask = beat - 0.2 * period          # how a renderer queries: ahead
+            clock.tick(ask)
+            errors.append((clock.next_beat(ask) - beat) * 1000)
+        clock.tick(beat)
+        clock.on_beat(BeatEvent(t=beat + rng.normal(0, 0.025), tempo=128.0,
+                                confidence=0.9))
+    e = np.abs(np.array(errors))
+    check(np.median(e) < 10.0,
+          f"25 ms of tracker jitter should average down, got {np.median(e):.1f} ms")
+    check(abs(clock.tempo - 128.0) < 0.5, f"tempo drifted to {clock.tempo:.2f}")
+
+    # 2. Silence: keep predicting, decay confidence, never stop.
+    before = clock.confidence
+    start = 300 * period
+    fired = 0
+    previous = start
+    for step in range(1, 400):
+        now = start + step * 0.025
+        clock.tick(now)
+        fired += len(clock.crossed(previous, now))
+        previous = now
+    check(clock.free_running, "clock did not notice it had lost the beat")
+    check(clock.confidence < before * 0.6,
+          f"confidence barely moved through 10 s of silence ({clock.confidence:.2f})")
+    check(clock.confidence > 0.0, "confidence hit zero -- a stale grid still beats none")
+    expected = 10.0 / period
+    check(abs(fired - expected) <= 2,
+          f"free-run produced {fired} beats over 10 s, expected ~{expected:.0f}")
+
+    # 3. A half-beat slip must be corrected from the low end alone.
+    clock = BeatClock(tempo=128.0, confidence=1.0)
+    clock.anchor = 0.5 * period          # deliberately on the offbeat
+    clock.last_beat_t = 0.0
+    for step in range(4000):
+        now = step * clock.block_s
+        clock.last_beat_t = now          # never free-running
+        # kick energy only at the true beats, which the model has wrong
+        phase = (now / period) % 1.0
+        clock.observe(now, 6.0 if min(phase, 1 - phase) < 0.05 else 0.05)
+        clock.tick(now)
+    check(clock.slips >= 1, "the clock never noticed it was on the offbeat")
+    residual = abs(((clock.anchor / period) % 1.0) - 0.0)
+    residual = min(residual, 1 - residual)
+    check(residual < 0.1,
+          f"after correcting, the anchor is still {residual:.2f} of a beat out")
+
+    # 4. A real tempo change must be followed, not merely tracked.
+    clock = BeatClock()
+    now = 0.0
+    for k in range(120):
+        bpm = 128.0 if k < 60 else 140.0
+        clock.tick(now)
+        clock.on_beat(BeatEvent(t=now, tempo=bpm, confidence=0.9))
+        now += 60.0 / bpm
+    check(abs(clock.tempo - 140.0) < 2.0,
+          f"clock settled at {clock.tempo:.1f} after a 128 -> 140 change")
+    return ("prediction beats its input (25 ms jitter -> "
+            f"{np.median(e):.1f} ms), free-run, offbeat recovery, tempo step")
+
+
+def test_beat_pipeline(layout: Layout) -> str:
+    """Audio in, beats out: the whole chain against a known grid."""
+    from .audio import ArraySource
+    from .verify import Report, click_track, run
+
+    audio, grid = click_track([(128.0, 20.0)])
+    fired, listener = run(ArraySource(audio))
+    report = Report("clicks", fired, grid, listener)
+    errors = np.abs(report.errors)
+    check(len(errors) > 30, f"only {len(errors)} beats scored")
+    within = float(np.mean(errors < 30))
+    check(within > 0.85,
+          f"only {100 * within:.0f}% of beats within 30 ms (median "
+          f"{np.median(errors):.1f} ms)")
+    check(report.offbeat_share == 0.0,
+          f"{100 * report.offbeat_share:.0f}% of beats landed on the offbeat")
+    check(abs(listener.clock.tempo - 128.0) < 2.0,
+          f"tempo settled at {listener.clock.tempo:.2f}, not 128")
+
+    # A silent break is the normal case in a DJ set, not an error case.
+    audio, grid = click_track([(128.0, 16.0), (0.0, 7.5), (128.0, 16.0)])
+    fired, listener = run(ArraySource(audio))
+    through = [f for f in fired if 16.5 < f.predicted < 23.0]
+    check(len(through) >= 12,
+          f"only {len(through)} beats predicted through 7.5 s of silence")
+    after = Report("after", [f for f in fired if f.predicted > 25.0], grid, listener)
+    relock = np.median(np.abs(after.errors))
+    check(relock < 30.0, f"re-locked {relock:.1f} ms off after the break")
+    return (f"{100 * within:.0f}% within 30 ms on a click track, no offbeat; "
+            f"free-runs a 7.5 s break and re-locks to {relock:.1f} ms")
+
+
 TESTS = (
     ("channel map", test_layout),
     ("fseq round-trip", test_fseq_roundtrip),
@@ -570,6 +723,9 @@ TESTS = (
     ("fixed script", test_script),
     ("preview geometry", test_geometry),
     ("web UI + engine", test_web),
+    ("audio features", test_analysis),
+    ("beat clock", test_clock),
+    ("audio -> beats", test_beat_pipeline),
 )
 
 
