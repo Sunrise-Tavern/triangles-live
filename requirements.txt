@@ -3,3 +3,6 @@ soundfile>=0.12.1
 scipy>=1.11
 numpy<2.3
 yt-dlp>=2024.1.1
+
+# live/ engine (M1): numpy only, already pulled in by librosa above.
+aiohttp>=3.9          # live/ M3: the daemon's browser UI

@@ -83,7 +83,7 @@ def frame(layout: Layout, t: float) -> np.ndarray:
             distance = head - i
             level = 0.0 if distance < 0 else max(0.0, 1.0 - distance / 3.0)
             rgb = np.empty((model.nodes, 3), dtype=np.uint8)
-            rgb[:] = (0, int(255 * level), int(255 * level))
+            rgb[:] = (0, round(255 * level), round(255 * level))
             model.pack(rgb, out)
 
     elif name == "arch":
@@ -105,8 +105,8 @@ def frame(layout: Layout, t: float) -> np.ndarray:
             col = model.coords[:, 1].astype(np.float32)
             level = np.clip(1.0 - np.abs(col - bar) / 4.0, 0.0, 1.0)
             rgb = np.zeros((model.nodes, 3), dtype=np.uint8)
-            rgb[:, 0] = (level * 255).astype(np.uint8)
-            rgb[:, 2] = (level * 255).astype(np.uint8)
+            rgb[:, 0] = np.rint(level * 255).astype(np.uint8)
+            rgb[:, 2] = np.rint(level * 255).astype(np.uint8)
             model.pack(rgb, out)
 
     elif name == "par":

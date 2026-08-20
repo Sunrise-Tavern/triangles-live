@@ -1,0 +1,85 @@
+:root {
+  --bg: #0b0d10;
+  --panel: #14181d;
+  --line: #232a32;
+  --text: #dfe6ee;
+  --dim: #7c8894;
+  --accent: #4cc4d6;
+  --bad: #d6604c;
+  --good: #6fd64c;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { display: flex; height: 100vh; }
+
+#stage { flex: 1 1 auto; position: relative; min-width: 0; background: #000; }
+#preview { width: 100%; height: 100%; display: block; }
+#overlay {
+  position: absolute; left: 12px; top: 12px; display: flex; gap: 8px;
+  align-items: center; pointer-events: none;
+}
+.pill {
+  padding: 2px 9px; border-radius: 999px; font-size: 12px;
+  background: #1c222a; color: var(--dim); border: 1px solid var(--line);
+}
+.pill.good { color: var(--good); border-color: #2c4b26; }
+.pill.bad { color: var(--bad); border-color: #4b2c26; }
+#hint { font-size: 12px; color: #47525d; }
+
+#panel {
+  flex: 0 0 340px; background: var(--panel); border-left: 1px solid var(--line);
+  padding: 16px; overflow-y: auto;
+}
+#readout { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat {
+  background: #10141a; border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px; text-align: center;
+}
+.stat b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
+.stat small { color: var(--dim); font-size: 11px; }
+
+#beat { height: 4px; background: #10141a; border-radius: 2px; margin: 10px 0 14px; }
+#beat i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+
+button {
+  font: inherit; color: var(--text); background: #1c222a;
+  border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px;
+  cursor: pointer;
+}
+button:hover { border-color: #3a4553; }
+button.big {
+  width: 100%; padding: 12px; font-weight: 700; letter-spacing: .12em;
+  margin-bottom: 16px;
+}
+button.big.on { background: var(--bad); border-color: var(--bad); color: #150a08; }
+
+.control { margin-bottom: 12px; }
+.control label {
+  display: flex; justify-content: space-between; font-size: 12px;
+  color: var(--dim); margin-bottom: 4px;
+}
+.control label span { color: var(--text); font-variant-numeric: tabular-nums; }
+.control input[type=range] { width: 100%; accent-color: var(--accent); }
+.control select, .control input[type=text] {
+  width: 100%; background: #10141a; color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px;
+}
+.toggle { display: flex; align-items: center; justify-content: space-between; }
+.toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .1em;
+     color: var(--dim); margin: 20px 0 8px; }
+.row { display: flex; gap: 6px; }
+.row input { flex: 1; background: #10141a; color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+#preset-list { list-style: none; padding: 0; margin: 8px 0 0; }
+#preset-list li {
+  display: flex; align-items: center; gap: 6px; padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+#preset-list li span { flex: 1; }
+#preset-list button { padding: 2px 8px; font-size: 12px; }
+#warning { color: var(--dim); font-size: 11px; margin-top: 18px; }

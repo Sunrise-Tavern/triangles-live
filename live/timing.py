@@ -96,7 +96,10 @@ class FrameClock:
             self.stats.total_late_ms += late * 1000.0
             self.stats.worst_late_ms = max(self.stats.worst_late_ms, late * 1000.0)
 
-        index, show_time = self._frame, self._frame * self.period
+        # frame / fps, never frame * period: the two disagree in the last bit
+        # of a float, which is enough to flip an 8-bit level by one and make a
+        # capture differ from the same content rendered offline.
+        index, show_time = self._frame, self._frame / self.fps
         self._frame += 1
         self.stats.frames += 1
         self.stats.elapsed_s = time.perf_counter() - self._start

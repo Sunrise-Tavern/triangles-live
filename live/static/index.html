@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Triangles &mdash; live</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <section id="stage">
+    <canvas id="preview"></canvas>
+    <div id="overlay">
+      <span id="link" class="pill bad">connecting</span>
+      <span id="target" class="pill"></span>
+      <span id="draw" class="pill"></span>
+      <span id="hint">drag to orbit &middot; wheel to zoom</span>
+    </div>
+  </section>
+
+  <aside id="panel">
+    <div id="readout">
+      <div class="stat"><b id="s-fps">&mdash;</b><small>fps</small></div>
+      <div class="stat"><b id="s-render">&mdash;</b><small>ms/frame</small></div>
+      <div class="stat"><b id="s-scene">&mdash;</b><small>scene</small></div>
+      <div class="stat"><b id="s-pattern">&mdash;</b><small>corridor</small></div>
+      <div class="stat"><b id="s-bpm">&mdash;</b><small>bpm</small></div>
+      <div class="stat"><b id="s-late">&mdash;</b><small>late</small></div>
+    </div>
+    <div id="beat"><i></i></div>
+
+    <button id="blackout" class="big">BLACKOUT</button>
+
+    <div id="controls"></div>
+
+    <div id="presets">
+      <h2>Presets</h2>
+      <div class="row">
+        <input id="preset-name" placeholder="name this look" maxlength="40">
+        <button id="preset-save">Save</button>
+      </div>
+      <ul id="preset-list"></ul>
+    </div>
+
+    <p id="warning"></p>
+  </aside>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

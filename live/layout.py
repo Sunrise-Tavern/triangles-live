@@ -49,6 +49,25 @@ class LayoutError(RuntimeError):
 
 
 @dataclass
+class Controller:
+    """A physical controller and the slice of channel space it owns."""
+
+    name: str
+    ip: str
+    protocol: str
+    start: int          # 1-based
+    channels: int
+
+    @property
+    def end(self) -> int:
+        return self.start + self.channels - 1
+
+    @property
+    def slice(self) -> slice:
+        return slice(self.start - 1, self.start - 1 + self.channels)
+
+
+@dataclass
 class Model:
     """One addressable fixture and where its pixels land in the channel array."""
 
@@ -65,6 +84,9 @@ class Model:
     #: peaking at 0.5 at the apex.
     strip_t: np.ndarray | None = None
     world: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    #: The model's raw xLights attributes, for anything that needs geometry
+    #: beyond the channel map (see :mod:`live.geometry`).
+    source: dict[str, str] = field(default_factory=dict)
 
     @property
     def channels(self) -> int:
@@ -111,6 +133,7 @@ class Layout:
     par: str
     channel_count: int
     groups: dict[str, list[str]] = field(default_factory=dict)
+    controllers: dict[str, Controller] = field(default_factory=dict)
 
     def __getitem__(self, name: str) -> Model:
         return self.models[name]
@@ -121,6 +144,28 @@ class Layout:
     def blank_channels(self) -> np.ndarray:
         """A full, all-off channel array for one frame."""
         return np.zeros(self.channel_count, dtype=np.uint8)
+
+    def output(self, name: str) -> Controller:
+        """A controller by name; raises with the available names if unknown."""
+        if name not in self.controllers:
+            raise LayoutError(
+                f"No controller {name!r}.  Known: {sorted(self.controllers)}"
+            )
+        return self.controllers[name]
+
+    def unaddressed(self) -> list[Model]:
+        """Models that sit outside every controller's channel space.
+
+        Right now this is the 24 arches and the par: their start channels run
+        past the Falcon's 11 160, and nothing else in the show is a controller.
+        Whatever drives them is not something xLights knows about, so the live
+        engine cannot reach them over DDP until that is resolved.
+        """
+        spans = [(c.start, c.end) for c in self.controllers.values() if c.channels]
+        return [
+            m for m in self.models.values()
+            if not any(lo <= m.start and m.end <= hi for lo, hi in spans)
+        ]
 
     def describe(self) -> str:
         lines = [f"{self.channel_count} channels total"]
@@ -137,8 +182,8 @@ class Layout:
 # --------------------------------------------------------------------------- #
 
 
-def _controller_starts(networks: Path) -> dict[str, int]:
-    """Map controller name -> its 1-based absolute start channel.
+def _controllers(networks: Path) -> dict[str, Controller]:
+    """Controller name -> where it sits in channel space.
 
     xLights lays controllers out back to back in document order; a controller
     with no ``<network>`` child (an FPP player) consumes no channels.
@@ -146,23 +191,26 @@ def _controller_starts(networks: Path) -> dict[str, int]:
     if not networks.exists():
         raise LayoutError(f"Could not find {networks}")
     root = ET.parse(networks).getroot()
-    starts: dict[str, int] = {}
+    found: dict[str, Controller] = {}
     cursor = 1
     for ctrl in root.findall("./Controller"):
         name = ctrl.get("Name") or ""
         size = sum(int(n.get("MaxChannels", "0")) for n in ctrl.findall("./network"))
-        starts[name] = cursor
+        found[name] = Controller(
+            name=name, ip=ctrl.get("IP", ""), protocol=ctrl.get("Protocol", ""),
+            start=cursor, channels=size,
+        )
         cursor += size
-    return starts
+    return found
 
 
-def _resolve_start(raw: str, controllers: dict[str, int]) -> int:
+def _resolve_start(raw: str, controllers: dict[str, Controller]) -> int:
     raw = (raw or "").strip()
     if raw.startswith("!"):
         name, _, offset = raw[1:].partition(":")
         if name not in controllers:
             raise LayoutError(f"Model references unknown controller {name!r}")
-        return controllers[name] + int(offset) - 1
+        return controllers[name].start + int(offset) - 1
     if raw.startswith(("@", "#", ">")):
         raise LayoutError(
             f"Start channel form {raw!r} (model- or universe-relative) is not "
@@ -222,7 +270,7 @@ def load_layout(rgb_effects: Path | None = None, networks: Path | None = None) -
             "<show folder>/generated/."
         )
 
-    controllers = _controller_starts(net_path)
+    controllers = _controllers(net_path)
     root = ET.parse(rgb_path).getroot()
 
     models: dict[str, Model] = {}
@@ -252,6 +300,7 @@ def load_layout(rgb_effects: Path | None = None, networks: Path | None = None) -
                 name=name, kind="net", start=start, nodes=count,
                 channels_per_node=3, order=_order(string_type, name),
                 grid=(height, width), coords=coords, world=world,
+                source=dict(attrs),
             )
 
         elif display == "Poly Line":
@@ -264,6 +313,7 @@ def load_layout(rgb_effects: Path | None = None, networks: Path | None = None) -
                 name=name, kind="arch", start=start, nodes=count,
                 channels_per_node=3, order=_order(string_type, name),
                 strip_t=_polyline_t(count, segs), world=world,
+                source=dict(attrs),
             )
 
         elif display.startswith("Dmx"):
@@ -282,6 +332,7 @@ def load_layout(rgb_effects: Path | None = None, networks: Path | None = None) -
             models[name] = Model(
                 name=name, kind="par", start=start, nodes=1,
                 channels_per_node=width, order=tuple(order), world=world,
+                source=dict(attrs),
             )
 
         else:  # pragma: no cover - nothing else exists in this show yet
@@ -308,7 +359,7 @@ def load_layout(rgb_effects: Path | None = None, networks: Path | None = None) -
 
     return Layout(
         models=models, arches=arches, nets=nets, par=sorted(pars)[0],
-        channel_count=channel_count, groups=groups,
+        channel_count=channel_count, groups=groups, controllers=controllers,
     )
 
 
@@ -330,6 +381,17 @@ def _natural_key(name: str):
 if __name__ == "__main__":
     layout = load_layout()
     print(layout.describe())
+    print()
+    print("controllers:")
+    for c in layout.controllers.values():
+        span = f"ch {c.start}-{c.end}" if c.channels else "no channels"
+        print(f"  {c.name:<20} {c.protocol:<12} {c.ip:<16} {span}")
+    orphans = layout.unaddressed()
+    if orphans:
+        print(f"\n!! {len(orphans)} model(s) sit outside every controller's channel "
+              f"space and cannot be driven over DDP:")
+        print(f"   {orphans[0].name} (ch {orphans[0].start}) ... "
+              f"{orphans[-1].name} (ch {orphans[-1].end})")
     print()
     print(f"corridor order : {layout.arches[0]} ... {layout.arches[-1]} "
           f"({len(layout.arches)} arches)")

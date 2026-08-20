@@ -90,41 +90,115 @@ corridor pattern library, section→treatment recipes, density/articulation logi
 
 Ordered so every step is testable on the Mac with no hardware.
 
-### M1 · DDP out + fake Falcon (the loop's two ends)
+### M1 · DDP out + fake Falcon (the loop's two ends) — **done**
 - `live/ddp.py` — DDP sender: 10-byte header (flags, seq, type, dest, 32-bit
   channel offset, 16-bit length), 1440 ch/packet (matches the Falcon config),
-  push flag on a frame's last packet, fixed 40 fps clock.
-- `live/fake_falcon.py` — UDP receiver reassembling frames; maps channels →
-  models via `show.py` + start channels; **writes `.fseq`** (v1 uncompressed;
-  documented in the show's own readme) and a minimal live preview.
-- **Verify**: synthetic pattern round-trips exactly; the `.fseq` passes
-  `xLights --checksequence` and looks right in xLights' 3D preview against the
-  real layout. xLights is the visual oracle from here on.
+  push flag on a frame's last packet; `FrameAssembler` for the other end.
+- `live/layout.py` — the channel map, read from `xlights_rgbeffects.xml` +
+  `xlights_networks.xml`: controller-relative start channels, per-string colour
+  order (nets RGB, arches **GRB**), custom-model node maps, polyline runs.
+  Separate from `triseq/show.py`, which knows names but not addresses.
+- `live/fake_falcon.py` — UDP receiver reassembling frames, reporting packet
+  loss and per-model coverage, writing `.fseq` (v2.0 uncompressed —
+  `live/fseq.py`, header documented in its docstring).
+- `live/timing.py` — drift-free frame clock that reports lateness.
+- `live/testpattern.py` — 30 s pattern in six stages, each isolating one
+  mapping so a wrong picture names the bug.
+- `live/preview.py` — frames → PNG with no image library, same projection M3's
+  browser preview will use.
 
-### M2 · Renderer
-- `live/frame.py` — per-model buffers from the layout's node maps (nets 465
-  nodes into 59×51; arches 360-node strips base→apex→base; par RGBW).
-- Net effects: wash, bars, radial pulse, sparkle, plasma-ish noise. Corridor:
-  port the pattern library from `arrange.py` (already per-arch on/off +
-  gradient — a real-time renderer's native form).
-- **Verify**: fixed 30 s script → `.fseq` → xLights; ≤ 10 ms/frame on the Mac.
+**Verified.**  `./live.sh selftest` passes: no channel overlaps or gaps, red
+lands on red for both RGB and GRB fixtures, `.fseq` round-trips, and 80 frames
+over a real UDP socket come back byte-identical.  End to end,
+`xLights --fseqcmp` reports **`IDENTICAL: 1200 frames x 37084 channels match
+exactly`** between the pattern rendered offline and the same pattern captured
+off the wire (30 s at 40 fps, zero packets lost, 0.7 ms/frame).
 
-### M3 · Web UI (preview + controls + presets)
-- `live/web.py` — small async server in the daemon process (aiohttp or FastAPI):
-  static single-page UI (plain HTML/JS/canvas, **no build toolchain**), REST for
-  settings/presets, WebSocket for state + preview frames.
-- Preview: per-model RGB downsampled to ~15 fps, drawn on a canvas using
-  geometry exported once from `show.py` (nets as 59×51 grids, arches as a
-  corridor of strips front-to-back, par as a swatch). This becomes the primary
-  dev preview; `.fseq` → xLights stays the high-fidelity oracle.
-- Controls (live, no restart): output enable/disable, **blackout**, master
-  brightness, corridor rate, articulation density, palette hue offset/lock,
-  state-machine thresholds; current state readout (tempo, confidence,
-  quiet/cruising/building/hot).
-- Presets: named JSON files of every knob; load/save/delete from the UI.
-- **Verify**: change each knob while a sim run is playing and see it take effect
-  within a frame or two; kill/reload the browser mid-run (daemon unaffected);
-  preview matches what the fake Falcon writes to `.fseq`.
+That comparison earned its keep immediately: it caught `frame * (1/fps)` vs
+`frame / fps` disagreeing in the last bit of a float — enough to flip 8-bit
+levels by one.  Show time is now always `frame / fps`.
+
+`xLights --checksequence` turned out to be no use on an `.fseq` (it wants a
+GUI and hangs); `--fseqcmp` replaces it and is strictly better.
+
+### M2 · Renderer — **done**
+- `live/frame.py` — `Canvas`: float RGB buffers plus the geometry effects paint
+  by. All eight nets share one 465-node map, so they are one `(8, 465, 3)`
+  array; all 24 arches share one base→apex→base run, so the corridor is one
+  `(24, 360, 3)` array and a wave down the tunnel is an outer product.
+  Effects never touch channel numbers or wire colour order —
+  `to_channels()` does that once per frame through a precomputed gather.
+- `live/palette.py` — the generative colour from `triseq/palettes.py` in numpy:
+  hue journey by golden angle, harmony schemes, `ramp()` across a fixture, and
+  both invariants (quiet-is-not-dark floor; gradients move through *hue*).
+- `live/effects.py` — the eight corridor patterns ported from `arrange.py` as
+  pure functions `(n, phase) → levels`, with their density table intact; net
+  effects wash / bars / radial / pinwheel / plasma / sparkle; par.
+- `live/script.py` — the fixed 30 s show: four four-bar scenes at 128 BPM,
+  intro → verse → build → drop, a pure function of the frame index.
+
+**Verified.**  `./live.sh bench`: **0.55 ms/frame** mean (0.31 render + 0.24
+pack), p95 0.70, max 1.28 — 2 % of the 25 ms budget at 40 fps, against a 10 ms
+target. Rendered offline, rendered again, and rendered through DDP into the
+fake Falcon all compare `IDENTICAL: 1200 frames x 37084 channels` under
+`xLights --fseqcmp`. `./live.sh selftest` grew three cases: canvas → channels
+(colour order, clamping, group slices), the effect vocabulary (every pattern
+finite, in range, and actually lighting something; targeting one net group
+leaves the other alone), and the script (deterministic, in budget, every
+channel used).
+
+Determinism is a *requirement*, not a nicety: the random effects take a frame
+index rather than a live RNG, because a capture that cannot be compared to a
+re-render makes the `--fseqcmp` oracle useless.
+
+### M3 · Web UI (preview + controls + presets) — **done**
+- `live/engine.py` — the daemon: render thread, DDP out, optional `.fseq`
+  recording, status. Its own thread, so the web server cannot starve it.
+- `live/settings.py` — every knob in one flat dataclass; validation *and* the
+  UI widgets are generated from one schema. Presets are named JSON files that
+  ignore unknown keys, so they survive a build that has more or fewer knobs.
+- `live/geometry.py` — **real** 3D world positions from the layout, plus an
+  orbitable camera. Not the schematic the plan assumed: the preview is the rig.
+- `live/web.py` + `live/static/` — aiohttp; REST for settings/presets/camera,
+  one WebSocket carrying status (JSON, 5 Hz) and preview frames (raw RGB bytes,
+  15 Hz, ~10 KB — the same payload as JSON is 300 KB/s of quotes and commas).
+  Plain HTML/JS/canvas, no build toolchain.
+- Controls: output, blackout, brightness, gamma, corridor rate, articulation,
+  pattern override, hue offset, hue lock, tempo, scene hold. The state-machine
+  thresholds land with M5 — the schema takes new knobs one line at a time and
+  old presets keep loading.
+
+**Verified**, in `selftest` against a real engine and a real server: blackout
+reaches the wire within three frames *and* darkens the preview; brightness
+changes the frame; a pattern override shows in the status; an out-of-range
+slider clamps while an unknown key is refused; presets round-trip; moving the
+camera bumps the geometry generation; closing the browser leaves the engine
+running and reconnect works. The run is recorded to `.fseq` and the blackout is
+in the file too — what the operator saw is what went to disk. Also driven by
+hand in Chrome: preview, orbit, blackout, live scene/pattern readout.
+
+The preview feed was capped at 15 Hz to begin with, straight from this plan's
+"~15 fps". That reads as stutter even with the render loop keeping perfect
+time — you see 15 of every 40 frames. It now runs at the engine's rate
+(measured 39.7 Hz in the browser, 25.0 ms gaps, 0.6 ms to draw) and skips
+identical frames, so a blackout costs one frame in three seconds instead of
+120. `--preview-fps` and `--preview-detail` are separate dials; the render loop
+was never the constraint (1.2 ms of a 25 ms budget, and it holds its rate to
+80 fps on the Mac at 13–18 % of budget).
+
+Two things worth carrying forward:
+- **Blackout is applied to the frame, not the canvas**, so the preview goes
+  dark with the rig. An operator hitting it must see the lights die, not watch
+  a show that is secretly still lit underneath.
+- The preview samples the **wire frame**, not the canvas, so brightness, gamma
+  and blackout are all visible in it. It is the same bytes the Falcon gets.
+
+This also corrected a claim in the offline `README.md`: the 24 arches share one
+`WorldPos`, but their `PointData` does not — they sit 100 units apart along Z,
+from −995 to +1305, in exactly the `Tunnel` group's order. The corridor has
+real depth in the layout, so a group-level sweep would have somewhere to
+travel. (The offline generator's per-arch stagger is still the better tool; the
+statement of *why* is what was wrong.)
 
 ### M4 · Streaming analysis + beat clock
 - `live/audio.py` — capture abstraction with two backends: **file streamer**
@@ -211,10 +285,15 @@ inferred downbeats is acceptable.
   for known tracks; real work.
 
 ## Open questions / risks
-- **How are the arches and the par actually wired?** In the layout they have no
-  controller (start channels 11 161+, past the Falcon's 11 160). If they're
-  driven by something xLights doesn't know about, this is configuration; if
-  not, it's hardware (~12 pixel ports for 24 arches; DMX for the par).
+- **How are the arches and the par actually wired?** Confirmed by M1 rather
+  than suspected: the Falcon owns channels 1–11 160 and the eight nets fill it
+  exactly; the par (11 161) and the 24 arches (to 37 084) sit outside every
+  controller in `xlights_networks.xml`. `./live.sh layout` prints this. If
+  they're driven by something xLights doesn't know about, this is
+  configuration; if not, it's hardware (~12 pixel ports for 24 arches; DMX for
+  the par). Nothing upstream of the output stage cares — the renderer,
+  arranger and `.fseq` all treat 33 models as real, and only the sender clips
+  per controller.
 - Live DJ mixes defeat beat trackers routinely (transitions, breakdowns, tempo
   nudges). Free-run + re-lock is mandatory, and M3's fault tests are the proof.
 - Gain: the DJ's level drifts; auto-gain on the input is required, not optional.
