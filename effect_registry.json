@@ -1,0 +1,4957 @@
+{
+ "effects": {
+  "Adjust": {
+   "file": "Adjust.json",
+   "params": {
+    "Action": {
+     "control": "choice",
+     "default": "None",
+     "key": "E_CHOICE_Action",
+     "options": [
+      "None",
+      "Adjust By Value",
+      "Adjust By Percentage",
+      "Set Minimum",
+      "Set Maximum",
+      "Set Range",
+      "Shift With Wrap By Value",
+      "Prevent Range",
+      "Reverse"
+     ],
+     "type": "enum"
+    },
+    "Count": {
+     "control": "spin",
+     "default": 0,
+     "key": "E_SPINCTRL_Count",
+     "max": 10000,
+     "min": 0,
+     "type": "int"
+    },
+    "NthChannel": {
+     "control": "spin",
+     "default": 1,
+     "key": "E_SPINCTRL_NthChannel",
+     "max": 32,
+     "min": 1,
+     "type": "int"
+    },
+    "StartingAt": {
+     "control": "spin",
+     "default": 1,
+     "key": "E_SPINCTRL_StartingAt",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Value1": {
+     "control": "spin",
+     "default": 0,
+     "key": "E_SPINCTRL_Value1",
+     "max": 255,
+     "min": -255,
+     "type": "int"
+    },
+    "Value2": {
+     "control": "spin",
+     "default": 0,
+     "key": "E_SPINCTRL_Value2",
+     "max": 255,
+     "min": -255,
+     "type": "int"
+    }
+   }
+  },
+  "Bars": {
+   "file": "Bars.json",
+   "params": {
+    "Bars_3D": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Bars_3D",
+     "type": "bool"
+    },
+    "Bars_BarCount": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Bars_BarCount",
+     "max": 5,
+     "min": 1,
+     "type": "int"
+    },
+    "Bars_Center": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_TEXTCTRL_Bars_Center",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "Bars_Cycles": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Bars_Cycles",
+     "max": 300,
+     "min": 0,
+     "type": "float"
+    },
+    "Bars_Direction": {
+     "control": "choice",
+     "default": "up",
+     "key": "E_CHOICE_Bars_Direction",
+     "options": [
+      "up",
+      "down",
+      "expand",
+      "compress",
+      "Left",
+      "Right",
+      "H-expand",
+      "H-compress",
+      "Alternate Up",
+      "Alternate Down",
+      "Alternate Left",
+      "Alternate Right",
+      "Custom Horz",
+      "Custom Vert"
+     ],
+     "type": "enum"
+    },
+    "Bars_Gradient": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Bars_Gradient",
+     "type": "bool"
+    },
+    "Bars_Highlight": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Bars_Highlight",
+     "type": "bool"
+    },
+    "Bars_UseFirstColorForHighlight": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Bars_UseFirstColorForHighlight",
+     "type": "bool"
+    }
+   }
+  },
+  "Butterfly": {
+   "file": "Butterfly.json",
+   "params": {
+    "Butterfly_Chunks": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Butterfly_Chunks",
+     "max": 10,
+     "min": 1,
+     "type": "int"
+    },
+    "Butterfly_Colors": {
+     "control": "choice",
+     "default": "Rainbow",
+     "key": "E_CHOICE_Butterfly_Colors",
+     "options": [
+      "Rainbow",
+      "Palette"
+     ],
+     "type": "enum"
+    },
+    "Butterfly_Direction": {
+     "control": "choice",
+     "default": "Normal",
+     "key": "E_CHOICE_Butterfly_Direction",
+     "options": [
+      "Normal",
+      "Reverse"
+     ],
+     "type": "enum"
+    },
+    "Butterfly_Skip": {
+     "control": "slider",
+     "default": 2,
+     "key": "E_SLIDER_Butterfly_Skip",
+     "max": 10,
+     "min": 2,
+     "type": "int"
+    },
+    "Butterfly_Speed": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Butterfly_Speed",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Butterfly_Style": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Butterfly_Style",
+     "max": 10,
+     "min": 1,
+     "type": "int"
+    }
+   }
+  },
+  "Candle": {
+   "file": "Candle.json",
+   "params": {
+    "Candle_FlameAgility": {
+     "control": "slider",
+     "default": 2,
+     "key": "E_SLIDER_Candle_FlameAgility",
+     "max": 10,
+     "min": 1,
+     "type": "int"
+    },
+    "Candle_WindBaseline": {
+     "control": "slider",
+     "default": 30,
+     "key": "E_SLIDER_Candle_WindBaseline",
+     "max": 255,
+     "min": 0,
+     "type": "int"
+    },
+    "Candle_WindCalmness": {
+     "control": "slider",
+     "default": 2,
+     "key": "E_SLIDER_Candle_WindCalmness",
+     "max": 10,
+     "min": 0,
+     "type": "int"
+    },
+    "Candle_WindVariability": {
+     "control": "slider",
+     "default": 5,
+     "key": "E_SLIDER_Candle_WindVariability",
+     "max": 10,
+     "min": 0,
+     "type": "int"
+    },
+    "PerNode": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_PerNode",
+     "type": "bool"
+    },
+    "UsePalette": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_UsePalette",
+     "type": "bool"
+    }
+   }
+  },
+  "Circles": {
+   "file": "Circles.json",
+   "params": {
+    "Circles_Bounce": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Circles_Bounce",
+     "type": "bool"
+    },
+    "Circles_Bubbles": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Circles_Bubbles",
+     "type": "bool"
+    },
+    "Circles_Count": {
+     "control": "slider",
+     "default": 3,
+     "key": "E_SLIDER_Circles_Count",
+     "max": 10,
+     "min": 1,
+     "type": "int"
+    },
+    "Circles_Linear_Fade": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Circles_Linear_Fade",
+     "type": "bool"
+    },
+    "Circles_Plasma": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Circles_Plasma",
+     "type": "bool"
+    },
+    "Circles_Radial": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Circles_Radial",
+     "type": "bool"
+    },
+    "Circles_Radial_3D": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Circles_Radial_3D",
+     "type": "bool"
+    },
+    "Circles_Size": {
+     "control": "slider",
+     "default": 5,
+     "key": "E_SLIDER_Circles_Size",
+     "max": 20,
+     "min": 1,
+     "type": "int"
+    },
+    "Circles_Speed": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Circles_Speed",
+     "max": 30,
+     "min": 1,
+     "type": "int"
+    },
+    "Circles_XC": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Circles_XC",
+     "max": 50,
+     "min": -50,
+     "type": "int"
+    },
+    "Circles_YC": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Circles_YC",
+     "max": 50,
+     "min": -50,
+     "type": "int"
+    }
+   }
+  },
+  "Color Wash": {
+   "file": "ColorWash.json",
+   "params": {
+    "ColorWash_CircularPalette": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_ColorWash_CircularPalette",
+     "type": "bool"
+    },
+    "ColorWash_Cycles": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_ColorWash_Cycles",
+     "max": 200,
+     "min": 1,
+     "type": "float"
+    },
+    "ColorWash_HFade": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_ColorWash_HFade",
+     "type": "bool"
+    },
+    "ColorWash_ReverseFades": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_ColorWash_ReverseFades",
+     "type": "bool"
+    },
+    "ColorWash_Shimmer": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_ColorWash_Shimmer",
+     "type": "bool"
+    },
+    "ColorWash_VFade": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_ColorWash_VFade",
+     "type": "bool"
+    }
+   }
+  },
+  "Curtain": {
+   "file": "Curtain.json",
+   "params": {
+    "Curtain_Edge": {
+     "control": "choice",
+     "default": "left",
+     "key": "E_CHOICE_Curtain_Edge",
+     "options": [
+      "left",
+      "center",
+      "right",
+      "bottom",
+      "middle",
+      "top"
+     ],
+     "type": "enum"
+    },
+    "Curtain_Effect": {
+     "control": "choice",
+     "default": "open",
+     "key": "E_CHOICE_Curtain_Effect",
+     "options": [
+      "open",
+      "close",
+      "open then close",
+      "close then open"
+     ],
+     "type": "enum"
+    },
+    "Curtain_Repeat": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Curtain_Repeat",
+     "type": "bool"
+    },
+    "Curtain_Speed": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Curtain_Speed",
+     "max": 100,
+     "min": 0,
+     "type": "float"
+    },
+    "Curtain_Swag": {
+     "control": "slider",
+     "default": 3,
+     "key": "E_SLIDER_Curtain_Swag",
+     "max": 10,
+     "min": 0,
+     "type": "int"
+    }
+   }
+  },
+  "DMX": {
+   "file": "DMX.json",
+   "params": {
+    "DMX_ButtonsRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_DMX_ButtonsRow",
+     "type": "string"
+    },
+    "DMX_ChannelsNotebook": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_DMX_ChannelsNotebook",
+     "type": "string"
+    }
+   }
+  },
+  "Duplicate": {
+   "file": "Duplicate.json",
+   "params": {
+    "Duplicate_Include_Submodels": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Duplicate_Include_Submodels",
+     "type": "bool"
+    },
+    "Duplicate_Layer": {
+     "control": "spin",
+     "default": 1,
+     "key": "E_SPINCTRL_Duplicate_Layer",
+     "max": 1000,
+     "min": 1,
+     "type": "int"
+    },
+    "Duplicate_Model": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_Duplicate_Model",
+     "options": [],
+     "type": "enum"
+    },
+    "Duplicate_Override_Buffer": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Duplicate_Override_Buffer",
+     "type": "bool"
+    },
+    "Duplicate_Override_Color": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Duplicate_Override_Color",
+     "type": "bool"
+    },
+    "Duplicate_Override_Palette": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Duplicate_Override_Palette",
+     "type": "bool"
+    },
+    "Duplicate_Override_Timing": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Duplicate_Override_Timing",
+     "type": "bool"
+    }
+   }
+  },
+  "Faces": {
+   "file": "Faces.json",
+   "params": {
+    "Faces_EyeBlinkDuration": {
+     "control": "choice",
+     "default": "Normal",
+     "key": "E_CHOICE_Faces_EyeBlinkDuration",
+     "options": [
+      "Short",
+      "Normal",
+      "Long",
+      "Longer"
+     ],
+     "type": "enum"
+    },
+    "Faces_EyeBlinkFrequency": {
+     "control": "choice",
+     "default": "Normal",
+     "key": "E_CHOICE_Faces_EyeBlinkFrequency",
+     "options": [
+      "Slowest",
+      "Slow",
+      "Normal",
+      "Fast",
+      "Fastest"
+     ],
+     "type": "enum"
+    },
+    "Faces_Eyes": {
+     "control": "choice",
+     "default": "Auto",
+     "key": "E_CHOICE_Faces_Eyes",
+     "options": [
+      "Open",
+      "Closed",
+      "Auto",
+      "(off)"
+     ],
+     "type": "enum"
+    },
+    "Faces_FaceDefinition": {
+     "control": "choice",
+     "default": "Default",
+     "key": "E_CHOICE_Faces_FaceDefinition",
+     "options": [],
+     "type": "enum"
+    },
+    "Faces_Fade": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Faces_Fade",
+     "type": "bool"
+    },
+    "Faces_LeadFrames": {
+     "control": "spin",
+     "default": 0,
+     "key": "E_SPINCTRL_Faces_LeadFrames",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "Faces_MouthMovements": {
+     "control": "custom",
+     "default": "",
+     "key": "E_CHOICE_Faces_MouthMovements",
+     "type": "enum"
+    },
+    "Faces_Outline": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Faces_Outline",
+     "type": "bool"
+    },
+    "Faces_SuppressShimmer": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Faces_SuppressShimmer",
+     "type": "bool"
+    },
+    "Faces_SuppressWhenNotSinging": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Faces_SuppressWhenNotSinging",
+     "type": "bool"
+    },
+    "Faces_TransparentBlackRow": {
+     "control": "custom",
+     "default": 0,
+     "key": "E_SLIDER_Faces_TransparentBlackRow",
+     "type": "int"
+    },
+    "Faces_UseState": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_Faces_UseState",
+     "options": [],
+     "type": "enum"
+    }
+   }
+  },
+  "Fan": {
+   "file": "Fan.json",
+   "params": {
+    "Fan_Accel": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Fan_Accel",
+     "max": 10,
+     "min": -10,
+     "type": "int"
+    },
+    "Fan_Blade_Angle": {
+     "control": "slider",
+     "default": 90,
+     "key": "E_SLIDER_Fan_Blade_Angle",
+     "max": 360,
+     "min": -360,
+     "type": "int"
+    },
+    "Fan_Blade_Width": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Fan_Blade_Width",
+     "max": 100,
+     "min": 5,
+     "type": "int"
+    },
+    "Fan_Blend_Edges": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Fan_Blend_Edges",
+     "type": "bool"
+    },
+    "Fan_CenterX": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Fan_CenterX",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Fan_CenterY": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Fan_CenterY",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Fan_Duration": {
+     "control": "slider",
+     "default": 80,
+     "key": "E_SLIDER_Fan_Duration",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Fan_Element_Width": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Fan_Element_Width",
+     "max": 100,
+     "min": 5,
+     "type": "int"
+    },
+    "Fan_End_Radius": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Fan_End_Radius",
+     "max": 2500,
+     "min": 0,
+     "type": "int"
+    },
+    "Fan_Num_Blades": {
+     "control": "slider",
+     "default": 3,
+     "key": "E_SLIDER_Fan_Num_Blades",
+     "max": 16,
+     "min": 1,
+     "type": "int"
+    },
+    "Fan_Num_Elements": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Fan_Num_Elements",
+     "max": 4,
+     "min": 1,
+     "type": "int"
+    },
+    "Fan_Reverse": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Fan_Reverse",
+     "type": "bool"
+    },
+    "Fan_Revolutions": {
+     "control": "slider",
+     "default": 2.0,
+     "divisor": 360,
+     "key": "E_SLIDER_Fan_Revolutions",
+     "max": 3600,
+     "min": 0,
+     "type": "float"
+    },
+    "Fan_Scale": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Fan_Scale",
+     "type": "bool"
+    },
+    "Fan_Start_Angle": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Fan_Start_Angle",
+     "max": 360,
+     "min": 0,
+     "type": "int"
+    },
+    "Fan_Start_Radius": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Fan_Start_Radius",
+     "max": 2500,
+     "min": 0,
+     "type": "int"
+    }
+   }
+  },
+  "Fill": {
+   "file": "Fill.json",
+   "params": {
+    "Fill_Band_Size": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Fill_Band_Size",
+     "max": 250,
+     "min": 0,
+     "type": "int"
+    },
+    "Fill_Color_Time": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Fill_Color_Time",
+     "type": "bool"
+    },
+    "Fill_Direction": {
+     "control": "choice",
+     "default": "Up",
+     "key": "E_CHOICE_Fill_Direction",
+     "options": [
+      "Up",
+      "Down",
+      "Left",
+      "Right"
+     ],
+     "type": "enum"
+    },
+    "Fill_Offset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Fill_Offset",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Fill_Offset_In_Pixels": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Fill_Offset_In_Pixels",
+     "type": "bool"
+    },
+    "Fill_Position": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Fill_Position",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Fill_Skip_Size": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Fill_Skip_Size",
+     "max": 250,
+     "min": 0,
+     "type": "int"
+    },
+    "Fill_Wrap": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Fill_Wrap",
+     "type": "bool"
+    }
+   }
+  },
+  "Fire": {
+   "file": "Fire.json",
+   "params": {
+    "Fire_GrowWithMusic": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Fire_GrowWithMusic",
+     "type": "bool"
+    },
+    "Fire_GrowthCycles": {
+     "control": "slider",
+     "default": 0.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Fire_GrowthCycles",
+     "max": 200,
+     "min": 0,
+     "type": "float"
+    },
+    "Fire_Height": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Fire_Height",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Fire_HueShift": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Fire_HueShift",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Fire_Location": {
+     "control": "choice",
+     "default": "Bottom",
+     "key": "E_CHOICE_Fire_Location",
+     "options": [
+      "Bottom",
+      "Top",
+      "Left",
+      "Right"
+     ],
+     "type": "enum"
+    },
+    "Fire_Style": {
+     "control": "choice",
+     "default": "New Render Method",
+     "key": "E_CHOICE_Fire_Style",
+     "options": [
+      "Old Render Method",
+      "New Render Method"
+     ],
+     "type": "enum"
+    }
+   }
+  },
+  "Fireworks": {
+   "file": "Fireworks.json",
+   "params": {
+    "FIRETIMING": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_FIRETIMING",
+     "type": "bool"
+    },
+    "FIRETIMINGTRACK": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_FIRETIMINGTRACK",
+     "options": [],
+     "type": "enum"
+    },
+    "Fireworks_Count": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Fireworks_Count",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Fireworks_Explosions": {
+     "control": "slider",
+     "default": 16,
+     "key": "E_SLIDER_Fireworks_Explosions",
+     "max": 50,
+     "min": 1,
+     "type": "int"
+    },
+    "Fireworks_Fade": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Fireworks_Fade",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Fireworks_Gravity": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Fireworks_Gravity",
+     "type": "bool"
+    },
+    "Fireworks_HoldColour": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Fireworks_HoldColour",
+     "type": "bool"
+    },
+    "Fireworks_Sensitivity": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Fireworks_Sensitivity",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Fireworks_UseMusic": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Fireworks_UseMusic",
+     "type": "bool"
+    },
+    "Fireworks_Velocity": {
+     "control": "slider",
+     "default": 2,
+     "key": "E_SLIDER_Fireworks_Velocity",
+     "max": 10,
+     "min": 1,
+     "type": "int"
+    },
+    "Fireworks_XLocation": {
+     "control": "slider",
+     "default": -1,
+     "key": "E_SLIDER_Fireworks_XLocation",
+     "max": 100,
+     "min": -1,
+     "type": "int"
+    },
+    "Fireworks_XVelocity": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Fireworks_XVelocity",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "Fireworks_YLocation": {
+     "control": "slider",
+     "default": -1,
+     "key": "E_SLIDER_Fireworks_YLocation",
+     "max": 100,
+     "min": -1,
+     "type": "int"
+    },
+    "Fireworks_YVelocity": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Fireworks_YVelocity",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    }
+   }
+  },
+  "Galaxy": {
+   "file": "Galaxy.json",
+   "params": {
+    "Galaxy_Accel": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Galaxy_Accel",
+     "max": 10,
+     "min": -10,
+     "type": "int"
+    },
+    "Galaxy_Blend_Edges": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Galaxy_Blend_Edges",
+     "type": "bool"
+    },
+    "Galaxy_CenterX": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Galaxy_CenterX",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Galaxy_CenterY": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Galaxy_CenterY",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Galaxy_Duration": {
+     "control": "slider",
+     "default": 20,
+     "key": "E_SLIDER_Galaxy_Duration",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Galaxy_End_Radius": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Galaxy_End_Radius",
+     "max": 250,
+     "min": 0,
+     "type": "int"
+    },
+    "Galaxy_End_Width": {
+     "control": "slider",
+     "default": 5,
+     "key": "E_SLIDER_Galaxy_End_Width",
+     "max": 255,
+     "min": 0,
+     "type": "int"
+    },
+    "Galaxy_Inward": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Galaxy_Inward",
+     "type": "bool"
+    },
+    "Galaxy_Reverse": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Galaxy_Reverse",
+     "type": "bool"
+    },
+    "Galaxy_Revolutions": {
+     "control": "slider",
+     "default": 4.0,
+     "divisor": 360,
+     "key": "E_SLIDER_Galaxy_Revolutions",
+     "max": 3600,
+     "min": 0,
+     "type": "float"
+    },
+    "Galaxy_Scale": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Galaxy_Scale",
+     "type": "bool"
+    },
+    "Galaxy_Start_Angle": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Galaxy_Start_Angle",
+     "max": 360,
+     "min": 0,
+     "type": "int"
+    },
+    "Galaxy_Start_Radius": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Galaxy_Start_Radius",
+     "max": 250,
+     "min": 0,
+     "type": "int"
+    },
+    "Galaxy_Start_Width": {
+     "control": "slider",
+     "default": 5,
+     "key": "E_SLIDER_Galaxy_Start_Width",
+     "max": 255,
+     "min": 0,
+     "type": "int"
+    }
+   }
+  },
+  "Garlands": {
+   "file": "Garlands.json",
+   "params": {
+    "Garlands_Cycles": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Garlands_Cycles",
+     "max": 200,
+     "min": 0,
+     "type": "float"
+    },
+    "Garlands_Direction": {
+     "control": "choice",
+     "default": "Up",
+     "key": "E_CHOICE_Garlands_Direction",
+     "options": [
+      "Up",
+      "Down",
+      "Left",
+      "Right",
+      "Up then Down",
+      "Down then Up",
+      "Left then Right",
+      "Right then Left"
+     ],
+     "type": "enum"
+    },
+    "Garlands_Spacing": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Garlands_Spacing",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Garlands_Type": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Garlands_Type",
+     "max": 4,
+     "min": 0,
+     "type": "int"
+    }
+   }
+  },
+  "Glediator": {
+   "file": "Glediator.json",
+   "params": {
+    "Glediator_DurationTreatment": {
+     "control": "choice",
+     "default": "Normal",
+     "key": "E_CHOICE_Glediator_DurationTreatment",
+     "options": [
+      "Normal",
+      "Loop",
+      "Slow/Accelerate"
+     ],
+     "type": "enum"
+    },
+    "Glediator_Filename": {
+     "control": "filepicker",
+     "default": "",
+     "key": "E_FILEPICKERCTRL_Glediator_Filename",
+     "type": "file"
+    }
+   }
+  },
+  "Guitar": {
+   "file": "Guitar.json",
+   "params": {
+    "BaseWaveFactor": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_BaseWaveFactor",
+     "max": 100,
+     "min": 1,
+     "type": "float"
+    },
+    "Collapse": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Collapse",
+     "type": "bool"
+    },
+    "Fade": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Fade",
+     "type": "bool"
+    },
+    "Guitar_MIDITrack_APPLYLAST": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_Guitar_MIDITrack_APPLYLAST",
+     "options": [],
+     "type": "enum"
+    },
+    "Guitar_Type": {
+     "control": "choice",
+     "default": "Guitar",
+     "key": "E_CHOICE_Guitar_Type",
+     "options": [
+      "Guitar",
+      "Bass Guitar",
+      "Banjo",
+      "Violin"
+     ],
+     "type": "enum"
+    },
+    "MaxFrets": {
+     "control": "slider",
+     "default": 19,
+     "key": "E_SLIDER_MaxFrets",
+     "max": 30,
+     "min": 8,
+     "type": "int"
+    },
+    "ShowStrings": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_ShowStrings",
+     "type": "bool"
+    },
+    "StringAppearance": {
+     "control": "choice",
+     "default": "On",
+     "key": "E_CHOICE_StringAppearance",
+     "options": [
+      "On",
+      "Wave"
+     ],
+     "type": "enum"
+    },
+    "StringWaveFactor": {
+     "control": "slider",
+     "default": 0.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_StringWaveFactor",
+     "max": 100,
+     "min": 0,
+     "type": "float"
+    },
+    "VaryWaveLengthOnFret": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_VaryWaveLengthOnFret",
+     "type": "bool"
+    }
+   }
+  },
+  "Kaleidoscope": {
+   "file": "Kaleidoscope.json",
+   "params": {
+    "Kaleidoscope_Rotation": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Kaleidoscope_Rotation",
+     "max": 359,
+     "min": 0,
+     "type": "int"
+    },
+    "Kaleidoscope_Size": {
+     "control": "slider",
+     "default": 5,
+     "key": "E_SLIDER_Kaleidoscope_Size",
+     "max": 100,
+     "min": 2,
+     "type": "int"
+    },
+    "Kaleidoscope_Type": {
+     "control": "choice",
+     "default": "Triangle",
+     "key": "E_CHOICE_Kaleidoscope_Type",
+     "options": [
+      "Triangle",
+      "Square",
+      "Square 2",
+      "6-Fold",
+      "8-Fold",
+      "12-Fold",
+      "Radial"
+     ],
+     "type": "enum"
+    },
+    "Kaleidoscope_X": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Kaleidoscope_X",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Kaleidoscope_Y": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Kaleidoscope_Y",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    }
+   }
+  },
+  "Life": {
+   "file": "Life.json",
+   "params": {
+    "Life_Count": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Life_Count",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Life_Seed": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Life_Seed",
+     "max": 4,
+     "min": 0,
+     "type": "int"
+    },
+    "Life_Speed": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Life_Speed",
+     "max": 30,
+     "min": 1,
+     "type": "int"
+    }
+   }
+  },
+  "Lightning": {
+   "file": "Lightning.json",
+   "params": {
+    "ForkedLightning": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_ForkedLightning",
+     "type": "bool"
+    },
+    "Lightning_BOTX": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Lightning_BOTX",
+     "max": 50,
+     "min": -50,
+     "type": "int"
+    },
+    "Lightning_Direction": {
+     "control": "choice",
+     "default": "Up",
+     "key": "E_CHOICE_Lightning_Direction",
+     "options": [
+      "Up",
+      "Down"
+     ],
+     "type": "enum"
+    },
+    "Lightning_TopX": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Lightning_TopX",
+     "max": 50,
+     "min": -50,
+     "type": "int"
+    },
+    "Lightning_TopY": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Lightning_TopY",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Lightning_WIDTH": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Lightning_WIDTH",
+     "max": 7,
+     "min": 1,
+     "type": "int"
+    },
+    "Number_Bolts": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Number_Bolts",
+     "max": 50,
+     "min": 1,
+     "type": "int"
+    },
+    "Number_Segments": {
+     "control": "slider",
+     "default": 5,
+     "key": "E_SLIDER_Number_Segments",
+     "max": 20,
+     "min": 1,
+     "type": "int"
+    }
+   }
+  },
+  "Lines": {
+   "file": "Lines.json",
+   "params": {
+    "Lines_FadeTrails": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Lines_FadeTrails",
+     "type": "bool"
+    },
+    "Lines_Objects": {
+     "control": "slider",
+     "default": 2,
+     "key": "E_SLIDER_Lines_Objects",
+     "max": 20,
+     "min": 1,
+     "type": "int"
+    },
+    "Lines_Segments": {
+     "control": "slider",
+     "default": 3,
+     "key": "E_SLIDER_Lines_Segments",
+     "max": 6,
+     "min": 2,
+     "type": "int"
+    },
+    "Lines_Speed": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Lines_Speed",
+     "max": 100,
+     "min": 0,
+     "type": "float"
+    },
+    "Lines_Thickness": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Lines_Thickness",
+     "max": 10,
+     "min": 1,
+     "type": "int"
+    },
+    "Lines_Trails": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Lines_Trails",
+     "max": 10,
+     "min": 0,
+     "type": "int"
+    }
+   }
+  },
+  "Liquid": {
+   "file": "Liquid.json",
+   "params": {
+    "BottomBarrier": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_BottomBarrier",
+     "type": "bool"
+    },
+    "Despeckle": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Despeckle",
+     "max": 4,
+     "min": 0,
+     "type": "int"
+    },
+    "Direction1": {
+     "control": "slider",
+     "default": 270,
+     "key": "E_SLIDER_Direction1",
+     "max": 360,
+     "min": 0,
+     "type": "int"
+    },
+    "Direction2": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Direction2",
+     "max": 360,
+     "min": 0,
+     "type": "int"
+    },
+    "Direction3": {
+     "control": "slider",
+     "default": 90,
+     "key": "E_SLIDER_Direction3",
+     "max": 360,
+     "min": 0,
+     "type": "int"
+    },
+    "Direction4": {
+     "control": "slider",
+     "default": 180,
+     "key": "E_SLIDER_Direction4",
+     "max": 360,
+     "min": 0,
+     "type": "int"
+    },
+    "Enabled1": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Enabled1",
+     "type": "bool"
+    },
+    "Enabled2": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Enabled2",
+     "type": "bool"
+    },
+    "Enabled3": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Enabled3",
+     "type": "bool"
+    },
+    "Enabled4": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Enabled4",
+     "type": "bool"
+    },
+    "Flow1": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Flow1",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "Flow2": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Flow2",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "Flow3": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Flow3",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "Flow4": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Flow4",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "FlowMusic1": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_FlowMusic1",
+     "type": "bool"
+    },
+    "FlowMusic2": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_FlowMusic2",
+     "type": "bool"
+    },
+    "FlowMusic3": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_FlowMusic3",
+     "type": "bool"
+    },
+    "FlowMusic4": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_FlowMusic4",
+     "type": "bool"
+    },
+    "HoldColor": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_HoldColor",
+     "type": "bool"
+    },
+    "LeftBarrier": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_LeftBarrier",
+     "type": "bool"
+    },
+    "LifeTime": {
+     "control": "slider",
+     "default": 1000,
+     "key": "E_SLIDER_LifeTime",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "Liquid_Gravity": {
+     "control": "slider",
+     "default": 10.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Liquid_Gravity",
+     "max": 1000,
+     "min": -1000,
+     "type": "float"
+    },
+    "Liquid_GravityAngle": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Liquid_GravityAngle",
+     "max": 360,
+     "min": 0,
+     "type": "int"
+    },
+    "Liquid_SourceSize1": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Liquid_SourceSize1",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Liquid_SourceSize2": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Liquid_SourceSize2",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Liquid_SourceSize3": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Liquid_SourceSize3",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Liquid_SourceSize4": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Liquid_SourceSize4",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "MixColors": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_MixColors",
+     "type": "bool"
+    },
+    "ParticleType": {
+     "control": "choice",
+     "default": "Elastic",
+     "key": "E_CHOICE_ParticleType",
+     "options": [
+      "Powder",
+      "Elastic",
+      "Spring",
+      "Tensile",
+      "Viscous",
+      "Static Pressure",
+      "Water",
+      "Reactive",
+      "Repulsive"
+     ],
+     "type": "enum"
+    },
+    "RightBarrier": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_RightBarrier",
+     "type": "bool"
+    },
+    "Size": {
+     "control": "slider",
+     "default": 500,
+     "key": "E_TEXTCTRL_Size",
+     "max": 10000,
+     "min": 1,
+     "type": "int"
+    },
+    "TopBarrier": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_TopBarrier",
+     "type": "bool"
+    },
+    "Velocity1": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Velocity1",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "Velocity2": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Velocity2",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "Velocity3": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Velocity3",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "Velocity4": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Velocity4",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "WarmUpTime": {
+     "control": "slider",
+     "default": 0,
+     "divisor": 100,
+     "key": "E_TEXTCTRL_WarmUpTime",
+     "max": 2500,
+     "min": 0,
+     "type": "int"
+    },
+    "X1": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_X1",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "X2": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_X2",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "X3": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_X3",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "X4": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_X4",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Y1": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Y1",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Y2": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Y2",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Y3": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Y3",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Y4": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Y4",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    }
+   }
+  },
+  "Marquee": {
+   "file": "Marquee.json",
+   "params": {
+    "MarqueeXC": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_MarqueeXC",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "MarqueeYC": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_MarqueeYC",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "Marquee_Band_Size": {
+     "control": "slider",
+     "default": 3,
+     "key": "E_SLIDER_Marquee_Band_Size",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Marquee_PixelOffsets": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Marquee_PixelOffsets",
+     "type": "bool"
+    },
+    "Marquee_Reverse": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Marquee_Reverse",
+     "type": "bool"
+    },
+    "Marquee_ScaleX": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Marquee_ScaleX",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Marquee_ScaleY": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Marquee_ScaleY",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Marquee_Skip_Size": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Marquee_Skip_Size",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Marquee_Speed": {
+     "control": "slider",
+     "default": 3,
+     "key": "E_SLIDER_Marquee_Speed",
+     "max": 50,
+     "min": 0,
+     "type": "int"
+    },
+    "Marquee_Stagger": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Marquee_Stagger",
+     "max": 50,
+     "min": 0,
+     "type": "int"
+    },
+    "Marquee_Start": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Marquee_Start",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Marquee_Thickness": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Marquee_Thickness",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Marquee_WrapX": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Marquee_WrapX",
+     "type": "bool"
+    },
+    "Marquee_WrapY": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Marquee_WrapY",
+     "type": "bool"
+    }
+   }
+  },
+  "Meteors": {
+   "file": "Meteors.json",
+   "params": {
+    "FadeWithDistance": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_FadeWithDistance",
+     "type": "bool"
+    },
+    "Meteors_Count": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Meteors_Count",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Meteors_Effect": {
+     "control": "choice",
+     "default": "Down",
+     "key": "E_CHOICE_Meteors_Effect",
+     "options": [
+      "Down",
+      "Up",
+      "Left",
+      "Right",
+      "Implode",
+      "Explode",
+      "Icicles",
+      "Icicles + bkg"
+     ],
+     "type": "enum"
+    },
+    "Meteors_Length": {
+     "control": "slider",
+     "default": 25,
+     "key": "E_SLIDER_Meteors_Length",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Meteors_Speed": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Meteors_Speed",
+     "max": 50,
+     "min": 0,
+     "type": "int"
+    },
+    "Meteors_Swirl_Intensity": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Meteors_Swirl_Intensity",
+     "max": 20,
+     "min": 0,
+     "type": "int"
+    },
+    "Meteors_Type": {
+     "control": "choice",
+     "default": "Rainbow",
+     "key": "E_CHOICE_Meteors_Type",
+     "options": [
+      "Rainbow",
+      "Range",
+      "Palette"
+     ],
+     "type": "enum"
+    },
+    "Meteors_UseMusic": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Meteors_UseMusic",
+     "type": "bool"
+    },
+    "Meteors_WamupFrames": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Meteors_WamupFrames",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Meteors_XOffset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Meteors_XOffset",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "Meteors_YOffset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Meteors_YOffset",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    }
+   }
+  },
+  "Morph": {
+   "file": "Morph.json",
+   "params": {
+    "MorphAccel": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_MorphAccel",
+     "max": 10,
+     "min": -10,
+     "type": "int"
+    },
+    "MorphDuration": {
+     "control": "slider",
+     "default": 20,
+     "key": "E_SLIDER_MorphDuration",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "MorphEndLength": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_MorphEndLength",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "MorphStartLength": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_MorphStartLength",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Morph_AutoRepeat": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Morph_AutoRepeat",
+     "type": "bool"
+    },
+    "Morph_End_Link": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Morph_End_Link",
+     "type": "bool"
+    },
+    "Morph_End_X1": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Morph_End_X1",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Morph_End_X2": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Morph_End_X2",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Morph_End_Y1": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Morph_End_Y1",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Morph_End_Y2": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Morph_End_Y2",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Morph_LineEditor": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Morph_LineEditor",
+     "type": "string"
+    },
+    "Morph_QuickSet": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Morph_QuickSet",
+     "type": "string"
+    },
+    "Morph_Repeat_Count": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Morph_Repeat_Count",
+     "max": 250,
+     "min": 0,
+     "type": "int"
+    },
+    "Morph_Repeat_Skip": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Morph_Repeat_Skip",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Morph_Stagger": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Morph_Stagger",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "Morph_Start_Link": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Morph_Start_Link",
+     "type": "bool"
+    },
+    "Morph_Start_X1": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Morph_Start_X1",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Morph_Start_X2": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Morph_Start_X2",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Morph_Start_Y1": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Morph_Start_Y1",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Morph_Start_Y2": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Morph_Start_Y2",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Morph_Swap": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Morph_Swap",
+     "type": "string"
+    },
+    "ShowHeadAtStart": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_ShowHeadAtStart",
+     "type": "bool"
+    }
+   }
+  },
+  "Moving Head": {
+   "file": "MovingHead.json",
+   "params": {
+    "AUTO_SHUTTER": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_AUTO_SHUTTER",
+     "type": "bool"
+    },
+    "MH1_Settings": {
+     "control": "text",
+     "default": "",
+     "key": "E_TEXTCTRL_MH1_Settings",
+     "type": "string"
+    },
+    "MH2_Settings": {
+     "control": "text",
+     "default": "",
+     "key": "E_TEXTCTRL_MH2_Settings",
+     "type": "string"
+    },
+    "MH3_Settings": {
+     "control": "text",
+     "default": "",
+     "key": "E_TEXTCTRL_MH3_Settings",
+     "type": "string"
+    },
+    "MH4_Settings": {
+     "control": "text",
+     "default": "",
+     "key": "E_TEXTCTRL_MH4_Settings",
+     "type": "string"
+    },
+    "MH5_Settings": {
+     "control": "text",
+     "default": "",
+     "key": "E_TEXTCTRL_MH5_Settings",
+     "type": "string"
+    },
+    "MH6_Settings": {
+     "control": "text",
+     "default": "",
+     "key": "E_TEXTCTRL_MH6_Settings",
+     "type": "string"
+    },
+    "MH7_Settings": {
+     "control": "text",
+     "default": "",
+     "key": "E_TEXTCTRL_MH7_Settings",
+     "type": "string"
+    },
+    "MH8_Settings": {
+     "control": "text",
+     "default": "",
+     "key": "E_TEXTCTRL_MH8_Settings",
+     "type": "string"
+    },
+    "MHColorRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_MHColorRow",
+     "type": "string"
+    },
+    "MHColorWheelRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_MHColorWheelRow",
+     "type": "string"
+    },
+    "MHCycles": {
+     "control": "slider",
+     "default": 0.1,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_MHCycles",
+     "max": 100,
+     "min": 0,
+     "type": "float"
+    },
+    "MHDimmerRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_MHDimmerRow",
+     "type": "string"
+    },
+    "MHFixtures": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_MHFixtures",
+     "type": "string"
+    },
+    "MHGroupings": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_MHGroupings",
+     "max": 6,
+     "min": 1,
+     "type": "int"
+    },
+    "MHIgnorePan": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_MHIgnorePan",
+     "type": "bool"
+    },
+    "MHIgnoreTilt": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_MHIgnoreTilt",
+     "type": "bool"
+    },
+    "MHIpadInfo": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_MHIpadInfo",
+     "type": "string"
+    },
+    "MHLinkRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_MHLinkRow",
+     "type": "string"
+    },
+    "MHLinkToNext": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_MHLinkToNext",
+     "type": "bool"
+    },
+    "MHPan": {
+     "control": "slider",
+     "default": 0.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_MHPan",
+     "max": 1800,
+     "min": -1800,
+     "type": "float"
+    },
+    "MHPanOffset": {
+     "control": "slider",
+     "default": 0.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_MHPanOffset",
+     "max": 1800,
+     "min": -1800,
+     "type": "float"
+    },
+    "MHPathDef": {
+     "control": "text",
+     "default": "",
+     "key": "E_TEXTCTRL_MHPathDef",
+     "type": "string"
+    },
+    "MHPathRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_MHPathRow",
+     "type": "string"
+    },
+    "MHPathScale": {
+     "control": "slider",
+     "default": 0.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_MHPathScale",
+     "max": 100,
+     "min": -100,
+     "type": "float"
+    },
+    "MHPattern": {
+     "control": "choice",
+     "default": "Circle",
+     "key": "E_CHOICE_MHPattern",
+     "options": [
+      "Circle",
+      "Eight",
+      "Line",
+      "Line2",
+      "Diamond",
+      "Square",
+      "SquareChoppy",
+      "SquareTrue",
+      "Leaf",
+      "Lissajous"
+     ],
+     "type": "enum"
+    },
+    "MHPatternEnable": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_MHPatternEnable",
+     "type": "bool"
+    },
+    "MHPatternHeight": {
+     "control": "slider",
+     "default": 45,
+     "key": "E_SLIDER_MHPatternHeight",
+     "max": 180,
+     "min": 0,
+     "type": "int"
+    },
+    "MHPatternPhaseOffset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_MHPatternPhaseOffset",
+     "max": 360,
+     "min": -360,
+     "type": "int"
+    },
+    "MHPatternRotation": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_MHPatternRotation",
+     "max": 360,
+     "min": 0,
+     "type": "int"
+    },
+    "MHPatternStartOffset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_MHPatternStartOffset",
+     "max": 360,
+     "min": 0,
+     "type": "int"
+    },
+    "MHPatternWidth": {
+     "control": "slider",
+     "default": 90,
+     "key": "E_SLIDER_MHPatternWidth",
+     "max": 180,
+     "min": 0,
+     "type": "int"
+    },
+    "MHPatternXFreq": {
+     "control": "slider",
+     "default": 2,
+     "key": "E_SLIDER_MHPatternXFreq",
+     "max": 32,
+     "min": 0,
+     "type": "int"
+    },
+    "MHPatternXOffset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_MHPatternXOffset",
+     "max": 180,
+     "min": -180,
+     "type": "int"
+    },
+    "MHPatternXPhase": {
+     "control": "slider",
+     "default": 90,
+     "key": "E_SLIDER_MHPatternXPhase",
+     "max": 360,
+     "min": 0,
+     "type": "int"
+    },
+    "MHPatternYFreq": {
+     "control": "slider",
+     "default": 3,
+     "key": "E_SLIDER_MHPatternYFreq",
+     "max": 32,
+     "min": 0,
+     "type": "int"
+    },
+    "MHPatternYOffset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_MHPatternYOffset",
+     "max": 180,
+     "min": -180,
+     "type": "int"
+    },
+    "MHPatternYPhase": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_MHPatternYPhase",
+     "max": 360,
+     "min": 0,
+     "type": "int"
+    },
+    "MHShutterEnable": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_MHShutterEnable",
+     "type": "bool"
+    },
+    "MHTilt": {
+     "control": "slider",
+     "default": 0.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_MHTilt",
+     "max": 1800,
+     "min": -1800,
+     "type": "float"
+    },
+    "MHTiltOffset": {
+     "control": "slider",
+     "default": 0.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_MHTiltOffset",
+     "max": 1800,
+     "min": -1800,
+     "type": "float"
+    },
+    "MHTimeOffset": {
+     "control": "slider",
+     "default": 0.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_MHTimeOffset",
+     "max": 1000,
+     "min": -1000,
+     "type": "float"
+    }
+   }
+  },
+  "Music": {
+   "file": "MusicEffect.json",
+   "params": {
+    "Music_Bars": {
+     "control": "slider",
+     "default": 20,
+     "key": "E_SLIDER_Music_Bars",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Music_Colour": {
+     "control": "choice",
+     "default": "Distinct",
+     "key": "E_CHOICE_Music_Colour",
+     "options": [
+      "Distinct",
+      "Blend",
+      "Cycle"
+     ],
+     "type": "enum"
+    },
+    "Music_EndNote": {
+     "control": "slider",
+     "default": 80,
+     "key": "E_SLIDER_Music_EndNote",
+     "max": 127,
+     "min": 0,
+     "type": "int"
+    },
+    "Music_Fade": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Music_Fade",
+     "type": "bool"
+    },
+    "Music_LogarithmicX": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Music_LogarithmicX",
+     "type": "bool"
+    },
+    "Music_Offset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Music_Offset",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Music_Scale": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Music_Scale",
+     "type": "bool"
+    },
+    "Music_Scaling": {
+     "control": "choice",
+     "default": "None",
+     "key": "E_CHOICE_Music_Scaling",
+     "options": [
+      "None",
+      "Individual Notes",
+      "All Notes"
+     ],
+     "type": "enum"
+    },
+    "Music_Sensitivity": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Music_Sensitivity",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Music_StartNote": {
+     "control": "slider",
+     "default": 60,
+     "key": "E_SLIDER_Music_StartNote",
+     "max": 127,
+     "min": 0,
+     "type": "int"
+    },
+    "Music_Type": {
+     "control": "choice",
+     "default": "Morph",
+     "key": "E_CHOICE_Music_Type",
+     "options": [
+      "Morph",
+      "Bounce",
+      "Collide",
+      "Separate",
+      "On"
+     ],
+     "type": "enum"
+    }
+   }
+  },
+  "Off": {
+   "file": "Off.json",
+   "params": {
+    "Off_Style": {
+     "control": "choice",
+     "default": "Black",
+     "key": "E_CHOICE_Off_Style",
+     "options": [
+      "Black",
+      "Transparent",
+      "Black -> Transparent",
+      "Transparent -> Black"
+     ],
+     "type": "enum"
+    }
+   }
+  },
+  "On": {
+   "file": "On.json",
+   "params": {
+    "Eff_On_End": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_TEXTCTRL_Eff_On_End",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Eff_On_Start": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_TEXTCTRL_Eff_On_Start",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "On_Cycles": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_On_Cycles",
+     "max": 1000,
+     "min": 0,
+     "type": "float"
+    },
+    "On_Shimmer": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_On_Shimmer",
+     "type": "bool"
+    },
+    "On_Transparency": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_On_Transparency",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    }
+   }
+  },
+  "Piano": {
+   "file": "Piano.json",
+   "params": {
+    "Piano_EndMIDI": {
+     "control": "spin",
+     "default": 72,
+     "key": "E_SPINCTRL_Piano_EndMIDI",
+     "max": 127,
+     "min": 0,
+     "type": "int"
+    },
+    "Piano_FadeNotes": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Piano_FadeNotes",
+     "type": "bool"
+    },
+    "Piano_MIDITrack_APPLYLAST": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_Piano_MIDITrack_APPLYLAST",
+     "options": [],
+     "type": "enum"
+    },
+    "Piano_Scale": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Piano_Scale",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Piano_ShowSharps": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Piano_ShowSharps",
+     "type": "bool"
+    },
+    "Piano_StartMIDI": {
+     "control": "spin",
+     "default": 60,
+     "key": "E_SPINCTRL_Piano_StartMIDI",
+     "max": 127,
+     "min": 0,
+     "type": "int"
+    },
+    "Piano_Type": {
+     "control": "choice",
+     "default": "True Piano",
+     "key": "E_CHOICE_Piano_Type",
+     "options": [
+      "True Piano",
+      "Bars"
+     ],
+     "type": "enum"
+    },
+    "Piano_XOffset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Piano_XOffset",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    }
+   }
+  },
+  "Pictures": {
+   "file": "Pictures.json",
+   "params": {
+    "LoopGIF": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_LoopGIF",
+     "type": "bool"
+    },
+    "PicturesEndXC": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_PicturesEndXC",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "PicturesEndYC": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_PicturesEndYC",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "PicturesXC": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_PicturesXC",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "PicturesYC": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_PicturesYC",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "Pictures_Direction": {
+     "control": "choice",
+     "default": "none",
+     "key": "E_CHOICE_Pictures_Direction",
+     "options": [
+      "none",
+      "left",
+      "right",
+      "up",
+      "down",
+      "up-left",
+      "down-left",
+      "up-right",
+      "down-right",
+      "peekaboo",
+      "wiggle",
+      "zoom in",
+      "peekaboo 90",
+      "peekaboo 180",
+      "peekaboo 270",
+      "flag wave",
+      "up once",
+      "down once",
+      "vector",
+      "tile-left",
+      "tile-right",
+      "tile-down",
+      "tile-up"
+     ],
+     "type": "enum"
+    },
+    "Pictures_EndScale": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Pictures_EndScale",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "Pictures_FilenameBlock": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Pictures_FilenameBlock",
+     "type": "string"
+    },
+    "Pictures_FrameRateAdj": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Pictures_FrameRateAdj",
+     "max": 200,
+     "min": 0,
+     "type": "float"
+    },
+    "Pictures_PixelOffsets": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Pictures_PixelOffsets",
+     "type": "bool"
+    },
+    "Pictures_Shimmer": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Pictures_Shimmer",
+     "type": "bool"
+    },
+    "Pictures_Speed": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Pictures_Speed",
+     "max": 200,
+     "min": 0,
+     "type": "float"
+    },
+    "Pictures_StartScale": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Pictures_StartScale",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "Pictures_TransparentBlackRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Pictures_TransparentBlackRow",
+     "type": "string"
+    },
+    "Pictures_WrapX": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Pictures_WrapX",
+     "type": "bool"
+    },
+    "Scaling": {
+     "control": "choice",
+     "default": "No Scaling",
+     "key": "E_CHOICE_Scaling",
+     "options": [
+      "No Scaling",
+      "Scale To Fit",
+      "Scale Keep Aspect Ratio",
+      "Scale Keep Aspect Ratio Crop"
+     ],
+     "type": "enum"
+    },
+    "SuppressGIFBackground": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_SuppressGIFBackground",
+     "type": "bool"
+    }
+   }
+  },
+  "Pinwheel": {
+   "file": "Pinwheel.json",
+   "params": {
+    "PinwheelXC": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_PinwheelXC",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "PinwheelYC": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_PinwheelYC",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "Pinwheel_3D": {
+     "control": "choice",
+     "default": "None",
+     "key": "E_CHOICE_Pinwheel_3D",
+     "options": [
+      "None",
+      "3D",
+      "3D Inverted",
+      "Sweep"
+     ],
+     "type": "enum"
+    },
+    "Pinwheel_ArmSize": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Pinwheel_ArmSize",
+     "max": 400,
+     "min": 0,
+     "type": "int"
+    },
+    "Pinwheel_Arms": {
+     "control": "slider",
+     "default": 3,
+     "key": "E_SLIDER_Pinwheel_Arms",
+     "max": 20,
+     "min": 1,
+     "type": "int"
+    },
+    "Pinwheel_Offset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Pinwheel_Offset",
+     "max": 360,
+     "min": 0,
+     "type": "int"
+    },
+    "Pinwheel_Rotation": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Pinwheel_Rotation",
+     "type": "bool"
+    },
+    "Pinwheel_Speed": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Pinwheel_Speed",
+     "max": 50,
+     "min": 0,
+     "type": "int"
+    },
+    "Pinwheel_Style": {
+     "control": "choice",
+     "default": "New Render Method",
+     "key": "E_CHOICE_Pinwheel_Style",
+     "options": [
+      "Old Render Method",
+      "New Render Method"
+     ],
+     "type": "enum"
+    },
+    "Pinwheel_Thickness": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Pinwheel_Thickness",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Pinwheel_Twist": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Pinwheel_Twist",
+     "max": 360,
+     "min": -360,
+     "type": "int"
+    }
+   }
+  },
+  "Plasma": {
+   "file": "Plasma.json",
+   "params": {
+    "Plasma_Color": {
+     "control": "choice",
+     "default": "Normal",
+     "key": "E_CHOICE_Plasma_Color",
+     "options": [
+      "Normal",
+      "Preset Colors 1",
+      "Preset Colors 2",
+      "Preset Colors 3",
+      "Preset Colors 4"
+     ],
+     "type": "enum"
+    },
+    "Plasma_Line_Density": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Plasma_Line_Density",
+     "max": 10,
+     "min": 1,
+     "type": "int"
+    },
+    "Plasma_Speed": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Plasma_Speed",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Plasma_Style": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Plasma_Style",
+     "max": 10,
+     "min": 1,
+     "type": "int"
+    }
+   }
+  },
+  "Ripple": {
+   "file": "Ripple.json",
+   "params": {
+    "RIPPLE_POINTS": {
+     "control": "slider",
+     "default": 5,
+     "key": "E_SLIDER_RIPPLE_POINTS",
+     "max": 8,
+     "min": 3,
+     "type": "int"
+    },
+    "Ripple3D": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Ripple3D",
+     "type": "bool"
+    },
+    "Ripple_Cycles": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Ripple_Cycles",
+     "max": 300,
+     "min": 0,
+     "type": "float"
+    },
+    "Ripple_Direction": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Ripple_Direction",
+     "max": 360,
+     "min": -360,
+     "type": "int"
+    },
+    "Ripple_Draw_Style": {
+     "control": "choice",
+     "default": "Old",
+     "key": "E_CHOICE_Ripple_Draw_Style",
+     "options": [
+      "Old",
+      "Lines Inward",
+      "Lines Outward",
+      "Lines Both",
+      "Lines Inward Ripple",
+      "Lines Outward Ripple",
+      "Lines Both Ripple",
+      "Solid Inward",
+      "Solid Outward",
+      "Solid Both",
+      "Solid Inward Ripple",
+      "Solid Outward Ripple",
+      "Solid Both Ripple",
+      "Highlight Inward",
+      "Highlight Outward",
+      "Highlight Both",
+      "Highlight Inward Ripple",
+      "Highlight Outward Ripple",
+      "Highlight Both Ripple"
+     ],
+     "type": "enum"
+    },
+    "Ripple_Movement": {
+     "control": "choice",
+     "default": "Explode",
+     "key": "E_CHOICE_Ripple_Movement",
+     "options": [
+      "Explode",
+      "Implode",
+      "None"
+     ],
+     "type": "enum"
+    },
+    "Ripple_Object_To_Draw": {
+     "control": "choice",
+     "default": "Circle",
+     "key": "E_CHOICE_Ripple_Object_To_Draw",
+     "options": [
+      "Circle",
+      "Square",
+      "Triangle",
+      "Star",
+      "Polygon",
+      "Heart",
+      "Tree",
+      "Candy Cane",
+      "Snow Flake",
+      "Crucifix",
+      "Present",
+      "SVG"
+     ],
+     "type": "enum"
+    },
+    "Ripple_Outline": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Ripple_Outline",
+     "max": 100,
+     "min": 0,
+     "type": "float"
+    },
+    "Ripple_Rotation": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Ripple_Rotation",
+     "max": 360,
+     "min": -360,
+     "type": "int"
+    },
+    "Ripple_SVG": {
+     "control": "custom",
+     "default": "",
+     "key": "E_FILEPICKERCTRL_Ripple_SVG",
+     "type": "file"
+    },
+    "Ripple_Scale": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Ripple_Scale",
+     "max": 500,
+     "min": 0,
+     "type": "int"
+    },
+    "Ripple_Spacing": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Ripple_Spacing",
+     "max": 400,
+     "min": 1,
+     "type": "float"
+    },
+    "Ripple_Thickness": {
+     "control": "slider",
+     "default": 3,
+     "key": "E_SLIDER_Ripple_Thickness",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Ripple_Twist": {
+     "control": "slider",
+     "default": 0.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Ripple_Twist",
+     "max": 450,
+     "min": -450,
+     "type": "float"
+    },
+    "Ripple_Velocity": {
+     "control": "slider",
+     "default": 0.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Ripple_Velocity",
+     "max": 300,
+     "min": 0,
+     "type": "float"
+    },
+    "Ripple_XC": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Ripple_XC",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "Ripple_YC": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Ripple_YC",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    }
+   }
+  },
+  "Servo": {
+   "file": "Servo.json",
+   "params": {
+    "16bit": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_16bit",
+     "type": "bool"
+    },
+    "Channel": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_Channel",
+     "options": [],
+     "type": "enum"
+    },
+    "Servo_ButtonRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Servo_ButtonRow",
+     "type": "string"
+    },
+    "Servo_StartEndRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Servo_StartEndRow",
+     "type": "string"
+    },
+    "Servo_TimingTrack": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_Servo_TimingTrack",
+     "options": [],
+     "type": "enum"
+    },
+    "Timing_Track": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Timing_Track",
+     "type": "bool"
+    }
+   }
+  },
+  "Shader": {
+   "file": "Shader.json",
+   "params": {
+    "Shader_DynamicParams": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Shader_DynamicParams",
+     "type": "string"
+    },
+    "Shader_FilenameBlock": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Shader_FilenameBlock",
+     "type": "string"
+    },
+    "Shader_LeadIn": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_TEXTCTRL_Shader_LeadIn",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "Shader_Offset_X": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_TEXTCTRL_Shader_Offset_X",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "Shader_Offset_Y": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_TEXTCTRL_Shader_Offset_Y",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "Shader_SpeedRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Shader_SpeedRow",
+     "type": "string"
+    },
+    "Shader_Zoom": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_TEXTCTRL_Shader_Zoom",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    }
+   }
+  },
+  "Shape": {
+   "file": "Shape.json",
+   "params": {
+    "SVG": {
+     "control": "custom",
+     "default": "",
+     "key": "E_FILEPICKERCTRL_SVG",
+     "type": "file"
+    },
+    "Shape_CentreX": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Shape_CentreX",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Shape_CentreY": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Shape_CentreY",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Shape_Char": {
+     "control": "custom",
+     "default": 127876,
+     "key": "E_SLIDER_Shape_Char",
+     "max": 917631,
+     "min": 32,
+     "type": "int"
+    },
+    "Shape_Count": {
+     "control": "slider",
+     "default": 5,
+     "key": "E_SLIDER_Shape_Count",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Shape_FadeAway": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Shape_FadeAway",
+     "type": "bool"
+    },
+    "Shape_FilterLabel": {
+     "control": "text",
+     "default": "",
+     "key": "E_TEXTCTRL_Shape_FilterLabel",
+     "type": "string"
+    },
+    "Shape_FilterReg": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Shape_FilterReg",
+     "type": "bool"
+    },
+    "Shape_FireTiming": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Shape_FireTiming",
+     "type": "bool"
+    },
+    "Shape_FireTimingTrack": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_Shape_FireTimingTrack",
+     "options": [],
+     "type": "enum"
+    },
+    "Shape_Font": {
+     "control": "custom",
+     "default": "",
+     "key": "E_FONTPICKER_Shape_Font",
+     "type": "font"
+    },
+    "Shape_Growth": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Shape_Growth",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "Shape_HoldColour": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Shape_HoldColour",
+     "type": "bool"
+    },
+    "Shape_Lifetime": {
+     "control": "slider",
+     "default": 5,
+     "key": "E_SLIDER_Shape_Lifetime",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Shape_ObjectToDraw": {
+     "control": "choice",
+     "default": "Circle",
+     "key": "E_CHOICE_Shape_ObjectToDraw",
+     "options": [
+      "Circle",
+      "Ellipse",
+      "Triangle",
+      "Square",
+      "Pentagon",
+      "Hexagon",
+      "Octagon",
+      "Star",
+      "Heart",
+      "Tree",
+      "Snowflake",
+      "Candy Cane",
+      "Random",
+      "Crucifix",
+      "Present",
+      "Emoji",
+      "SVG"
+     ],
+     "type": "enum"
+    },
+    "Shape_Points": {
+     "control": "slider",
+     "default": 5,
+     "key": "E_SLIDER_Shape_Points",
+     "max": 9,
+     "min": 2,
+     "type": "int"
+    },
+    "Shape_RandomInitial": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Shape_RandomInitial",
+     "type": "bool"
+    },
+    "Shape_RandomLocation": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Shape_RandomLocation",
+     "type": "bool"
+    },
+    "Shape_Rotation": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Shape_Rotation",
+     "max": 360,
+     "min": 0,
+     "type": "int"
+    },
+    "Shape_Sensitivity": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Shape_Sensitivity",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Shape_SkinTone": {
+     "control": "custom",
+     "default": "Default",
+     "key": "E_CHOICE_Shape_SkinTone",
+     "options": [
+      "Default",
+      "Light",
+      "Medium Light",
+      "Medium",
+      "Medium Dark",
+      "Dark"
+     ],
+     "type": "enum"
+    },
+    "Shape_StartSize": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Shape_StartSize",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Shape_Thickness": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Shape_Thickness",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Shape_UseMusic": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Shape_UseMusic",
+     "type": "bool"
+    },
+    "Shapes_Direction": {
+     "control": "slider",
+     "default": 90,
+     "key": "E_SLIDER_Shapes_Direction",
+     "max": 359,
+     "min": 0,
+     "type": "int"
+    },
+    "Shapes_RandomMovement": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Shapes_RandomMovement",
+     "type": "bool"
+    },
+    "Shapes_Velocity": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Shapes_Velocity",
+     "max": 20,
+     "min": 0,
+     "type": "int"
+    }
+   }
+  },
+  "Shimmer": {
+   "file": "Shimmer.json",
+   "params": {
+    "PRE_2017_7": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_PRE_2017_7",
+     "type": "bool"
+    },
+    "Shimmer_Cycles": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Shimmer_Cycles",
+     "max": 6000,
+     "min": 0,
+     "type": "float"
+    },
+    "Shimmer_Duty_Factor": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Shimmer_Duty_Factor",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Shimmer_Use_All_Colors": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Shimmer_Use_All_Colors",
+     "type": "bool"
+    }
+   }
+  },
+  "Shockwave": {
+   "file": "Shockwave.json",
+   "params": {
+    "Shockwave_Accel": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Shockwave_Accel",
+     "max": 10,
+     "min": -10,
+     "type": "int"
+    },
+    "Shockwave_Blend_Edges": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Shockwave_Blend_Edges",
+     "type": "bool"
+    },
+    "Shockwave_CenterX": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Shockwave_CenterX",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Shockwave_CenterY": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Shockwave_CenterY",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Shockwave_Cycles": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Shockwave_Cycles",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Shockwave_Duration": {
+     "control": "slider",
+     "default": 1000,
+     "key": "E_SLIDER_Shockwave_Duration",
+     "max": 5000,
+     "min": 50,
+     "type": "int"
+    },
+    "Shockwave_End_Radius": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Shockwave_End_Radius",
+     "max": 750,
+     "min": 0,
+     "type": "int"
+    },
+    "Shockwave_End_Width": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Shockwave_End_Width",
+     "max": 255,
+     "min": 0,
+     "type": "int"
+    },
+    "Shockwave_FilterLabel": {
+     "control": "text",
+     "default": "",
+     "key": "E_TEXTCTRL_Shockwave_FilterLabel",
+     "type": "string"
+    },
+    "Shockwave_FilterRegex": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Shockwave_FilterRegex",
+     "type": "bool"
+    },
+    "Shockwave_Scale": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_Shockwave_Scale",
+     "type": "bool"
+    },
+    "Shockwave_Start_Radius": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Shockwave_Start_Radius",
+     "max": 750,
+     "min": 0,
+     "type": "int"
+    },
+    "Shockwave_Start_Width": {
+     "control": "slider",
+     "default": 5,
+     "key": "E_SLIDER_Shockwave_Start_Width",
+     "max": 255,
+     "min": 0,
+     "type": "int"
+    },
+    "Shockwave_TimingTrack": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_Shockwave_TimingTrack",
+     "options": [],
+     "type": "enum"
+    }
+   }
+  },
+  "SingleStrand": {
+   "file": "SingleStrand.json",
+   "params": {
+    "Chase_Group_All": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Chase_Group_All",
+     "type": "bool"
+    },
+    "Chase_Offset": {
+     "control": "slider",
+     "default": 0.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Chase_Offset",
+     "max": 5000,
+     "min": -5000,
+     "type": "float"
+    },
+    "Chase_Rotations": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Chase_Rotations",
+     "max": 500,
+     "min": 1,
+     "type": "float"
+    },
+    "Chase_Type1": {
+     "control": "choice",
+     "default": "Left-Right",
+     "key": "E_CHOICE_Chase_Type1",
+     "options": [
+      "Left-Right",
+      "Right-Left",
+      "Bounce from Left",
+      "Bounce from Right",
+      "Dual Chase",
+      "From Middle",
+      "To Middle",
+      "Bounce to Middle",
+      "Bounce from Middle",
+      "Static Left-Right",
+      "Static Right-Left",
+      "Static Dual",
+      "Static From Middle",
+      "Static To Middle",
+      "Static Double-Ended"
+     ],
+     "type": "enum"
+    },
+    "Color_Mix1": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Color_Mix1",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "FX_Intensity": {
+     "control": "slider",
+     "default": 128,
+     "key": "E_SLIDER_FX_Intensity",
+     "max": 255,
+     "min": 0,
+     "type": "int"
+    },
+    "FX_Speed": {
+     "control": "slider",
+     "default": 128,
+     "key": "E_SLIDER_FX_Speed",
+     "max": 255,
+     "min": 0,
+     "type": "int"
+    },
+    "Fade_Type": {
+     "control": "choice",
+     "default": "None",
+     "key": "E_CHOICE_Fade_Type",
+     "options": [
+      "None",
+      "From Head",
+      "From Tail",
+      "Head and Tail",
+      "Middle"
+     ],
+     "type": "enum"
+    },
+    "Number_Chases": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Number_Chases",
+     "max": 20,
+     "min": 1,
+     "type": "int"
+    },
+    "SingleStrand_Colors": {
+     "control": "choice",
+     "default": "Palette",
+     "key": "E_CHOICE_SingleStrand_Colors",
+     "options": [
+      "Rainbow",
+      "Palette"
+     ],
+     "type": "enum"
+    },
+    "SingleStrand_FX": {
+     "control": "choice",
+     "default": "Blink",
+     "key": "E_CHOICE_SingleStrand_FX",
+     "options": [],
+     "type": "enum"
+    },
+    "SingleStrand_FX_Palette": {
+     "control": "choice",
+     "default": "Default",
+     "key": "E_CHOICE_SingleStrand_FX_Palette",
+     "options": [],
+     "type": "enum"
+    },
+    "SingleStrand_TimingTrack": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_SingleStrand_TimingTrack",
+     "options": [],
+     "type": "enum"
+    },
+    "Skips_Advance": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Skips_Advance",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Skips_BandSize": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Skips_BandSize",
+     "max": 20,
+     "min": 1,
+     "type": "int"
+    },
+    "Skips_Direction": {
+     "control": "choice",
+     "default": "Left",
+     "key": "E_CHOICE_Skips_Direction",
+     "options": [
+      "Left",
+      "Right",
+      "From Middle",
+      "To Middle"
+     ],
+     "type": "enum"
+    },
+    "Skips_SkipSize": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Skips_SkipSize",
+     "max": 20,
+     "min": 0,
+     "type": "int"
+    },
+    "Skips_StartPos": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Skips_StartPos",
+     "max": 20,
+     "min": 1,
+     "type": "int"
+    }
+   }
+  },
+  "Sketch": {
+   "file": "Sketch.json",
+   "params": {
+    "DrawPercentage": {
+     "control": "slider",
+     "default": 40,
+     "key": "E_SLIDER_DrawPercentage",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "MotionEnabled": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_MotionEnabled",
+     "type": "bool"
+    },
+    "MotionPercentage": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_MotionPercentage",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "SketchBackgroundOpacity": {
+     "control": "slider",
+     "default": 48,
+     "key": "E_SLIDER_SketchBackgroundOpacity",
+     "max": 255,
+     "min": 0,
+     "type": "int"
+    },
+    "Sketch_BackgroundRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Sketch_BackgroundRow",
+     "type": "string"
+    },
+    "Sketch_DefRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Sketch_DefRow",
+     "type": "string"
+    },
+    "Sketch_Info": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Sketch_Info",
+     "type": "string"
+    },
+    "Sketch_PathEditor": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Sketch_PathEditor",
+     "type": "string"
+    },
+    "Thickness": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Thickness",
+     "max": 25,
+     "min": 1,
+     "type": "int"
+    }
+   }
+  },
+  "Snowflakes": {
+   "file": "Snowflakes.json",
+   "params": {
+    "Falling": {
+     "control": "choice",
+     "default": "Driving",
+     "key": "E_CHOICE_Falling",
+     "options": [
+      "Driving",
+      "Falling",
+      "Falling & Accumulating"
+     ],
+     "type": "enum"
+    },
+    "Snowflakes_Count": {
+     "control": "slider",
+     "default": 5,
+     "key": "E_SLIDER_Snowflakes_Count",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Snowflakes_Speed": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Snowflakes_Speed",
+     "max": 50,
+     "min": 0,
+     "type": "int"
+    },
+    "Snowflakes_Type": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Snowflakes_Type",
+     "max": 9,
+     "min": 0,
+     "type": "int"
+    },
+    "Snowflakes_WarmupFrames": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Snowflakes_WarmupFrames",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    }
+   }
+  },
+  "Snowstorm": {
+   "file": "Snowstorm.json",
+   "params": {
+    "Snowstorm_Count": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Snowstorm_Count",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Snowstorm_Length": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Snowstorm_Length",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Snowstorm_Speed": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Snowstorm_Speed",
+     "max": 50,
+     "min": 1,
+     "type": "int"
+    }
+   }
+  },
+  "Spirals": {
+   "file": "Spirals.json",
+   "params": {
+    "Spirals_3D": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Spirals_3D",
+     "type": "bool"
+    },
+    "Spirals_Blend": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Spirals_Blend",
+     "type": "bool"
+    },
+    "Spirals_Count": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Spirals_Count",
+     "max": 5,
+     "min": 1,
+     "type": "int"
+    },
+    "Spirals_Grow": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Spirals_Grow",
+     "type": "bool"
+    },
+    "Spirals_Movement": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 10,
+     "key": "E_TEXTCTRL_Spirals_Movement",
+     "max": 200,
+     "min": -200,
+     "type": "float"
+    },
+    "Spirals_Rotation": {
+     "control": "slider",
+     "default": 2.0,
+     "divisor": 10,
+     "key": "E_SLIDER_Spirals_Rotation",
+     "max": 300,
+     "min": -300,
+     "type": "float"
+    },
+    "Spirals_Shrink": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Spirals_Shrink",
+     "type": "bool"
+    },
+    "Spirals_Thickness": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Spirals_Thickness",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    }
+   }
+  },
+  "Spirograph": {
+   "file": "Spirograph.json",
+   "params": {
+    "Spirograph_Animate": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Spirograph_Animate",
+     "max": 50,
+     "min": -50,
+     "type": "int"
+    },
+    "Spirograph_Length": {
+     "control": "slider",
+     "default": 20,
+     "key": "E_SLIDER_Spirograph_Length",
+     "max": 50,
+     "min": 0,
+     "type": "int"
+    },
+    "Spirograph_R": {
+     "control": "slider",
+     "default": 20,
+     "key": "E_SLIDER_Spirograph_R",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Spirograph_Speed": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_TEXTCTRL_Spirograph_Speed",
+     "max": 50,
+     "min": 0,
+     "type": "int"
+    },
+    "Spirograph_Width": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Spirograph_Width",
+     "max": 50,
+     "min": 1,
+     "type": "int"
+    },
+    "Spirograph_d": {
+     "control": "slider",
+     "default": 30,
+     "key": "E_SLIDER_Spirograph_d",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Spirograph_r": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Spirograph_r",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    }
+   }
+  },
+  "State": {
+   "file": "State.json",
+   "params": {
+    "State_Color": {
+     "control": "choice",
+     "default": "Graduate",
+     "key": "E_CHOICE_State_Color",
+     "options": [
+      "Graduate",
+      "Cycle",
+      "Allocate"
+     ],
+     "type": "enum"
+    },
+    "State_Fade_Time": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_State_Fade_Time",
+     "max": 1000,
+     "min": 0,
+     "type": "int"
+    },
+    "State_Mode": {
+     "control": "choice",
+     "default": "Default",
+     "key": "E_CHOICE_State_Mode",
+     "options": [
+      "Default",
+      "Countdown",
+      "Time Countdown",
+      "Number",
+      "Iterate"
+     ],
+     "type": "enum"
+    },
+    "State_StateDefinition": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_State_StateDefinition",
+     "options": [],
+     "type": "enum"
+    },
+    "State_StateSource": {
+     "control": "custom",
+     "default": "",
+     "key": "E_CHOICE_State_StateSource",
+     "type": "enum"
+    }
+   }
+  },
+  "Strobe": {
+   "file": "Strobe.json",
+   "params": {
+    "Number_Strobes": {
+     "control": "slider",
+     "default": 3,
+     "key": "E_SLIDER_Number_Strobes",
+     "max": 300,
+     "min": 1,
+     "type": "int"
+    },
+    "Strobe_Duration": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Strobe_Duration",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "Strobe_Music": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Strobe_Music",
+     "type": "bool"
+    },
+    "Strobe_Type": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Strobe_Type",
+     "max": 4,
+     "min": 1,
+     "type": "int"
+    }
+   }
+  },
+  "Tendril": {
+   "file": "Tendril.json",
+   "params": {
+    "Tendril_Dampening": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Tendril_Dampening",
+     "max": 20,
+     "min": 0,
+     "type": "int"
+    },
+    "Tendril_Friction": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Tendril_Friction",
+     "max": 20,
+     "min": 0,
+     "type": "int"
+    },
+    "Tendril_Length": {
+     "control": "slider",
+     "default": 60,
+     "key": "E_SLIDER_Tendril_Length",
+     "max": 100,
+     "min": 5,
+     "type": "int"
+    },
+    "Tendril_ManualX": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Tendril_ManualX",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Tendril_ManualY": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Tendril_ManualY",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Tendril_Movement": {
+     "control": "choice",
+     "default": "Circle",
+     "key": "E_CHOICE_Tendril_Movement",
+     "options": [
+      "Random",
+      "Square",
+      "Circle",
+      "Horizontal Zig Zag",
+      "Horiz. Zig Zag Return",
+      "Vertical Zig Zag",
+      "Vert. Zig Zag Return",
+      "Music Line",
+      "Music Circle",
+      "Manual"
+     ],
+     "type": "enum"
+    },
+    "Tendril_Speed": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Tendril_Speed",
+     "max": 10,
+     "min": 1,
+     "type": "int"
+    },
+    "Tendril_Tension": {
+     "control": "slider",
+     "default": 20,
+     "key": "E_SLIDER_Tendril_Tension",
+     "max": 39,
+     "min": 0,
+     "type": "int"
+    },
+    "Tendril_Thickness": {
+     "control": "slider",
+     "default": 3,
+     "key": "E_SLIDER_Tendril_Thickness",
+     "max": 20,
+     "min": 1,
+     "type": "int"
+    },
+    "Tendril_Trails": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Tendril_Trails",
+     "max": 20,
+     "min": 1,
+     "type": "int"
+    },
+    "Tendril_TuneMovement": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Tendril_TuneMovement",
+     "max": 20,
+     "min": 0,
+     "type": "int"
+    },
+    "Tendril_XOffset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Tendril_XOffset",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "Tendril_YOffset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Tendril_YOffset",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    }
+   }
+  },
+  "Text": {
+   "file": "Text.json",
+   "params": {
+    "Text": {
+     "control": "text",
+     "default": "",
+     "key": "E_TEXTCTRL_Text",
+     "type": "string"
+    },
+    "TextNoRepeat": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_TextNoRepeat",
+     "type": "bool"
+    },
+    "TextToCenter": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_TextToCenter",
+     "type": "bool"
+    },
+    "Text_Color_PerWord": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Text_Color_PerWord",
+     "type": "bool"
+    },
+    "Text_Count": {
+     "control": "choice",
+     "default": "none",
+     "key": "E_CHOICE_Text_Count",
+     "options": [
+      "none",
+      "seconds",
+      "minutes seconds",
+      "to date 'd h m s'",
+      "to date 'h:m:s'",
+      "to date 'm' or 's'",
+      "to date 's'",
+      "!to date!%fmt"
+     ],
+     "type": "enum"
+    },
+    "Text_Dir": {
+     "control": "choice",
+     "default": "none",
+     "key": "E_CHOICE_Text_Dir",
+     "options": [
+      "none",
+      "left",
+      "right",
+      "up",
+      "down",
+      "vector",
+      "up-left",
+      "down-left",
+      "up-right",
+      "down-right",
+      "wavey",
+      "word-flip",
+      "left-right",
+      "up-down"
+     ],
+     "type": "enum"
+    },
+    "Text_Effect": {
+     "control": "choice",
+     "default": "normal",
+     "key": "E_CHOICE_Text_Effect",
+     "options": [
+      "normal",
+      "vert text up",
+      "vert text down",
+      "rotate up 45",
+      "rotate up 90",
+      "rotate down 45",
+      "rotate down 90"
+     ],
+     "type": "enum"
+    },
+    "Text_File_Row": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Text_File_Row",
+     "type": "string"
+    },
+    "Text_Font": {
+     "control": "fontpicker",
+     "default": "",
+     "key": "E_FONTPICKER_Text_Font",
+     "type": "font"
+    },
+    "Text_Font_XL_Row": {
+     "control": "custom",
+     "default": "Use OS Fonts",
+     "key": "E_CHOICE_Text_Font_XL_Row",
+     "options": [
+      "Use OS Fonts",
+      "5-5x5 Thin",
+      "5-5x5 Mono",
+      "6-5x6 Thin",
+      "6-5x6 Thin Vertical",
+      "6-6x6 Thin",
+      "6-6x6 Thin Vertical",
+      "7-7x9 Thin",
+      "7-7x9 Thin Narrow",
+      "7-7x9 Bold",
+      "8-8x8 Thin",
+      "8-8x8 Thin Vertical",
+      "10-12x12 Bold",
+      "10-12x12 Bold Vertical",
+      "10-12x12 Thin",
+      "10-12x12 Thin Vertical",
+      "12-15x15 Bold",
+      "12-15x15 Bold Vertical"
+     ],
+     "type": "enum"
+    },
+    "Text_LyricTrack": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_Text_LyricTrack",
+     "options": [],
+     "type": "enum"
+    },
+    "Text_PixelOffsets": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Text_PixelOffsets",
+     "type": "bool"
+    },
+    "Text_Speed": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_TEXTCTRL_Text_Speed",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Text_XEnd": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Text_XEnd",
+     "max": 200,
+     "min": -200,
+     "type": "int"
+    },
+    "Text_XStart": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Text_XStart",
+     "max": 200,
+     "min": -200,
+     "type": "int"
+    },
+    "Text_YEnd": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Text_YEnd",
+     "max": 200,
+     "min": -200,
+     "type": "int"
+    },
+    "Text_YStart": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Text_YStart",
+     "max": 200,
+     "min": -200,
+     "type": "int"
+    }
+   }
+  },
+  "Tree": {
+   "file": "Tree.json",
+   "params": {
+    "Tree_Branches": {
+     "control": "slider",
+     "default": 3,
+     "key": "E_SLIDER_Tree_Branches",
+     "max": 10,
+     "min": 1,
+     "type": "int"
+    },
+    "Tree_ShowLights": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Tree_ShowLights",
+     "type": "bool"
+    },
+    "Tree_Speed": {
+     "control": "slider",
+     "default": 10,
+     "key": "E_SLIDER_Tree_Speed",
+     "max": 50,
+     "min": 1,
+     "type": "int"
+    }
+   }
+  },
+  "Twinkle": {
+   "file": "Twinkle.json",
+   "params": {
+    "Twinkle_Count": {
+     "control": "slider",
+     "default": 3,
+     "key": "E_SLIDER_Twinkle_Count",
+     "max": 100,
+     "min": 2,
+     "type": "int"
+    },
+    "Twinkle_ReRandom": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Twinkle_ReRandom",
+     "type": "bool"
+    },
+    "Twinkle_Steps": {
+     "control": "slider",
+     "default": 30,
+     "key": "E_SLIDER_Twinkle_Steps",
+     "max": 400,
+     "min": 2,
+     "type": "int"
+    },
+    "Twinkle_Strobe": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Twinkle_Strobe",
+     "type": "bool"
+    },
+    "Twinkle_Style": {
+     "control": "choice",
+     "default": "New Render Method",
+     "key": "E_CHOICE_Twinkle_Style",
+     "options": [
+      "Old Render Method",
+      "New Render Method"
+     ],
+     "type": "enum"
+    }
+   }
+  },
+  "VU Meter": {
+   "file": "VUMeter.json",
+   "params": {
+    "Filter": {
+     "control": "text",
+     "default": "",
+     "key": "E_TEXTCTRL_Filter",
+     "type": "string"
+    },
+    "Regex": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Regex",
+     "type": "bool"
+    },
+    "SVGFile": {
+     "control": "filepicker",
+     "default": "",
+     "key": "E_FILEPICKERCTRL_SVGFile",
+     "type": "file"
+    },
+    "VUMeter_AudioTrack": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_VUMeter_AudioTrack",
+     "type": "enum"
+    },
+    "VUMeter_Bars": {
+     "control": "slider",
+     "default": 6,
+     "key": "E_SLIDER_VUMeter_Bars",
+     "max": 100,
+     "min": 1,
+     "type": "int"
+    },
+    "VUMeter_EndNote": {
+     "control": "slider",
+     "default": 84,
+     "key": "E_SLIDER_VUMeter_EndNote",
+     "max": 127,
+     "min": 0,
+     "type": "int"
+    },
+    "VUMeter_Gain": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_VUMeter_Gain",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "VUMeter_LogarithmicX": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_VUMeter_LogarithmicX",
+     "type": "bool"
+    },
+    "VUMeter_Sensitivity": {
+     "control": "slider",
+     "default": 70,
+     "key": "E_SLIDER_VUMeter_Sensitivity",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "VUMeter_Shape": {
+     "control": "choice",
+     "default": "Circle",
+     "key": "E_CHOICE_VUMeter_Shape",
+     "options": [
+      "Circle",
+      "Filled Circle",
+      "Square",
+      "Filled Square",
+      "Diamond",
+      "Filled Diamond",
+      "Star",
+      "Filled Star",
+      "Tree",
+      "Filled Tree",
+      "Crucifix",
+      "Filled Crucifix",
+      "Present",
+      "Filled Present",
+      "Candy Cane",
+      "Snowflake",
+      "Heart",
+      "Filled Heart",
+      "SVG"
+     ],
+     "type": "enum"
+    },
+    "VUMeter_SlowDownFalls": {
+     "control": "checkbox",
+     "default": true,
+     "key": "E_CHECKBOX_VUMeter_SlowDownFalls",
+     "type": "bool"
+    },
+    "VUMeter_StartNote": {
+     "control": "slider",
+     "default": 36,
+     "key": "E_SLIDER_VUMeter_StartNote",
+     "max": 127,
+     "min": 0,
+     "type": "int"
+    },
+    "VUMeter_TimingTrack": {
+     "control": "choice",
+     "default": "",
+     "key": "E_CHOICE_VUMeter_TimingTrack",
+     "options": [],
+     "type": "enum"
+    },
+    "VUMeter_Type": {
+     "control": "choice",
+     "default": "Waveform",
+     "key": "E_CHOICE_VUMeter_Type",
+     "options": [
+      "Spectrogram",
+      "Spectrogram Peak",
+      "Spectrogram Line",
+      "Spectrogram Circle Line",
+      "Volume Bars",
+      "Waveform",
+      "Frame Waveform",
+      "On",
+      "Color On",
+      "Dominant Frequency Colour",
+      "Dominant Frequency Colour Gradient",
+      "Intensity Wave",
+      "Pulse",
+      "Level Bar",
+      "Level Random Bar",
+      "Level Color",
+      "Level Pulse",
+      "Level Jump",
+      "Level Jump 100",
+      "Level Pulse Color",
+      "Level Shape",
+      "Timing Event Bar",
+      "Timing Event Bar Bounce",
+      "Timing Event Random Bar",
+      "Timing Event Bars",
+      "Timing Event Spike",
+      "Timing Event Sweep",
+      "Timing Event Sweep 2",
+      "Timing Event Timed Sweep",
+      "Timing Event Timed Sweep 2",
+      "Timing Event Alternate Timed Sweep",
+      "Timing Event Alternate Timed Sweep 2",
+      "Timing Event Timed Chase From Middle",
+      "Timing Event Timed Chase To Middle",
+      "Timing Event Color",
+      "Timing Event Jump",
+      "Timing Event Jump 100",
+      "Timing Event Pulse",
+      "Timing Event Pulse Color",
+      "Note On",
+      "Note Level Pulse",
+      "Note Level Jump",
+      "Note Level Jump 100",
+      "Note Level Bar",
+      "Note Level Random Bar"
+     ],
+     "type": "enum"
+    },
+    "VUMeter_XOffset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_VUMeter_XOffset",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    },
+    "VUMeter_YOffset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_VUMeter_YOffset",
+     "max": 100,
+     "min": -100,
+     "type": "int"
+    }
+   }
+  },
+  "Video": {
+   "file": "Video.json",
+   "params": {
+    "SampleSpacing": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_TEXTCTRL_SampleSpacing",
+     "max": 200,
+     "min": 0,
+     "type": "int"
+    },
+    "SynchroniseWithAudio": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_SynchroniseWithAudio",
+     "type": "bool"
+    },
+    "Video_AspectRatio": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Video_AspectRatio",
+     "type": "bool"
+    },
+    "Video_CropBottom": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Video_CropBottom",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Video_CropLeft": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Video_CropLeft",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Video_CropRight": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Video_CropRight",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Video_CropTop": {
+     "control": "slider",
+     "default": 100,
+     "key": "E_SLIDER_Video_CropTop",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Video_DurationRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Video_DurationRow",
+     "type": "string"
+    },
+    "Video_DurationTreatment": {
+     "control": "choice",
+     "default": "Normal",
+     "key": "E_CHOICE_Video_DurationTreatment",
+     "options": [
+      "Normal",
+      "Normal No Blue",
+      "Loop",
+      "Slow/Accelerate",
+      "Manual",
+      "Manual and Loop"
+     ],
+     "type": "enum"
+    },
+    "Video_FilenameBlock": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Video_FilenameBlock",
+     "type": "string"
+    },
+    "Video_Speed": {
+     "control": "slider",
+     "default": 1.0,
+     "divisor": 100,
+     "key": "E_TEXTCTRL_Video_Speed",
+     "max": 1000,
+     "min": -1000,
+     "type": "float"
+    },
+    "Video_Starttime": {
+     "control": "slider",
+     "default": 0.0,
+     "divisor": 100,
+     "key": "E_TEXTCTRL_Video_Starttime",
+     "max": 20,
+     "min": 0,
+     "type": "float"
+    },
+    "Video_TransparentBlackRow": {
+     "control": "custom",
+     "default": "",
+     "key": "E_TEXTCTRL_Video_TransparentBlackRow",
+     "type": "string"
+    }
+   }
+  },
+  "Warp": {
+   "file": "Warp.json",
+   "params": {
+    "Warp_Cycle_Count": {
+     "control": "slider",
+     "default": 1,
+     "key": "E_SLIDER_Warp_Cycle_Count",
+     "max": 10,
+     "min": 1,
+     "type": "int"
+    },
+    "Warp_Frequency": {
+     "control": "slider",
+     "default": 20,
+     "key": "E_SLIDER_Warp_Frequency",
+     "max": 40,
+     "min": 0,
+     "type": "int"
+    },
+    "Warp_Speed": {
+     "control": "slider",
+     "default": 20,
+     "key": "E_SLIDER_Warp_Speed",
+     "max": 40,
+     "min": 0,
+     "type": "int"
+    },
+    "Warp_Treatment_APPLYLAST": {
+     "control": "choice",
+     "default": "constant",
+     "key": "E_CHOICE_Warp_Treatment_APPLYLAST",
+     "options": [
+      "constant",
+      "in",
+      "out"
+     ],
+     "type": "enum"
+    },
+    "Warp_Type": {
+     "control": "choice",
+     "default": "water drops",
+     "key": "E_CHOICE_Warp_Type",
+     "options": [
+      "water drops",
+      "dissolve",
+      "circle reveal",
+      "banded swirl",
+      "ripple",
+      "single water drop",
+      "circular swirl",
+      "drop",
+      "wavy",
+      "sample on",
+      "mirror",
+      "copy",
+      "flip",
+      "speed"
+     ],
+     "type": "enum"
+    },
+    "Warp_X": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Warp_X",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Warp_Y": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Warp_Y",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    }
+   }
+  },
+  "Wave": {
+   "file": "Wave.json",
+   "params": {
+    "Fill_Colors": {
+     "control": "choice",
+     "default": "None",
+     "key": "E_CHOICE_Fill_Colors",
+     "options": [
+      "None",
+      "Rainbow",
+      "Palette"
+     ],
+     "type": "enum"
+    },
+    "Mirror_Wave": {
+     "control": "checkbox",
+     "default": false,
+     "key": "E_CHECKBOX_Mirror_Wave",
+     "type": "bool"
+    },
+    "Number_Waves": {
+     "control": "slider",
+     "default": 2.5,
+     "divisor": 360,
+     "key": "E_TEXTCTRL_Number_Waves",
+     "max": 3600,
+     "min": 180,
+     "type": "float"
+    },
+    "Thickness_Percentage": {
+     "control": "slider",
+     "default": 5,
+     "key": "E_SLIDER_Thickness_Percentage",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Wave_Direction": {
+     "control": "choice",
+     "default": "Right to Left",
+     "key": "E_CHOICE_Wave_Direction",
+     "options": [
+      "Right to Left",
+      "Left to Right"
+     ],
+     "type": "enum"
+    },
+    "Wave_Height": {
+     "control": "slider",
+     "default": 50,
+     "key": "E_SLIDER_Wave_Height",
+     "max": 100,
+     "min": 0,
+     "type": "int"
+    },
+    "Wave_Speed": {
+     "control": "slider",
+     "default": 10.0,
+     "divisor": 100,
+     "key": "E_TEXTCTRL_Wave_Speed",
+     "max": 5000,
+     "min": 0,
+     "type": "float"
+    },
+    "Wave_Type": {
+     "control": "choice",
+     "default": "Sine",
+     "key": "E_CHOICE_Wave_Type",
+     "options": [
+      "Sine",
+      "Triangle",
+      "Square",
+      "Decaying Sine",
+      "Fractal/ivy"
+     ],
+     "type": "enum"
+    },
+    "Wave_YOffset": {
+     "control": "slider",
+     "default": 0,
+     "key": "E_SLIDER_Wave_YOffset",
+     "max": 250,
+     "min": -250,
+     "type": "int"
+    }
+   }
+  }
+ }
+}

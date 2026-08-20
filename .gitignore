@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Downloaded / working audio (full tracks, source copies)
+.cache/
+
+# Generated output: sequences + excerpt audio (regenerable; mp3s are copyrighted)
+out/
+
+# macOS
+.DS_Store
+
+# Logs / scratch
+*.log
