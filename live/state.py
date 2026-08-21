@@ -56,16 +56,42 @@ class StateThresholds:
     #: builds against 0.17-0.33 everywhere else -- a cleaner separation than
     #: anything loudness-based, and immune to the DJ's gain.
     build_high_share: float = 0.40
+    #: ...and this far above the track's own high-band share.  The absolute
+    #: threshold was set on one track; a brighter track sits above it all the
+    #: way through (measured: 0.48-0.72 for 86 s, every second of it called
+    #: "building").  A sweep is a *rise*, so it is also measured against a
+    #: slow average of the share, once that average has had time to fill.
+    build_high_ratio: float = 1.3
+    #: ...and, once building, the ratio it may fall to before the build is
+    #: over.  Without this a track hovering at the ratio flaps
+    #: building/cruising every dwell period (measured: 6 changes a minute).
+    build_high_ratio_leave: float = 1.1
     #: ...sustained for this long.
     build_hold_s: float = 1.0
+    #: A build that has not resolved after this long is not a build any more;
+    #: it is the track.  Resolve it by energy, and let the high-band baseline
+    #: (which has caught up by now) stop it re-entering.
+    max_build_s: float = 20.0
     #: Fallback only: energy this high is hot even with no build before it,
     #: for when we join a track mid-drop.  Deliberately high -- the event rule
     #: below is the one that should normally fire.
     hot_energy: float = 1.75
+    #: The lower bar: ``hot_enter`` sustained for this long.  A verse peaks
+    #: at 1.77 for a moment and falls back; a track at full tilt sits at
+    #: 1.2-1.6 against its own 45 s baseline for minutes, which the 1.75 gate
+    #: never reaches -- measured, the loudest 60 s of a session stayed in
+    #: cruising.  Duration separates the two where level cannot.
+    hot_hold_s: float = 6.0
     #: A kick this far above normal, arriving out of a build, is the drop...
     drop_kick: float = 3.0
     #: ...if the energy has also moved back into the bass.
     drop_bass_share: float = 0.35
+    #: ...or, relative to the track's own bass share, this much more.  Bass
+    #: share is a property of the mix as much as of the moment: a track whose
+    #: drop reads 0.19 bass against 0.10 elsewhere never clears 0.35.
+    drop_bass_ratio: float = 1.5
+    #: Time constant of the band-share baselines above.
+    share_tau_s: float = 45.0
     #: ...and the build actually lasted.
     min_build_s: float = 2.5
     #: How much of the loudness baseline must be filled before the energy
@@ -118,12 +144,18 @@ class StateMachine:
         self._slow = 1.0
         self._bright = 1.0
         self._high = 0.0
+        self._high_slow = 0.0
+        self._bass_slow = 0.0
+        self._share_count = 0
         self._rising_for = 0.0
+        self._hot_for = 0.0
         self._quiet_for = 0.0
         self._now = 0.0
         self._alpha = 1.0 - math.exp(-block_s / self.t.energy_tau_s)
         self._slow_alpha = 1.0 - math.exp(-block_s / self.t.slope_tau_s)
         self._bright_alpha = 1.0 - math.exp(-block_s / 8.0)
+        self._share_alpha = 1.0 - math.exp(-block_s / self.t.share_tau_s)
+        self._share_warm = int(round(1.0 / self._share_alpha))
         self.history: list[tuple[float, str]] = field(default_factory=list)  # type: ignore
         self.history = []
 
@@ -143,8 +175,22 @@ class StateMachine:
         brightness = features.centroid / max(self._bright, 1e-6)
 
         self._high += (features.high_share - self._high) * self._alpha
-        rising = self._high >= self.t.build_high_share
+        if not features.silent:
+            # Cumulative mean until the window fills, then an EMA -- the same
+            # warm-up the loudness baseline uses, so the first bars are not
+            # compared against an empty average.
+            self._share_count += 1
+            a = max(self._share_alpha, 1.0 / self._share_count)
+            self._high_slow += (features.high_share - self._high_slow) * a
+            self._bass_slow += (features.bass_share - self._bass_slow) * a
+        ratio = (self.t.build_high_ratio_leave if self.state == BUILDING
+                 else self.t.build_high_ratio)
+        rising = self._high >= self.t.build_high_share and (
+            self._share_count < self._share_warm
+            or self._high >= ratio * self._high_slow)
         self._rising_for = self._rising_for + self.block_s if rising else 0.0
+        self._hot_for = (self._hot_for + self.block_s
+                         if self._energy > self.t.hot_enter else 0.0)
 
         reason = self._transition(features, slope, brightness)
 
@@ -189,8 +235,12 @@ class StateMachine:
 
         # The drop.  Checked first and exempt from the dwell timer: this is the
         # one moment where being a beat late is obvious to everyone in the room.
+        bass_back = (features.bass_share >= self.t.drop_bass_share
+                     or (self._share_count >= self._share_warm
+                         and features.bass_share
+                         >= self.t.drop_bass_ratio * self._bass_slow))
         if (self.state == BUILDING and features.kick >= self.t.drop_kick
-                and features.bass_share >= self.t.drop_bass_share
+                and bass_back
                 and self._now - self.entered_at >= self.t.min_build_s):
             # Kick strength alone cannot do this: a build has kicks too, and
             # measured, its peaks (9.5-67) overlap the drop's (18-21)
@@ -218,7 +268,11 @@ class StateMachine:
                 return self._enter(CRUISING, "energy fell")
             return ""
 
-        if self._high >= self.t.build_high_share:
+        if self.state == BUILDING and held >= self.t.max_build_s:
+            return self._enter(
+                HOT if self._energy > self.t.hot_leave else CRUISING,
+                "build outlasted a build")
+        if self._rising_for > 0.0:
             if self._rising_for >= self.t.build_hold_s and self.state != BUILDING:
                 return self._enter(BUILDING, "high band swept up")
             return ""
@@ -231,7 +285,9 @@ class StateMachine:
                 HOT if self._energy > self.t.hot_energy else CRUISING,
                 "build ended")
 
-        if self._energy > self.t.hot_energy and features.warm >= self.t.min_warm:
+        if features.warm >= self.t.min_warm and (
+                self._energy > self.t.hot_energy
+                or self._hot_for >= self.t.hot_hold_s):
             return self._enter(HOT, "energy above ceiling")
         if self.state == QUIET:
             return self._enter(CRUISING, "energy above floor")
