@@ -606,7 +606,7 @@ def cmd_doctor(args) -> int:
 def cmd_analyze(args) -> int:
     """Read back a recorded session and say what went wrong."""
     from .session import analyze
-    return analyze(Path(args.directory), replay=args.replay)
+    return analyze(Path(args.directory), replay=args.replay, width=args.window)
 
 
 def cmd_inspect(args) -> int:
@@ -811,6 +811,8 @@ def build_parser(config: Config | None = None) -> argparse.ArgumentParser:
     p = sub.add_parser("analyze", help="diagnose a recorded session",
                        parents=[common])
     p.add_argument("directory")
+    p.add_argument("--window", type=float, default=30.0,
+                   help="seconds per row of the per-window table")
     p.add_argument("--replay", action="store_true",
                    help="rerun the whole chain on the recorded audio")
     p.set_defaults(func=cmd_analyze)

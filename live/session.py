@@ -213,7 +213,140 @@ def _column(data, group: str, name: str) -> np.ndarray:
     return data[group][:, fields.index(name)]
 
 
-def analyze(directory: Path, replay: bool = False) -> int:
+def predicted_beats(t: np.ndarray, tempo: np.ndarray,
+                    beat_phase: np.ndarray, beat: np.ndarray) -> np.ndarray:
+    """The beat times the renderer actually used, from the per-block trace.
+
+    Each block records the clock's phase and tempo, so the beat it was
+    counting from is ``t - phase * period``.  The last block before each beat
+    index changes holds the prediction that was standing when the lights
+    fired -- the number that decides whether they were on time -- which is
+    not the same as where the tracker later said the beat was.
+    """
+    period = 60.0 / np.maximum(tempo, 1.0)
+    origin = t - beat_phase * period
+    index = beat.astype(int)
+    last = np.flatnonzero(np.diff(index) != 0)      # last block of each beat
+    return origin[last]
+
+
+def kick_on(times: np.ndarray, t: np.ndarray, kick: np.ndarray,
+            window: float = 0.06) -> float:
+    """Mean peak kick within ``window`` of each time; 0 if none fall in range."""
+    if len(times) == 0:
+        return 0.0
+    lo = np.searchsorted(t, times - window)
+    hi = np.searchsorted(t, times + window)
+    peaks = [kick[a:b].max() for a, b in zip(lo, hi) if b > a]
+    return float(np.mean(peaks)) if peaks else 0.0
+
+
+@dataclass
+class Window:
+    start: float
+    end: float
+    tempo: float
+    confidence: float
+    locked: float
+    free_running: float
+    beats: int
+    kick_ours: float
+    kick_offbeat: float
+    energy: float
+    state: str
+
+    @property
+    def polarity(self) -> str:
+        if self.beats < 4 or max(self.kick_ours, self.kick_offbeat) < 0.5:
+            return "-"
+        # Same bar the clock's own polarity check uses: below it a syncopated
+        # passage (kicks on the and) reads as a tie, not a slip.
+        if self.kick_offbeat > 1.35 * self.kick_ours:
+            return "OFFBEAT"
+        if self.kick_ours > 1.35 * self.kick_offbeat:
+            return "ok"
+        return "tie"
+
+
+def windows(t, tempo, confidence, locked, free_running, beat, beat_phase,
+            kick, energy, state, width: float) -> list[Window]:
+    """Everything that matters, per stretch of the session.
+
+    Session-wide numbers hide every failure that lasts under a minute, and
+    those are the ones that matter: a half-beat slip for twenty seconds, a
+    lock on pulseless material, a tempo that wandered and came back.  Thirty
+    seconds is about eight bars, long enough for the kick evidence to mean
+    something and short enough to localise a problem to a passage.
+    """
+    beats = predicted_beats(t, tempo, beat_phase, beat)
+    out = []
+    for start in np.arange(0.0, float(t[-1]), width):
+        end = start + width
+        m = (t >= start) & (t < end)
+        if m.sum() < 10:
+            continue
+        ours = beats[(beats >= start) & (beats < end)]
+        half = 30.0 / max(float(np.median(tempo[m])), 1.0)
+        counts = np.bincount(state[m].astype(int), minlength=len(STATES))
+        out.append(Window(
+            start=float(start), end=float(min(end, t[-1])),
+            tempo=float(np.median(tempo[m])),
+            confidence=float(confidence[m].mean()),
+            locked=float(locked[m].mean()),
+            free_running=float(free_running[m].mean()),
+            beats=len(ours),
+            kick_ours=kick_on(ours, t, kick),
+            kick_offbeat=kick_on(ours + half, t, kick),
+            energy=float(np.median(energy[m])),
+            state=STATES[int(counts.argmax())],
+        ))
+    return out
+
+
+def window_table(rows: list[Window]) -> str:
+    lines = ["  window      tempo  conf  lock  kick ours/off  phase    energy  state",
+             "  " + "-" * 72]
+    for w in rows:
+        lines.append(
+            f"  {w.start:5.0f}-{w.end:4.0f}s  {w.tempo:5.1f}  {w.confidence:4.2f}"
+            f"  {100 * w.locked:3.0f}%  {w.kick_ours:5.2f}/{w.kick_offbeat:<5.2f}"
+            f"  {w.polarity:<7}  {w.energy:5.2f}  {w.state}")
+    return "\n".join(lines)
+
+
+def window_findings(rows: list[Window]) -> list[str]:
+    """The checks that would have named each failure seen so far."""
+    findings = []
+    run: list[Window] = []
+    for w in rows + [None]:
+        if w is not None and w.polarity == "OFFBEAT":
+            run.append(w)
+            continue
+        if run:
+            findings.append(
+                f"on the wrong half of the beat {run[0].start:.0f}-{run[-1].end:.0f}s "
+                f"(kick {np.mean([r.kick_offbeat for r in run]):.1f} on our offbeat "
+                f"vs {np.mean([r.kick_ours for r in run]):.1f} on our beat)")
+            run = []
+    for w in rows:
+        if w.locked > 0.5 and max(w.kick_ours, w.kick_offbeat) < 0.5:
+            findings.append(f"locked {100 * w.locked:.0f}% through {w.start:.0f}-"
+                            f"{w.end:.0f}s with no low end to lock to")
+    for a, b in zip(rows, rows[1:]):
+        if a.confidence > 0.5 and b.confidence > 0.5 and \
+                abs(b.tempo - a.tempo) > 0.04 * a.tempo:
+            findings.append(f"tempo {a.tempo:.1f} -> {b.tempo:.1f} at {b.start:.0f}s"
+                            + (" (a metrical ratio: counting the same music "
+                               "differently)" if _near_ratio(b.tempo / a.tempo)
+                               else ""))
+    return findings
+
+
+def _near_ratio(ratio: float) -> bool:
+    return any(abs(ratio - r) < 0.04 * r for r in (0.5, 2 / 3, 0.75, 4 / 3, 1.5, 2.0))
+
+
+def analyze(directory: Path, replay: bool = False, width: float = 30.0) -> int:
     """Report what happened, and flag the things that look wrong.
 
     Deliberately opinionated: a dump of numbers is what we already had.  The
@@ -229,8 +362,13 @@ def analyze(directory: Path, replay: bool = False) -> int:
     energy = _column(data, "features", "energy")
     silent = _column(data, "features", "silent")
     high = _column(data, "features", "high_share")
+    kick = _column(data, "features", "kick")
     tempo = _column(data, "clock", "tempo")
     confidence = _column(data, "clock", "confidence")
+    locked = _column(data, "clock", "locked")
+    free_running = _column(data, "clock", "free_running")
+    beat = _column(data, "clock", "beat")
+    beat_phase = _column(data, "clock", "beat_phase")
     state = data["state"][:, 0]
     duration = float(meta["duration_s"])
 
@@ -268,6 +406,15 @@ def analyze(directory: Path, replay: bool = False) -> int:
     print(f"  tempo p5/p50/p95  {np.percentile(tempo, 5):.1f} / "
           f"{np.percentile(tempo, 50):.1f} / {np.percentile(tempo, 95):.1f}")
     print(f"  locked            {100 * np.mean(confidence >= 0.5):.0f}% of the session")
+    beats = meta.get("beats", [])
+    if beats:
+        print(f"  {len(beats)} accepted tracker beats recorded")
+
+    rows = windows(t, tempo, confidence, locked, free_running, beat, beat_phase,
+                   kick, energy, state, width)
+    print(f"\nper {width:.0f} s  (kick = low end on our beats / on our offbeat; "
+          "the beat is where the kick is)")
+    print(window_table(rows))
 
     print("\nsuspicious")
     findings = []
@@ -286,9 +433,13 @@ def analyze(directory: Path, replay: bool = False) -> int:
     if duration > 60 and len(changes) / (duration / 60) > 8:
         findings.append(f"{len(changes) / (duration / 60):.1f} state changes a "
                         "minute; that is flapping, not structure")
-    spread = np.percentile(tempo, 95) - np.percentile(tempo, 5)
-    if spread > 12:
-        findings.append(f"tempo wandered {spread:.0f} BPM across the session")
+    findings.extend(window_findings(rows))
+    steady = [w for w in rows if w.confidence > 0.5]
+    if len(steady) >= 2:
+        spread = max(w.tempo for w in steady) - min(w.tempo for w in steady)
+        if spread > 12:
+            findings.append(f"tempo ranged {spread:.0f} BPM across locked windows"
+                            " -- several tracks, or one that would not sit still")
     if np.mean(confidence >= 0.5) < 0.5:
         findings.append(f"the beat clock was only locked "
                         f"{100 * np.mean(confidence >= 0.5):.0f}% of the time")
@@ -299,12 +450,16 @@ def analyze(directory: Path, replay: bool = False) -> int:
 
     if replay:
         print("\nreplaying the recorded audio through the current code...")
-        _replay(directory, meta)
+        _replay(directory, meta, width)
     return 0
 
 
-def _replay(directory: Path, meta: dict) -> None:
-    """Rerun the chain on the recorded audio -- does today's code do better?"""
+def _replay(directory: Path, meta: dict, width: float = 30.0) -> None:
+    """Rerun the chain on the recorded audio -- does today's code do better?
+
+    Same table as the recording, so the two can be read side by side, plus
+    the clock's own counters, which the trace does not carry.
+    """
     import wave
 
     from .audio import ArraySource
@@ -320,9 +475,34 @@ def _replay(directory: Path, meta: dict) -> None:
         ArraySource(samples, blocksize=int(meta.get("blocksize", 512))),
         silence_dbfs=float(cfg.get("silence_dbfs", -70.0)),
         window=int(cfg.get("window", 2048)))
+    rows = []
     for block in listener.source.blocks():
-        machine.push(listener.step(block))
-    print(f"  {len(machine.history)} transitions now vs "
-          f"{len(meta.get('transitions', []))} when recorded")
-    for when, name in machine.history[:20]:
-        print(f"    {when:8.1f}s  -> {name}")
+        features = listener.step(block)
+        machine.push(features)
+        clock = listener.clock.state(features.t)
+        rows.append((features.t, clock.tempo, clock.confidence, clock.locked,
+                     clock.free_running, clock.beat, clock.beat_phase,
+                     features.kick, features.energy,
+                     STATES_INDEX[machine.state]))
+    trace = np.array(rows, dtype=np.float64).T
+    table = windows(*trace[:9], trace[9], width)
+    clock = listener.clock
+    print(f"  clock: relocks {clock.relocks}, half-beat slips {clock.slips}, "
+          f"flips onto the tracker's half {clock.flips}, "
+          f"offbeat detections {clock.offbeat_events}")
+    print(window_table(table))
+    for line in window_findings(table):
+        print(f"  ! {line}")
+    before = [(float(w), n) for w, n, _ in meta.get("transitions", [])]
+    after = [(float(w), n) for w, n in machine.history]
+
+    def same(a, b):
+        return a[1] == b[1] and abs(a[0] - b[0]) < 0.5
+
+    print(f"  {len(after)} transitions now vs {len(before)} when recorded")
+    for x in after:
+        mark = "" if any(same(x, y) for y in before) else "   (new)"
+        print(f"    {x[0]:8.1f}s  -> {x[1]}{mark}")
+    for x in before:
+        if not any(same(x, y) for y in after):
+            print(f"    {x[0]:8.1f}s  -> {x[1]}   (no longer)")
