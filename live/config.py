@@ -48,6 +48,17 @@ class AudioConfig:
     loop: bool = False
     autogain: bool = True
     backend: str = "aubio"
+    #: Samples per analysis hop, and aubio's hop size.  **A last resort on a
+    #: slow machine, not a free win.**  1024 does halve the analysis cost, but
+    #: measured against exact ground truth it takes beats within 30 ms from
+    #: 100% to 68% and the median error from 2.4 ms to 25.6 ms -- the timing
+    #: resolution lands right on the threshold rather than comfortably inside
+    #: it.  Lower the frame rate first; that costs nothing.
+    blocksize: int = 512
+    #: FFT window.  Must be at least the block size.  2048 gives the bass band
+    #: 21.5 Hz bins, which is what makes the kick detector work.  1024 is
+    #: cheaper and worse: 50% of beats within 30 ms in the same test.
+    window: int = 2048
 
 
 @dataclass

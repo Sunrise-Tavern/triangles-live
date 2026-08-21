@@ -262,12 +262,16 @@ def cmd_preview(args) -> int:
 
 def _audio_source(args):
     """Build the audio input from the flags, or None for the scripted show."""
+    config = getattr(args, "config_obj", None)
+    block = config.audio.blocksize if config else 512
+    gain = AutoGain() if getattr(args, "autogain", False) else None
     if getattr(args, "audio", None):
-        return FileSource(args.audio, realtime=True, loop=getattr(args, "loop", False),
-                          gain=AutoGain() if getattr(args, "autogain", False) else None)
+        return FileSource(args.audio, realtime=True, blocksize=block,
+                          loop=getattr(args, "loop", False), gain=gain)
     if getattr(args, "audio_device", None) is not None:
         device = args.audio_device
-        return LineInSource(device=int(device) if str(device).isdigit() else device)
+        return LineInSource(device=int(device) if str(device).isdigit() else device,
+                            blocksize=block, gain=gain)
     return None
 
 
@@ -279,7 +283,7 @@ def cmd_serve(args) -> int:
     audio = _audio_source(args)
     engine = Engine(load_layout(), fps=args.fps, host=args.ddp or None,
                     port=args.ddp_port, controller=args.controller or None,
-                    audio=audio, backend=args.backend,
+                    audio=audio, backend=args.backend, window=config.audio.window,
                     record=Path(args.record) if args.record else None)
     engine.settings.apply({
         "brightness": config.show.brightness,

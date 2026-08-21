@@ -44,13 +44,15 @@ class ListenerStats:
 class Listener:
     def __init__(self, source: AudioSource, *, backend: str = "aubio",
                  clock: BeatClock | None = None, backend_kwargs: dict | None = None,
-                 on_beat=None, bars: BarTracker | None = None) -> None:
+                 on_beat=None, bars: BarTracker | None = None,
+                 window: int = 2048) -> None:
         self.source = source
-        self.analyzer = Analyzer(source.samplerate, source.blocksize)
+        self.analyzer = Analyzer(source.samplerate, source.blocksize,
+                                 window=window)
         self.backend = make_backend(
             backend,
             **{"samplerate": source.samplerate, "blocksize": source.blocksize,
-               **(backend_kwargs or {})}
+               "window": window, **(backend_kwargs or {})}
             if backend == "aubio" else (backend_kwargs or {}),
         )
         self.clock = clock or BeatClock()

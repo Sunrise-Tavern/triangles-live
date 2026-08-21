@@ -453,6 +453,22 @@ Errors mean the show will not run; warnings mean it will run in a way you
 should know about.  A laptop with nothing set up comes out all-green on errors,
 or nobody would ever run it.
 
+### If the Pi is slow
+
+`doctor` reports the render budget against the configured frame rate.  If it
+is tight, the knobs are **not** equally priced:
+
+| knob | saves | costs |
+|---|---|---|
+| `[output] fps` 40 → 20 | half the render cost | nothing — the offline show has always rendered at 20 fps |
+| `[web] preview_fps`, `preview_detail` | real CPU, and bandwidth | only the browser preview |
+| `[audio] blocksize` 512 → 1024 | half the analysis cost | **beats within 30 ms: 100 % → 68 %**, median error 2.4 → 25.6 ms |
+| `[audio] window` 2048 → 1024 | more | **100 % → 50 %** |
+
+Measured against exact ground truth on the synthetic track.  The frame rate is
+free; the DSP knobs are a last resort, because the whole design premise is
+landing on the beat.  A faster Pi is cheaper than a third of the beat accuracy.
+
 ### Installing on the Pi
 
 ```bash

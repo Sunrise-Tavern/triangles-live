@@ -28,6 +28,12 @@ loop = false
 # relative, so this is on by default at the rig.
 autogain = true
 backend = "aubio"
+# On a slow machine, turn [output] fps down FIRST -- it costs nothing (the
+# offline show has always rendered at 20 fps).  These two are a last resort:
+# blocksize 1024 halves the analysis cost but takes beats-within-30ms from
+# 100% to 68%, and window 1024 from 100% to 50%.
+blocksize = 512
+window = 2048
 
 [web]
 bind = "0.0.0.0"
