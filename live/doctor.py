@@ -157,7 +157,17 @@ def check_audio(report: Report, config: Config, deep: bool) -> None:
     # is with nothing playing.
     configured = config.audio.silence_dbfs
     suggested = round(rms_dbfs + 8)
-    if rms_dbfs > configured:
+    if rms_dbfs > -45.0:
+        # Measured: with a -36 dBFS floor, a track's quiet passages land within
+        # 0-4 dB of the room itself at every playback level, so no threshold
+        # can separate them.  This is the "never a room mic" rule, as a number.
+        report.add("silence threshold", WARN,
+                   f"input floor is {rms_dbfs:.0f} dBFS -- too high to tell "
+                   f"silence from quiet music",
+                   "use a line feed, or a loopback device for desktop audio; "
+                   "with a room mic set silence_dbfs = -100 to switch the "
+                   "idle state off rather than have it flicker")
+    elif rms_dbfs > configured:
         report.add("silence threshold", WARN,
                    f"input is {rms_dbfs:.0f} dBFS but [audio] silence_dbfs is "
                    f"{configured:.0f} -- silence will never be detected",

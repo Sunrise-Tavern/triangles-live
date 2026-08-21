@@ -39,6 +39,9 @@ window = 2048
 # with nothing on it sits near -90 dBFS, a room microphone near -51.
 #   -70  a line feed from the XR16 (the rig)
 #   -45  a room mic, or Spotify captured through a loopback with room noise
+#   -100 switches the idle state off entirely -- the right answer for a room
+#        mic, where the noise floor is only a few dB below quiet music and no
+#        threshold can separate them
 # Run `./live.sh doctor` with nothing playing and it will tell you what to set.
 silence_dbfs = -70.0
 
