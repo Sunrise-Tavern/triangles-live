@@ -4,9 +4,9 @@ Real-time lighting for the Triangles rig: audio in, DDP out, no pre-rendered
 sequence.  The plan and its milestones live in [`../LIVE_PLAN.md`](../LIVE_PLAN.md).
 This file is the operator's guide to what exists **now**.
 
-Status: **M1–M6 complete** — the loop closes.  Audio in, analysed, tracked,
-arranged, rendered, and out over DDP, with a browser preview and controls.
-Only M7 (deploy prep) remains.
+Status: **M1–M7 complete.**  Audio in, analysed, tracked, arranged, rendered,
+and out over DDP, with a browser preview, one config file, a preflight check
+and a systemd unit.  What remains is measuring it on the actual Pi.
 
 ## Quick start
 
@@ -413,6 +413,67 @@ audio   : lag 0.0 ms, tempo 128.11, confidence 1.00, bar confidence 0.77
 Eleven late frames in ten minutes, none skipped, and the clock still locked at
 the end.  Note that a soak capture is large — 37 084 channels x 24 819 frames
 is 920 MB — so delete it or point `--out` somewhere disposable.
+
+## Running it at the rig
+
+Everything that changes between the sofa and the venue lives in **`live.toml`**,
+because nobody remembers command-line flags at a gig and the machine that
+matters is headless.  A flag beats the file; the file beats the default.
+
+```bash
+./live.sh doctor                    # the ten-minutes-before-doors check
+./live.sh serve                     # uses live.toml
+./live.sh serve --fps 30            # override one value for this run
+```
+
+`[output] host` is empty by default on purpose — a laptop should render
+without blasting the rig.
+
+### `doctor`
+
+Every check answers a question with an obvious remedy, and says which:
+
+```
+[  ok  ] layout          33 models, 37084 channels, 24 arches
+[ warn ] addressing      25 models outside every controller
+                         -> the arches and par have no controller; only the nets will light
+[  ok  ] aubio           version 0.4.9
+[  ok  ] audio input     signal at -33.0 dBFS peak
+[ warn ] falcon          no host configured -- rendering only
+[  ok  ] render budget   0.57 ms/frame, 2% of 25 ms at 40 fps
+[  ok  ] beat tracking   100% of beats within 30 ms, tempo 128.2, 95x real time
+```
+
+The audio check **actually opens the device and listens**, which is the one
+that earns its keep: a device can exist, be selected, and be silent because
+nobody plugged the aux cable in, and nothing else would notice.  It also warns
+on clipping, which ruins onset detection.
+
+Errors mean the show will not run; warnings mean it will run in a way you
+should know about.  A laptop with nothing set up comes out all-green on errors,
+or nobody would ever run it.
+
+### Installing on the Pi
+
+```bash
+./deploy/install-pi.sh
+```
+
+Installs `python3-aubio` **from apt** rather than pip — the 2019 release needs
+two build flags to compile against modern numpy and ffmpeg (see `setup.sh`),
+and Debian has already done that work — then makes the venv with
+`--system-site-packages` so it is visible.
+
+It installs `requirements-live.txt`, deliberately *not* `requirements.txt`:
+the offline generator's librosa, numba, scipy and yt-dlp are a slow, fragile
+build on a Pi and none of them run at the rig.
+
+Then a systemd unit with `Restart=always`, `Nice=-5` (audio capture and a
+40 fps render both suffer from being preempted), and
+`After=network-online.target` — without which the service can start before the
+interface has its static address and never find the Falcon.
+
+`[show] blackout_on_start` decides whether a mid-set restart comes back dark.
 
 ## Validating against real music
 

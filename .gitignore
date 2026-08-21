@@ -20,3 +20,6 @@ tracks/
 
 # Harmonix Set annotations (122 MB; clone with the command in live/README.md)
 datasets/
+
+# Runtime logs
+logs/

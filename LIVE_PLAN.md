@@ -313,102 +313,36 @@ Still open from this milestone's list: behaviour through a real crossfade
 between two tracks of different tempo. The tempo-step fault test covers the
 mechanism (128 → 140 settles in ~16 s) but not two tracks overlapping.
 
-### M7 · Deploy prep
-- Config (Falcon IP, audio device, frame rate), `systemd` unit, Pi install
-  script, log to file, auto-gain on input. Smoke-test the install on the Mac.
-- On the Pi: measure real CPU; if tight, drop to 30 fps or thin the analysis
-  hop before touching effects.
+### M7 · Deploy prep — **done, except the Pi itself**
+- `live/config.py` + `live.toml` — one commented file the rig runs from, since
+  nobody remembers flags at a gig and the machine is headless. Flag beats file
+  beats default. `[output] host` is empty by default: a laptop should render
+  without blasting the rig.
+- `live/doctor.py` — preflight. Layout, ffmpeg, aubio, audio devices, the
+  Falcon, disk, render budget against the configured frame rate, and a beat
+  track on a click. Errors mean it will not run; warnings mean it will run in a
+  way you should know about. The audio check **opens the device and listens**,
+  which is the one that matters: a device can exist, be selected and be silent
+  because nobody plugged the aux in.
+- `requirements-live.txt` — the live engine only. The offline generator's
+  librosa/numba/scipy/yt-dlp are a slow, fragile build on a Pi and never run
+  at the rig.
+- `deploy/install-pi.sh` + `deploy/triangles-live.service` — apt `python3-aubio`
+  (Debian has already done the build work the 2019 release needs), venv with
+  `--system-site-packages`, systemd with `Restart=always`, `Nice=-5` and
+  `After=network-online.target`.
+- Rotating log file alongside the journal, because a file next to the code is
+  what someone can read over SSH without knowing journalctl's flags.
 
----
+**Smoke-tested on the Mac, and it caught a real one**: running the unit file's
+*exact* `ExecStart` line failed, because `--config` was only accepted before
+the subcommand and `ExecStart` puts it after. It is now accepted in both
+positions, and the self-test pins that so the unit file cannot silently rot.
 
-## Libraries reviewed (2026-08-19)
-
-**LedFx** (github.com/ledfx/ledfx) — full audio-reactive engine: capture →
-frequency-band effects → DDP/E1.31/WLED, with a web UI. **Verdict: reference,
-not a base.** What it does well is the plumbing we already scoped (DDP out, web
-UI, device mapping) — worth reading its DDP sender and its "virtuals" 1D-mapping
-code when writing ours. What it lacks is everything that makes our approach
-musical: no beat *prediction* (frequency-reactive per frame), no structural
-state, no notion of the corridor as one instrument with per-arch stagger, no
-palette journey. Bolting our arranger into its per-device effect model means
-fighting its architecture for the parts we care most about. Also worth one
-evening as a *bench comparison*: run LedFx on the sim feed and confirm our
-output is meaningfully tighter — if it isn't, that's important to know early.
-
-**BeatNet** (github.com/mjhydri/BeatNet) — CRNN + particle-filter **online beat,
-downbeat and meter tracking**. **Spike run 2026-08-20, all four modes. Verdict:
-do not adopt live; useful offline.**
-
-*Installation — better than this plan assumed.* madmom **git master**
-(0.17.dev0) builds and imports cleanly on Python 3.12 with numpy 2.5.2. The
-compatibility wall is real only for the released 0.16.1, and the README's
-`sitecustomize.py` workaround (which monkey-patches numpy process-wide) is not
-needed on that path. Still blocking: BeatNet's own particle filter calls
-`np.in1d`, removed in numpy 2.0, so adoption means a fork or a numpy<2 pin;
-`pyaudio` and `matplotlib` are imported at module scope on the inference path
-(pyaudio needs system portaudio, and can be stubbed for file input); metadata
-pins `numba==0.54.1`, from 2021. Licence is **CC-BY-4.0** per the repo, not
-CC BY-NC-SA as previously recorded here — permissive, so licensing was never
-the obstacle.
-
-*The four modes are not variations on one algorithm.* `stream` is microphone;
-`realtime` reads a file chunk by chunk; `online` reads the **whole** file into
-the CRNN and only the *decoding* is causal; `offline` is the whole file plus
-madmom's Viterbi DBN. Only `stream` and `realtime` are the deployment shape.
-
-Measured against the synthesised 128 BPM 4/4 track (exact ground truth), and
-Eric Prydz *Opus*:
-
-| mode | beats | within 30 ms | meter | downbeats on the true bar line |
-|---|---|---|---|---|
-| `online` / PF | 262/320 | 89.3 % | 2/4 | 63.5 % |
-| `realtime` / PF | 264/320 | **55.3 %** | 2/4 | 64.0 % |
-| `offline` / DBN | 323/320 | 90.4 % | 4/4 | 67.9 % |
-| `offline` / DBN forced `[4]` | 323/320 | 90.4 % | 4/4 | 67.9 % |
-| **ours (aubio + PLL)** | 322/320 | **100 %** | — | no downbeat yet |
-
-On *Opus*, downbeat spacing in events — a clean tracker gives all 4s:
-`online` `{2:15, 3:10, 4:12, 5:2, 6:1, 7:1}`, `realtime` `{2:14, 3:7, 4:17, …}`,
-`offline` with `[2,3,4]` `{2:99}` (consistent but wrong meter), `offline` forced
-to `[4]` **`{4:51}`** — perfectly clean 4/4 at exactly 125.0 BPM, with the best
-kick alignment of anything measured (4.57 against our 3.91 and librosa's 4.49).
-
-*So the conclusion is narrower than "downbeats don't work".* BeatNet's working
-downbeats live in the mode we cannot use, and the modes we can use do not
-produce them:
-
-- The causal PF path's **meter is broken**, not merely untuned: `BeatNet.py:67`
-  builds it with `beats_per_bar=[]`, the downbeat state space is constructed
-  from hardcoded `min/max_beats_per_bar = 2/4` that ignore the argument, and
-  forcing `[4]` crashes. All three pretrained models behave identically. Not
-  the numpy shim either — all four `in1d` calls are on 1-D arrays where `isin`
-  is exactly equivalent.
-- `realtime`, the mode that matches deployment, is the **worst** on beats
-  (55.3 %), well below our aubio + PLL.
-- Even at its best, downbeat *phase* is ~68 % right on the synthetic track, with
-  most of the remainder landing on the half-bar. (That track may have genuinely
-  weak bar cues, so treat this as a floor rather than a verdict on the model.)
-
-*Cost.* 18× real time on the Mac against 150× for our whole aubio chain —
-roughly 8× the CPU before the 40 fps renderer, on a machine far faster than a
-Pi, plus torch, librosa, madmom-from-git and a fork.
-
-**The one genuinely open door**: the CRNN activations are shared across modes —
-it is the *decoder* that differs. Taking BeatNet's CRNN chunk by chunk and
-decoding it with our own causal logic (the existing PLL for beats, a bar
-tracker for downbeats) is the only configuration that could beat what we have.
-It still costs torch on the Pi. Park it behind M5.
-
-**Concretely useful now**: `offline` / DBN with `beats_per_bar=[4]` is an
-excellent *precomputation* tool — exact tempo, clean bars. That is precisely
-what the "semi-live cueing" idea below needs, so if we ever fingerprint tracks
-and load precomputed structure, this is the tool to build it with.
-
-**Consequence for M5**: build bar phase ourselves. Correlate band energy at a
-4-beat period to find which position carries the pattern change, and anchor
-`clock.set_downbeat()` on the first strong kick after a break — the same trick
-that resolved half-beat polarity, one level up. No dependency risk, negligible
-CPU, and nothing causal in BeatNet beats it.
+**Not done: the Pi.** Every number here is from the Mac. The measurement that
+decides whether 40 fps survives — render budget, analysis speed, and whether
+the USB interface behaves under load — has to happen on the hardware.
+`./live.sh doctor` is the command that answers it.
 
 ## Validation corpus — **open**
 

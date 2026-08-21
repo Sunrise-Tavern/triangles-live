@@ -1,0 +1,53 @@
+# Triangles live engine -- the file the rig runs from.
+#
+#   ./live.sh serve                     uses this file
+#   ./live.sh serve --fps 30            overrides one value for this run
+#   ./live.sh doctor                    checks all of it before the doors open
+#
+# A command-line flag beats this file; this file beats the built-in default.
+
+[output]
+# The Falcon, from xlights_networks.xml.  Leave empty to render without
+# sending anything -- that is the right setting on a laptop.
+host = ""
+# host = "192.168.50.20"
+port = 4048
+# Clip output to one controller's channels.  The 24 arches and the par sit
+# outside the Falcon's 11 160; run `./live.sh layout` to see it.
+controller = "Falcon_F16V5_0E1C"
+fps = 40.0
+
+[audio]
+# Input device index or name.  Empty = system default.
+# Run `./live.sh listen --devices` at the rig to find the USB interface.
+device = ""
+# Or drive the show from a file instead of the line input, for testing:
+file = ""
+loop = false
+# The DJ's level drifts across a set and every threshold downstream is
+# relative, so this is on by default at the rig.
+autogain = true
+backend = "aubio"
+
+[web]
+bind = "0.0.0.0"
+port = 8080
+# 0 = match the engine's frame rate.  Turn down for a phone on bad wifi.
+preview_fps = 0.0
+preview_detail = 1.0
+
+[show]
+brightness = 1.0
+gamma = 1.0
+# Shift the lights against the PA; positive fires later.  Measure at the rig.
+latency_ms = 0.0
+# Preset to load at startup, by name.
+preset = ""
+# Start dark, so a restart mid-set doesn't throw light unannounced.
+blackout_on_start = false
+
+[log]
+file = "logs/live.log"
+level = "info"
+max_bytes = 8388608
+keep = 3

@@ -22,6 +22,7 @@ from pathlib import Path
 from .ddp import DDP_PORT, DEFAULT_CHANNELS_PER_PACKET, DDPSender
 from .fake_falcon import FakeFalcon
 from .audio import AutoGain, FileSource, LineInSource
+from .config import Config, setup_logging
 from .engine import Engine
 from .fseq import FseqWriter, read_header
 from .layout import load_layout
@@ -274,11 +275,25 @@ def cmd_serve(args) -> int:
     """Run the engine with its browser UI -- the dev preview and the show desk."""
     from .web import serve
 
+    config: Config = args.config_obj
     audio = _audio_source(args)
-    engine = Engine(load_layout(), fps=args.fps, host=args.ddp, port=args.ddp_port,
-                    controller=args.controller, audio=audio,
-                    backend=args.backend,
+    engine = Engine(load_layout(), fps=args.fps, host=args.ddp or None,
+                    port=args.ddp_port, controller=args.controller or None,
+                    audio=audio, backend=args.backend,
                     record=Path(args.record) if args.record else None)
+    engine.settings.apply({
+        "brightness": config.show.brightness,
+        "gamma": config.show.gamma,
+        "latency_ms": config.show.latency_ms,
+        "blackout": config.show.blackout_on_start,
+    })
+    if config.show.preset:
+        from . import settings as knobs
+        try:
+            engine.settings.load(knobs.read_preset(config.show.preset))
+            print(f"preset  : {config.show.preset}")
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"preset  : {exc}", file=sys.stderr)
     print(f"audio   : {args.audio or args.audio_device or 'none (scripted show)'}")
     url = f"http://{'localhost' if args.bind in ('0.0.0.0', '') else args.bind}:{args.port}"
     print(f"engine  : {args.fps:g} fps -> "
@@ -571,6 +586,12 @@ def cmd_harmonix(args) -> int:
     return 0
 
 
+def cmd_doctor(args) -> int:
+    """Everything that has to be true before the doors open, checked."""
+    from .doctor import run_checks
+    return run_checks(args.config_obj, deep=not args.quick)
+
+
 def cmd_inspect(args) -> int:
     for path in args.files:
         h = read_header(path)
@@ -583,23 +604,35 @@ def cmd_inspect(args) -> int:
     return 0
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(config: Config | None = None) -> argparse.ArgumentParser:
+    config = config or Config()
     ap = argparse.ArgumentParser(prog="live", description=__doc__.splitlines()[0])
+    # --config is accepted both before and after the subcommand.  The
+    # systemd unit puts it after ("python -m live serve --config ..."), which
+    # a bare top-level option silently rejects -- caught by actually running
+    # the unit's ExecStart line rather than something like it.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--config", metavar="PATH",
+                        help="config file (default: live.toml, or "
+                             "$TRIANGLES_CONFIG)")
+    ap.add_argument("--config", metavar="PATH",
+                    help="config file (default: live.toml, or $TRIANGLES_CONFIG)")
+    ap.set_defaults(config_obj=config)
     sub = ap.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("layout", help="print the channel map")
+    p = sub.add_parser("layout", help="print the channel map", parents=[common])
     p.set_defaults(func=cmd_layout)
 
-    p = sub.add_parser("selftest", help="byte-exact round trip, no hardware")
+    p = sub.add_parser("selftest", help="byte-exact round trip, no hardware", parents=[common])
     p.set_defaults(func=cmd_selftest)
 
-    p = sub.add_parser("render", help="test pattern -> fseq, no network")
+    p = sub.add_parser("render", help="test pattern -> fseq, no network", parents=[common])
     p.add_argument("--out", default="out/pattern.fseq")
     p.add_argument("--fps", type=float, default=40.0)
     p.add_argument("--seconds", type=float, default=DURATION)
     p.set_defaults(func=cmd_render)
 
-    p = sub.add_parser("pattern", help="stream the test pattern over DDP")
+    p = sub.add_parser("pattern", help="stream the test pattern over DDP", parents=[common])
     p.add_argument("--host", default="127.0.0.1",
                    help=f"target; the rig's Falcon is {FALCON_IP}")
     p.add_argument("--port", type=int, default=DDP_PORT)
@@ -612,7 +645,7 @@ def build_parser() -> argparse.ArgumentParser:
                    default=DEFAULT_CHANNELS_PER_PACKET)
     p.set_defaults(func=cmd_pattern)
 
-    p = sub.add_parser("fake-falcon", help="receive DDP and write an fseq")
+    p = sub.add_parser("fake-falcon", help="receive DDP and write an fseq", parents=[common])
     p.add_argument("--out", default="out/capture.fseq")
     p.add_argument("--no-out", action="store_true")
     p.add_argument("--port", type=int, default=DDP_PORT)
@@ -623,7 +656,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--media")
     p.set_defaults(func=cmd_fake_falcon)
 
-    p = sub.add_parser("demo", help="sender + fake Falcon in one process")
+    p = sub.add_parser("demo", help="sender + fake Falcon in one process", parents=[common])
     p.add_argument("--out", default="out/capture.fseq")
     p.add_argument("--port", type=int, default=DDP_PORT)
     p.add_argument("--fps", type=float, default=40.0)
@@ -633,7 +666,7 @@ def build_parser() -> argparse.ArgumentParser:
                    default=DEFAULT_CHANNELS_PER_PACKET)
     p.set_defaults(func=cmd_demo)
 
-    p = sub.add_parser("show", help="render the fixed 30 s script")
+    p = sub.add_parser("show", help="render the fixed 30 s script", parents=[common])
     p.add_argument("--out", default="out/show.fseq")
     p.add_argument("--send", action="store_true", help="stream over DDP instead")
     p.add_argument("--host", default="127.0.0.1")
@@ -645,12 +678,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--brightness", type=float, default=1.0)
     p.set_defaults(func=cmd_show)
 
-    p = sub.add_parser("bench", help="render cost against the frame budget")
+    p = sub.add_parser("bench", help="render cost against the frame budget", parents=[common])
     p.add_argument("--frames", type=int, default=600)
     p.add_argument("--fps", type=float, default=40.0)
     p.set_defaults(func=cmd_bench)
 
-    p = sub.add_parser("preview", help="fseq -> PNG, no xLights needed")
+    p = sub.add_parser("preview", help="fseq -> PNG, no xLights needed", parents=[common])
     p.add_argument("file")
     p.add_argument("--out", default="out/preview.png")
     p.add_argument("--at", type=float, help="single frame at this many seconds")
@@ -658,28 +691,35 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--columns", type=int, default=4)
     p.set_defaults(func=cmd_preview)
 
-    p = sub.add_parser("serve", help="run the engine with its browser UI")
-    p.add_argument("--bind", default="0.0.0.0", help="web server address")
-    p.add_argument("--port", type=int, default=8080, help="web server port")
-    p.add_argument("--ddp", help=f"send frames here; the rig's Falcon is {FALCON_IP}")
-    p.add_argument("--ddp-port", type=int, default=DDP_PORT)
-    p.add_argument("--controller", help="clip output to one controller's channels")
-    p.add_argument("--fps", type=float, default=40.0)
+    p = sub.add_parser("serve", help="run the engine with its browser UI", parents=[common])
+    p.add_argument("--bind", default=config.web.bind, help="web server address")
+    p.add_argument("--port", type=int, default=config.web.port,
+                   help="web server port")
+    p.add_argument("--ddp", default=config.output.host,
+                   help=f"send frames here; the rig's Falcon is {FALCON_IP}")
+    p.add_argument("--ddp-port", type=int, default=config.output.port)
+    p.add_argument("--controller", default=config.output.controller,
+                   help="clip output to one controller's channels")
+    p.add_argument("--fps", type=float, default=config.output.fps)
     p.add_argument("--record", help="also write every frame to this fseq")
     p.add_argument("--preview-fps", type=float,
+                   default=config.web.preview_fps or None,
                    help="cap the browser feed (default: the engine's rate)")
-    p.add_argument("--preview-detail", type=float, default=1.0,
+    p.add_argument("--preview-detail", type=float, default=config.web.preview_detail,
                    help="preview pixel density; 1.0 is ~3300 dots, 2.0 doubles "
                         "it and the bandwidth")
-    p.add_argument("--audio", help="drive the show from this audio file")
-    p.add_argument("--audio-device", help="drive it from a line input (see "
-                                          "'live listen --devices')")
-    p.add_argument("--backend", default="aubio", help="beat tracker backend")
-    p.add_argument("--loop", action="store_true", help="loop the audio file")
-    p.add_argument("--autogain", action="store_true")
+    p.add_argument("--audio", default=config.audio.file or None,
+                   help="drive the show from this audio file")
+    p.add_argument("--audio-device", default=config.audio.device or None,
+                   help="drive it from a line input (see 'live listen --devices')")
+    p.add_argument("--backend", default=config.audio.backend,
+                   help="beat tracker backend")
+    p.add_argument("--loop", action="store_true", default=config.audio.loop,
+                   help="loop the audio file")
+    p.add_argument("--autogain", action="store_true", default=config.audio.autogain)
     p.set_defaults(func=cmd_serve)
 
-    p = sub.add_parser("beats", help="measure the beat clock against ground truth")
+    p = sub.add_parser("beats", help="measure the beat clock against ground truth", parents=[common])
     p.add_argument("files", nargs="*")
     p.add_argument("--bpm", type=float, help="known tempo: compare to an exact grid")
     p.add_argument("--fps", type=float, default=40.0)
@@ -688,7 +728,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="silence and tempo-change tests")
     p.set_defaults(func=cmd_beats)
 
-    p = sub.add_parser("listen", help="watch analysis + clock in the terminal")
+    p = sub.add_parser("listen", help="watch analysis + clock in the terminal", parents=[common])
     p.add_argument("file", nargs="?", help="audio file; omit to use line-in")
     p.add_argument("--device", help="input device index or name")
     p.add_argument("--devices", action="store_true", help="list inputs and exit")
@@ -698,7 +738,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--autogain", action="store_true")
     p.set_defaults(func=cmd_listen)
 
-    p = sub.add_parser("sim", help="the whole loop: audio -> DDP -> fseq")
+    p = sub.add_parser("sim", help="the whole loop: audio -> DDP -> fseq", parents=[common])
     p.add_argument("file", help="audio to drive the show")
     p.add_argument("--out", default="out/sim.fseq")
     p.add_argument("--seconds", type=float, default=60.0)
@@ -711,7 +751,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="restart the audio when it ends -- for soak tests")
     p.set_defaults(func=cmd_sim)
 
-    p = sub.add_parser("corpus", help="validate against a folder of tracks")
+    p = sub.add_parser("corpus", help="validate against a folder of tracks", parents=[common])
     p.add_argument("paths", nargs="+", type=Path)
     p.add_argument("--backend", default="aubio")
     p.add_argument("--fps", type=float, default=40.0)
@@ -721,7 +761,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path)
     p.set_defaults(func=cmd_corpus)
 
-    p = sub.add_parser("harmonix", help="ground truth from the Harmonix Set")
+    p = sub.add_parser("harmonix", help="ground truth from the Harmonix Set", parents=[common])
     p.add_argument("paths", nargs="*", help="music folders or files to scan")
     p.add_argument("--list", action="store_true", help="browse the annotations")
     p.add_argument("--genre")
@@ -743,7 +783,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--backend", default="aubio")
     p.set_defaults(func=cmd_harmonix)
 
-    p = sub.add_parser("inspect", help="print an fseq header")
+    p = sub.add_parser("doctor", help="preflight: is this machine ready to run", parents=[common])
+    p.add_argument("--quick", action="store_true",
+                   help="skip the render and beat-tracking benchmarks")
+    p.set_defaults(func=cmd_doctor)
+
+    p = sub.add_parser("inspect", help="print an fseq header", parents=[common])
     p.add_argument("files", nargs="+")
     p.set_defaults(func=cmd_inspect)
 
@@ -751,7 +796,21 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    # Pre-parse just --config, so the real parser can take its defaults from
+    # the file.  argparse cannot do this in one pass.
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--config")
+    known, _rest = pre.parse_known_args(argv)
+    try:
+        config = Config.load(known.config)
+    except (ValueError, OSError) as exc:
+        print(f"config: {exc}", file=sys.stderr)
+        return 2
+
+    args = build_parser(config).parse_args(argv)
+    args.config_obj = config
+    if args.command in ("serve", "sim"):
+        setup_logging(config.log)
     return args.func(args)
 
 

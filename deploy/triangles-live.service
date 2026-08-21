@@ -1,0 +1,30 @@
+# systemd unit for the Triangles live engine.
+# Installed by deploy/install-pi.sh, which substitutes the paths.
+[Unit]
+Description=Triangles live lighting engine
+Documentation=file://__DIR__/live/README.md
+# The Falcon is on a static address on a local switch; without this the
+# service can start before the interface has one and never find it.
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__DIR__
+ExecStart=__DIR__/.venv/bin/python -m live serve --config __DIR__/live.toml
+# A show that dies mid-set should come back on its own.  Restart is cheap:
+# the engine re-locks the beat clock within a few seconds, and blackout_on_start
+# in live.toml decides whether it comes back dark.
+Restart=always
+RestartSec=3
+# Audio capture and a 40 fps render both suffer from being preempted.
+Nice=-5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=2
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=triangles-live
+
+[Install]
+WantedBy=multi-user.target

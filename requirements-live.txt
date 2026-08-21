@@ -1,0 +1,9 @@
+# The live engine only.  Deliberately not requirements.txt: the offline
+# generator pulls librosa, numba, scipy, soundfile and yt-dlp, which are a slow
+# and fragile install on a Pi and are not used at the rig.
+#
+# aubio is NOT here -- on a Pi install it from apt (python3-aubio) and create
+# the venv with --system-site-packages.  See deploy/install-pi.sh.
+numpy<2.3
+aiohttp>=3.9
+sounddevice>=0.4.6

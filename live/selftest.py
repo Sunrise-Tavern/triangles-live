@@ -849,6 +849,84 @@ def test_arranger(layout: Layout) -> str:
             f"every channel used, {arranger.journey} palette steps, deterministic")
 
 
+def test_config(layout: Layout) -> str:
+    """The file configures the rig; a flag still overrides it for one run."""
+    from .__main__ import build_parser
+    from .config import Config
+
+    defaults = Config()
+    check(defaults.output.host == "",
+          "the default config must not point at the Falcon -- a laptop should "
+          "render without blasting the rig")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "rig.toml"
+        path.write_text(
+            '[output]\nhost = "10.1.2.3"\nfps = 30.0\n'
+            '[web]\nport = 9099\n[show]\nbrightness = 0.5\n'
+        )
+        config = Config.load(path)
+        check(config.output.host == "10.1.2.3", "host not read from the file")
+        check(config.output.fps == 30.0, "fps not read from the file")
+        check(config.output.port == 4048, "an unset value lost its default")
+
+        args = build_parser(config).parse_args(["serve"])
+        check(args.ddp == "10.1.2.3", f"config did not reach the CLI ({args.ddp})")
+        check(args.fps == 30.0 and args.port == 9099, "config defaults not applied")
+        args = build_parser(config).parse_args(["serve", "--fps", "60"])
+        check(args.fps == 60.0, "an explicit flag must beat the file")
+
+        # --config after the subcommand is the form the systemd unit uses.
+        args = build_parser(config).parse_args(["serve", "--config", str(path)])
+        check(args.config == str(path),
+              "--config must be accepted after the subcommand too, or the "
+              "unit file's ExecStart line fails")
+
+        bad = Path(tmp) / "bad.toml"
+        bad.write_text('[output]\nhsot = "typo"\n')
+        try:
+            Config.load(bad)
+        except ValueError as exc:
+            check("hsot" in str(exc), "a typo should be named in the error")
+        else:
+            raise Failure("an unknown setting was silently ignored")
+
+    missing = Config.load(Path(tmp) / "gone.toml")
+    check(missing.output.fps == 40.0,
+          "a missing config must fall back to defaults, not fail")
+    return "defaults < file < flag, unknown keys rejected, missing file is fine"
+
+
+def test_doctor(layout: Layout) -> str:
+    """Preflight must pass on a machine with nothing set up."""
+    import io
+    from contextlib import redirect_stdout
+
+    from .config import Config
+    from .doctor import FAIL, WARN, Report, check_layout, check_storage, check_tools
+
+    report = Report()
+    check_layout(report)
+    check_tools(report)
+    check_storage(report, Config())
+    failures = [c for c in report.checks if c.status == FAIL]
+    check(not failures,
+          "doctor reports a failure on a working checkout: "
+          + "; ".join(f"{c.name}: {c.detail}" for c in failures))
+    for c in report.checks:
+        if c.status != "ok":
+            check(bool(c.remedy),
+                  f"check {c.name!r} warns without saying what to do about it")
+
+    buffer = io.StringIO()
+    with redirect_stdout(buffer):
+        code = __import__("live.doctor", fromlist=["run_checks"]).run_checks(
+            Config(), deep=False)
+    check(code == 0, f"doctor exited {code} on a healthy machine")
+    check("layout" in buffer.getvalue(), "doctor printed no report")
+    return f"{len(report.checks)} checks, every non-ok one carries a remedy"
+
+
 TESTS = (
     ("channel map", test_layout),
     ("fseq round-trip", test_fseq_roundtrip),
@@ -865,6 +943,8 @@ TESTS = (
     ("bar tracking", test_downbeat),
     ("state machine", test_state_machine),
     ("arranger", test_arranger),
+    ("config", test_config),
+    ("doctor", test_doctor),
 )
 
 
