@@ -235,7 +235,9 @@ class Engine:
                 self._writer.add_frame(out)
 
             if self.session is not None:
-                self.session.frame(index, t, out, self.layout)
+                phase = (self.listener.clock.phase(t)
+                         if self.listener is not None else -1.0)
+                self.session.frame(index, t, out, self.layout, phase)
             self.frame = out
             self._which ^= 1
             render_ms += (time.perf_counter() - started) * 1000

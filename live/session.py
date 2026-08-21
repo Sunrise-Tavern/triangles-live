@@ -140,7 +140,16 @@ class Recorder:
 
     # -- called from the render thread ------------------------------------- #
 
-    def frame(self, index: int, t: float, channels: np.ndarray, layout) -> None:
+    def frame(self, index: int, t: float, channels: np.ndarray, layout,
+              beat_phase: float = -1.0) -> None:
+        """One rendered frame's summary.
+
+        ``beat_phase`` is recorded because inferring "did the lights fire on
+        the beat" from a brightness curve does not work: at every-4th-frame
+        sampling the curve resolves to about 100 ms against a 470 ms beat, so
+        the answer comes out barely above chance whatever the truth is.  With
+        the phase logged the question is direct.
+        """
         if self._closed or index % self.frame_stride:
             return
         # A brightness curve per fixture family is enough to see whether the
@@ -151,6 +160,7 @@ class Recorder:
             float(channels.mean()),
             float(channels[layout.nets_slice].mean()) if layout.nets_slice else 0.0,
             float(channels[layout.arches_slice].mean()) if layout.arches_slice else 0.0,
+            float(beat_phase),
         ))
         self.meta.frames += 1
 
@@ -173,7 +183,7 @@ class Recorder:
             state=np.array(self._state, dtype=np.float32),
             state_fields=np.array(("state",) + STATE_FIELDS),
             frames=np.array(self._frames, dtype=np.float32),
-            frames_fields=np.array(("t", "mean", "nets", "arches")),
+            frames_fields=np.array(("t", "mean", "nets", "arches", "beat_phase")),
         )
         (self.dir / "session.json").write_text(
             json.dumps(asdict(self.meta), indent=2) + "\n")

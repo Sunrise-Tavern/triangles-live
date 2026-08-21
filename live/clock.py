@@ -157,6 +157,14 @@ class BeatClock:
     #: Accepted beats of history before the long-baseline estimate is trusted.
     baseline_beats: int = 24
     baseline_gain: float = 0.12
+    #: Confidence is otherwise a measure of *self-consistency* -- do incoming
+    #: beats fit the model we already hold -- which a slow drift satisfies
+    #: perfectly.  Fed a grid sliding 121 to 170 BPM, the clock reported 0.99
+    #: throughout, and the arranger uses that number to decide whether to trust
+    #: the grid at all.  So a tempo that will not sit still caps it.
+    stability_beats: int = 12
+    #: Relative spread across those beats at which confidence is fully capped.
+    stability_spread: float = 0.06
     block_s: float = 512 / 44100
     slips: int = 0
     offbeat_events: int = 0
@@ -174,6 +182,8 @@ class BeatClock:
     _metrical_run: int = 0
     #: (time, beat index) for accepted beats -- the long tempo baseline.
     history: list[tuple[float, int]] = field(default_factory=list)
+    #: Recent tempo readings, for the stability cap on confidence.
+    _tempo_log: list[float] = field(default_factory=list)
 
     # -- model ------------------------------------------------------------- #
 
@@ -354,6 +364,15 @@ class BeatClock:
         self.tempo = min(max(tempo, self.tempo_range[0]), self.tempo_range[1])
         agreement = 1.0 - abs(relative) / self.tolerance
         self.confidence += (1.0 - self.confidence) * 0.25 * max(agreement, 0.1)
+
+        self._tempo_log.append(self.tempo)
+        if len(self._tempo_log) > self.stability_beats:
+            del self._tempo_log[:-self.stability_beats]
+        if len(self._tempo_log) >= self.stability_beats:
+            middle = sorted(self._tempo_log)[len(self._tempo_log) // 2]
+            spread = (max(self._tempo_log) - min(self._tempo_log)) / max(middle, 1e-6)
+            steady = 1.0 - min(spread / max(self.stability_spread, 1e-6), 1.0)
+            self.confidence = min(self.confidence, 0.15 + 0.85 * steady)
         return True
 
     def _baseline_tempo(self) -> float | None:
