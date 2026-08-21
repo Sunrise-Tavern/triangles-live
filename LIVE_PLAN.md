@@ -410,6 +410,38 @@ and load precomputed structure, this is the tool to build it with.
 that resolved half-beat polarity, one level up. No dependency risk, negligible
 CPU, and nothing causal in BeatNet beats it.
 
+## Validation corpus — **open**
+
+`live/corpus.py` (`./live.sh corpus tracks/`) runs a folder of music through
+the whole live chain and puts one row per track on the table, flagging the bad
+ones. Most of its metrics need no oracle — kick alignment on our grid versus
+our offbeat, share of the track locked, bar shifts, state transitions per
+minute, speed — because the offline generator is better-informed but is not
+ground truth, as the librosa episode in M4 established.
+
+**We have four real tracks, all 90–110 s excerpts, and three synthetic files.**
+That is not enough, and every threshold in the project was chosen against
+essentially one of them.
+
+Needed, from our own music (nothing is downloaded):
+- **full tracks, not excerpts** — the loudness baseline is 45 s and the peak
+  reference releases over 120 s, so a 97 s excerpt never fills either;
+- **at least one long DJ mix** — transitions are what defeat beat trackers, it
+  is literally what the rig will hear, and nothing here has ever been tested
+  across a crossfade;
+- spread across four-on-the-floor, half-time/DnB, hip-hop, backbeat pop,
+  ambient, something with a real tempo change, something live, and something
+  not in 4/4 (`bar_length` is hardcoded).
+
+Already flagged by the thin corpus, both held open rather than tuned away:
+- **Tempo wanders on real material** in a way it never does on the synthetic
+  track: Opus runs 100.7 / 125.2 / 143.0 at p5/p50/p95 and spends about twenty
+  seconds around 105 BPM before recovering, against 127.8–128.3 for the whole
+  synthetic track. Suspect is M4's coarse tempo term following aubio's BPM
+  readout, which never wanders on synthetic input so never fires there.
+- **Bar confidence is near zero on all four real tracks**, against 0.13–0.18
+  synthetic — the bar line is being found, but not confidently.
+
 ## Later, optional
 - **XR16 OSC meters** (UDP 10024) as an energy side-channel — free VU per input,
   no audio path. Needs the XR16 in Ethernet mode (its mode switch is Ethernet /

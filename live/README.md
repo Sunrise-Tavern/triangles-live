@@ -414,6 +414,82 @@ Eleven late frames in ten minutes, none skipped, and the clock still locked at
 the end.  Note that a soak capture is large — 37 084 channels x 24 819 frames
 is 920 MB — so delete it or point `--out` somewhere disposable.
 
+## Validating against real music
+
+Every threshold in this project was chosen by looking at one or two files —
+mostly `test_track.wav`, which is *synthesised*.  That is how you end up with a
+show that works on the track you developed against.
+
+```bash
+./live.sh corpus tracks/                    # one row per track, bad ones flagged
+./live.sh corpus tracks/ --offline          # also compare offline boundaries
+```
+
+**Most of what it measures needs no oracle**, deliberately.  The offline
+generator sees the whole file and is better-informed, but it is not ground
+truth — a mistake already made once here, when librosa's beat grid turned out
+to be on the *offbeat* for two of five tracks and reported us 60 % wrong while
+we were right.  So the primary signals are true or false on their own terms:
+
+| signal | what a bad value means |
+|---|---|
+| `kick` ours / offbeat | left lower ⇒ we are on the wrong half of the beat |
+| `lock` | share of the track the clock was confident |
+| `bar` shifts / confidence | one shift then stable is the tracker working; fifteen is not |
+| `st/min` | state transitions per minute — high means flapping |
+| `x rt` | speed vs real time, which is what decides whether it fits on a Pi |
+
+Offline boundaries are compared as a **flag**, not a score: a disagreement is a
+place to go and listen, not proof that either side is wrong.
+
+### What to put in `tracks/`
+
+`tracks/` is gitignored — supply your own music; nothing is downloaded.  Two
+requirements that are easy to get wrong:
+
+* **Full tracks, not excerpts.**  The loudness baseline is 45 s and the peak
+  reference releases over 120 s, so a 97 s excerpt never fills either.  The
+  `out/*.mp3` files are excerpts written by `run.sh` and systematically
+  under-test the engine for this reason.
+* **One long DJ mix is worth more than twenty singles.**  Transitions are what
+  defeat beat trackers, and a mix is the only way to test them — plus it is
+  literally what the rig will hear.  Nothing in this repo has ever been tested
+  across a crossfade.
+
+Diversity matters more than count.  Worth covering:
+
+| kind | what it stresses |
+|---|---|
+| house / techno, four-on-the-floor | the baseline case |
+| drum & bass, half-time | octave errors (tempo folds into 70–180) |
+| hip-hop / trap | sparse, swung, half-time feel |
+| pop with a backbeat | beat-vs-snare confusion |
+| ambient / downtempo | weak pulse — free-run and confidence |
+| a long breakdown, or a real tempo change | re-lock |
+| live or acoustic | loose timing |
+| anything in 3/4 or 6/8 | `bar_length` is hardcoded to 4 |
+
+### What it found on the four real excerpts we have
+
+All four have the low end on our beats, so phase is right — but the clock's
+**tempo wanders on real material in a way it never does on the synthetic
+track**:
+
+| track | tempo p5 / p50 / p95 |
+|---|---|
+| `test_track.wav` (synthetic) | 127.8 / 127.9 / 128.3 |
+| Midnight Vampires | 114.4 / 115.4 / 132.4 |
+| Opus | **100.7** / 125.2 / **143.0** |
+
+Opus loses the tempo for about twenty seconds mid-track and recovers.  The
+suspect is M4's coarse tempo term, which follows aubio's BPM readout when it
+disagrees persistently — on the synthetic track that readout never wanders, so
+it never fires.  Bar confidence also sits near zero on all four real tracks
+against 0.13–0.18 on the synthetic one.
+
+Both are held open rather than tuned away: fixing them against four excerpts
+would repeat exactly the mistake this harness exists to catch.
+
 ### Colour
 
 Ported from `triseq/palettes.py` into numpy: a base hue from the music, a

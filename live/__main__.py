@@ -411,6 +411,21 @@ def cmd_sim(args) -> int:
     return 0 if falcon.stats.frames else 1
 
 
+def cmd_corpus(args) -> int:
+    """Run a folder of tracks through the live chain and flag the bad ones."""
+    from .corpus import main as corpus_main
+
+    argv = [*(str(p) for p in args.paths), "--backend", args.backend,
+            "--fps", str(args.fps)]
+    if args.no_render:
+        argv.append("--no-render")
+    if args.offline:
+        argv.append("--offline")
+    if args.out:
+        argv += ["--out", str(args.out)]
+    return corpus_main(argv)
+
+
 def cmd_inspect(args) -> int:
     for path in args.files:
         h = read_header(path)
@@ -550,6 +565,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--loop", action="store_true",
                    help="restart the audio when it ends -- for soak tests")
     p.set_defaults(func=cmd_sim)
+
+    p = sub.add_parser("corpus", help="validate against a folder of tracks")
+    p.add_argument("paths", nargs="+", type=Path)
+    p.add_argument("--backend", default="aubio")
+    p.add_argument("--fps", type=float, default=40.0)
+    p.add_argument("--no-render", action="store_true")
+    p.add_argument("--offline", action="store_true",
+                   help="also run the offline segmenter, to compare boundaries")
+    p.add_argument("--out", type=Path)
+    p.set_defaults(func=cmd_corpus)
 
     p = sub.add_parser("inspect", help="print an fseq header")
     p.add_argument("files", nargs="+")
