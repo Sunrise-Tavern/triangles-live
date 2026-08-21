@@ -469,6 +469,73 @@ Diversity matters more than count.  Worth covering:
 | live or acoustic | loose timing |
 | anything in 3/4 or 6/8 | `bar_length` is hardcoded to 4 |
 
+## Ground truth: the Harmonix Set
+
+912 Western pop and dance tracks annotated with **beats, downbeats and
+functional segments**, plus BPM and time signature — MIT-licensed, from
+[urinieto/harmonixset](https://github.com/urinieto/harmonixset) ([ISMIR 2019
+paper](https://ccrma.stanford.edu/~urinieto/MARL/publications/ISMIR2019-Nieto-Harmonix.pdf)).
+The first real oracle this project has had for three things it could only
+check against a file we generated ourselves.
+
+```bash
+git clone --depth 1 https://github.com/urinieto/harmonixset.git datasets/harmonix
+
+./live.sh harmonix --list --genre Dance --min-bpm 120   # browse what it covers
+./live.sh harmonix ~/Music --score                      # score what you own
+./live.sh harmonix --synth 30                           # score without owning anything
+```
+
+The set ships annotations, not audio.  `--score` matches your library by
+MusicBrainz id, then tags, then filename, and warns when a file's duration
+disagrees with the annotation — a remaster or radio edit lines up at the start
+and drifts, which looks like a tracking failure and is not.
+
+### Testing 912 real structures without owning a note
+
+`--synth` renders an annotation *as audio*: a kick on every annotated beat, a
+bass note and crash on every downbeat, hats, and a high-band sweep through
+sections mapped to *building*.  The timbres are ours, so this says nothing
+about how aubio copes with a dense modern mix — but the **structures are
+real**: real tempo curves including drift and mid-track changes, real bar
+layouts including the 22 tracks not in 4/4, real arrangements.  Against that,
+our one hand-written synthetic arrangement was a sample of size one.
+
+Segment labels map to our states through the pop analogue of build-and-drop:
+**prechorus → building, chorus → hot**.  That's a judgement, and it lives in
+one visible table in `harmonix.py` rather than scattered through the scoring.
+
+### What it measured
+
+**On dance/electronic at 115–145 BPM — what this rig actually plays** (14 tracks):
+
+| | median | best |
+|---|---|---|
+| beat precision | **89 %** | 99 % |
+| beat recall | **91 %** | 99 % |
+| downbeats within 50 ms | **70 %** | 99 % |
+| tempo error | **0.1 %** | — |
+| tempo wander across the track | 1.6 BPM | — |
+| clock locked | 96 % | — |
+
+**On a spread of 30 across every genre**, beat precision drops to 54 % median.
+The failures are not random — they are three specific, now-measured limits:
+
+* **Non-4/4 is unusable.** 6/8, 3/4 and 6/4 tracks score 16–29 %.  `bar_length`
+  is hardcoded to 4, so this is expected; it is now quantified rather than
+  suspected.
+* **Slow tracks get octave-doubled.**  66→133, 78→156, 82→164, 87→173: the
+  70–180 folding range resolves sub-80 BPM material at double time.  Precision
+  and recall together are what reveal this — recall stays high because every
+  annotated beat still has one of ours on it.
+* **Tempo wanders mid-track on a minority of tracks**, even when the final
+  value is right: "Give It Up" ends at 139.9 against an annotated 140 but
+  spends part of the track near 92 (140 × 2/3, a triplet relationship).  This
+  is the same defect the four real excerpts showed on Opus, now reproducible.
+
+Precision and recall are reported separately for exactly this reason — a single
+"beats within 30 ms" number would have hidden every octave error.
+
 ### What it found on the four real excerpts we have
 
 All four have the low end on our beats, so phase is right — but the clock's

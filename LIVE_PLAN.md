@@ -433,7 +433,30 @@ Needed, from our own music (nothing is downloaded):
   ambient, something with a real tempo change, something live, and something
   not in 4/4 (`bar_length` is hardcoded).
 
-Already flagged by the thin corpus, both held open rather than tuned away:
+**Ground truth now exists.** The Harmonix Set (912 tracks; beats, downbeats
+and functional segments; MIT-licensed annotations) is wired in via
+`live/harmonix.py`. `--score` grades any of those 912 you own; `--synth`
+renders an annotation *as audio* and grades against it, which tests 912 real
+tempo curves, bar layouts and arrangements without owning a note — the timbres
+are ours, so it says nothing about aubio on a dense real mix, but our previous
+structural sample size was one.
+
+Measured on dance/electronic at 115–145 BPM, which is what this rig plays:
+**beat precision 89 %, recall 91 %, downbeats within 50 ms 70 %, tempo error
+0.1 %, clock locked 96 %**, best tracks 96–99 %. Across all genres precision
+falls to 54 %, and the failures are three specific limits rather than noise:
+
+- **non-4/4 is unusable** (16–29 %) — `bar_length` is hardcoded to 4;
+- **sub-80 BPM material is octave-doubled** by the 70–180 folding range
+  (66→133, 78→156, 82→164, 87→173);
+- **tempo wanders mid-track** on a minority of tracks even when the final value
+  is right — "Give It Up" ends at 139.9 against 140 but spends part of the
+  track near 92, which is 140 x 2/3.
+
+Precision and recall are reported separately because a single "within 30 ms"
+number hides every octave error: recall stays high at double tempo.
+
+Already flagged by the thin corpus of real excerpts, still open:
 - **Tempo wanders on real material** in a way it never does on the synthetic
   track: Opus runs 100.7 / 125.2 / 143.0 at p5/p50/p95 and spends about twenty
   seconds around 105 BPM before recovering, against 127.8–128.3 for the whole

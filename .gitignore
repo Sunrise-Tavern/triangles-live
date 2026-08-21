@@ -17,3 +17,6 @@ out/
 
 # Validation corpus (your own music; large, and not ours to redistribute)
 tracks/
+
+# Harmonix Set annotations (122 MB; clone with the command in live/README.md)
+datasets/

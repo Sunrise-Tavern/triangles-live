@@ -426,6 +426,111 @@ def cmd_corpus(args) -> int:
     return corpus_main(argv)
 
 
+def cmd_harmonix(args) -> int:
+    """Ground truth from the Harmonix Set: what it covers, and how we score."""
+    from . import harmonix
+
+    entries = harmonix.load()
+    if args.list:
+        rows = entries
+        if args.genre:
+            rows = [e for e in rows if args.genre.lower() in e.genre.lower()]
+        if args.not_four_four:
+            rows = [e for e in rows if not e.four_four]
+        if args.min_bpm:
+            rows = [e for e in rows if e.bpm >= args.min_bpm]
+        if args.max_bpm:
+            rows = [e for e in rows if e.bpm <= args.max_bpm]
+        print(f"{len(rows)} of {len(entries)} entries match")
+        for e in rows[:args.limit]:
+            print(f"  {e.bpm:5.0f} {e.time_signature:<5} {e.genre[:16]:<18}"
+                  f"{e.title[:38]:<40}{e.artist[:26]}")
+        return 0
+
+    if args.synth:
+        pool = entries
+        if args.genre:
+            pool = [e for e in pool if args.genre.lower() in e.genre.lower()]
+        if args.not_four_four:
+            pool = [e for e in pool if not e.four_four]
+        if args.min_bpm:
+            pool = [e for e in pool if e.bpm >= args.min_bpm]
+        if args.max_bpm:
+            pool = [e for e in pool if e.bpm <= args.max_bpm]
+        picked = harmonix.sample(pool, args.synth, seed=args.seed)
+        print(f"rendering and scoring {len(picked)} annotations "
+              f"(no audio needed -- the structures are real, the timbres ours)")
+        print(f"{'title':<30}{'genre':<14}{'bpm':>5}{'ours':>7}{'sig':>6}"
+              f"{'prec':>6}{'rec':>6}{'downbt':>8}{'shift':>5}{'wander':>7}"
+              f"{'state':>7}{'lock':>6}")
+        print("-" * 112)
+        scored = []
+        for entry in picked:
+            result = harmonix.score_synthetic(entry, fps=args.fps,
+                                              backend=args.backend)
+            scored.append(result)
+            print(result.line(), flush=True)
+        ok = [r for r in scored if not r.error]
+        if ok:
+            import numpy as _np
+            print()
+            print(f"{len(ok)} scored")
+            print(f"  beat precision     : median "
+                  f"{100 * float(_np.median([r.beats_pct for r in ok])):.0f}%"
+                  f"   worst {100 * min(r.beats_pct for r in ok):.0f}%")
+            print(f"  beat recall        : median "
+                  f"{100 * float(_np.median([r.beats_recall for r in ok])):.0f}%"
+                  f"   (high recall + low precision = we are at double tempo)")
+            print(f"  downbeats within 50 ms : median "
+                  f"{100 * float(_np.median([r.downbeats_pct for r in ok])):.0f}%"
+                  f"   worst {100 * min(r.downbeats_pct for r in ok):.0f}%")
+            print(f"  tempo error        : median "
+                  f"{100 * float(_np.median([r.tempo_error for r in ok])):.1f}%"
+                  f"   over 5%: {sum(r.tempo_error > 0.05 for r in ok)} track(s)")
+            print(f"  state agreement    : median "
+                  f"{100 * float(_np.median([r.state_agreement for r in ok])):.0f}%")
+            print(f"  tempo wander       : median "
+                  f"{float(_np.median([r.tempo_spread for r in ok])):.1f} BPM"
+                  f"   over 10 BPM: {sum(r.tempo_spread > 10 for r in ok)} track(s)")
+            print(f"  clock locked       : median "
+                  f"{100 * float(_np.median([r.locked for r in ok])):.0f}%")
+            bad = [r for r in ok if r.beats_pct < 0.5]
+            if bad:
+                print(f"  poor beat tracking : {len(bad)} track(s) below 50% -- "
+                      + ", ".join(f"{r.entry.title[:22]} ({r.entry.bpm:.0f}bpm "
+                                  f"{r.entry.time_signature})" for r in bad[:6]))
+        return 0
+
+    if not args.paths:
+        print("Give a music folder to scan, --list to browse the set, or "
+              "--synth N to score against rendered annotations.")
+        return 1
+
+    matched, missed = harmonix.scan([Path(p) for p in args.paths], entries,
+                                    threshold=args.threshold)
+    print(f"{len(matched)} of {len(matched) + len(missed)} files have "
+          f"annotations")
+    for m in matched:
+        flag = "  (edition mismatch)" if m.suspect_edition else ""
+        print(f"  {m.score:.2f} {m.how:<14} {m.path.name[:44]:<46}"
+              f"-> {m.entry.title[:26]} / {m.entry.artist[:18]}{flag}")
+    if missed and args.show_missed:
+        print(f"\nno annotation for {len(missed)} file(s):")
+        for p in missed[:args.limit]:
+            print(f"  {p.name}")
+    if not matched or not args.score:
+        return 0
+
+    print()
+    print(f"{'title':<32}{'artist':<20}{'bpm ref/ours':<12}{'beats':>6}"
+          f"{'downbt':>7}{'state':>7}  notes")
+    print("-" * 116)
+    for m in matched:
+        result = harmonix.score(m.path, m, fps=args.fps, backend=args.backend)
+        print(result.line())
+    return 0
+
+
 def cmd_inspect(args) -> int:
     for path in args.files:
         h = read_header(path)
@@ -575,6 +680,26 @@ def build_parser() -> argparse.ArgumentParser:
                    help="also run the offline segmenter, to compare boundaries")
     p.add_argument("--out", type=Path)
     p.set_defaults(func=cmd_corpus)
+
+    p = sub.add_parser("harmonix", help="ground truth from the Harmonix Set")
+    p.add_argument("paths", nargs="*", help="music folders or files to scan")
+    p.add_argument("--list", action="store_true", help="browse the annotations")
+    p.add_argument("--genre")
+    p.add_argument("--not-four-four", action="store_true",
+                   help="only tracks that are not in 4/4")
+    p.add_argument("--min-bpm", type=float)
+    p.add_argument("--max-bpm", type=float)
+    p.add_argument("--limit", type=int, default=40)
+    p.add_argument("--threshold", type=float, default=0.82)
+    p.add_argument("--show-missed", action="store_true")
+    p.add_argument("--synth", type=int, metavar="N",
+                   help="render N annotations as audio and score against them")
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--score", action="store_true",
+                   help="run the live chain on matched files and grade it")
+    p.add_argument("--fps", type=float, default=40.0)
+    p.add_argument("--backend", default="aubio")
+    p.set_defaults(func=cmd_harmonix)
 
     p = sub.add_parser("inspect", help="print an fseq header")
     p.add_argument("files", nargs="+")
