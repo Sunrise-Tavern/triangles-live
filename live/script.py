@@ -124,7 +124,12 @@ class Script:
             self._palettes[key] = cached
         return cached
 
-    def pattern_for(self, scene: Scene) -> str:
+    def phrase_index(self, t: float, scene: Scene) -> int:
+        """The scripted show has fixed patterns; this exists so the engine can
+        treat it and the live arranger the same way."""
+        return 0
+
+    def pattern_for(self, scene: Scene, phrase: int = 0) -> str:
         """Which corridor pattern to draw, honouring the live knobs.
 
         At articulation 0.5 this returns the scene's own pattern, so the

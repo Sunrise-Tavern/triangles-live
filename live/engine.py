@@ -273,7 +273,8 @@ class Engine:
         s.render_ms = round(render_ms, 3)
         s.elapsed_s = round(clock.stats.elapsed_s, 1)
         s.scene = scene.kind
-        s.pattern = self.script.pattern_for(scene)
+        s.pattern = self.script.pattern_for(scene,
+                                            self.script.phrase_index(t, scene))
         s.bpm = self.script.bpm
         s.beat_phase = round(self.script.beat_phase(t), 3)
         s.packets_sent = self._sender.packets_sent if self._sender else 0

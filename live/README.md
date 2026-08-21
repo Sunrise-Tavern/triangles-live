@@ -798,6 +798,36 @@ against 0.13–0.18 on the synthetic one.
 Both are held open rather than tuned away: fixing them against four excerpts
 would repeat exactly the mistake this harness exists to catch.
 
+### The corridor on `auto`
+
+`vocabulary()` returns the **three** patterns nearest the energy the state
+wants, and the corridor draws a different one each phrase rather than the
+nearest one every time.  This is the offline show's rule — *"every phrase draws
+a different pattern, never repeating the previous one"* — and it exists because
+a single travelling comet repeated for ninety seconds reads as one idea however
+well it tracks the music.
+
+It was missed at first: `pattern_for` computed the three candidates and then
+always took `[0]`, so the corridor held one pattern for a whole section — four
+patterns across 150 seconds, changing only when the state changed.  It now
+draws 25, from seven.
+
+Two rates, kept separate because they answer different questions:
+
+| | what it controls | quiet / cruising / building / hot |
+|---|---|---|
+| `phrase_bars` | how fast the gesture travels | 4 / 4 / 2 / **1** bar |
+| `pattern_bars` | how often a *new* pattern is drawn | 8 / 4 / 4 / **4** bars |
+
+Sharing one number gave a drop a new pattern every 1.9 s, which reads as
+thrashing rather than energy.
+
+The walk is deterministic — a crc32-derived step that is never zero, so
+consecutive phrases always differ and the show still renders identically twice.
+`hash()` would have been the obvious choice and is wrong: it is salted per
+process, so two runs of the same show drew different patterns and the
+`--fseqcmp` oracle would have started reporting false differences.
+
 ### Colour
 
 Ported from `triseq/palettes.py` into numpy: a base hue from the music, a

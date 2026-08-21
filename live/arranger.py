@@ -24,6 +24,7 @@ merely breathes.
 
 from __future__ import annotations
 
+import zlib
 from dataclasses import dataclass
 
 import numpy as np
@@ -47,18 +48,22 @@ class Treatment:
     brightness: float
     #: Corridor pattern when articulation sits at its midpoint.
     pattern: str
-    #: Bars per corridor phrase.
+    #: Bars for one traverse of the corridor -- how fast the gesture moves.
     phrase_bars: float
+    #: Bars before a *different* pattern is drawn.  Separate from the gesture
+    #: rate on purpose: a drop wants a fast comet (one bar) but not a new idea
+    #: every bar, which reads as thrashing rather than energy.
+    pattern_bars: float
     #: Never strobe the corridor here, however the numbers fall out.
     quiet: bool = False
 
 
 TREATMENTS: dict[str, Treatment] = {
-    SILENT:   Treatment(SILENT,   "analogous",     0.45, 0.40, "comet",    16.0, True),
-    QUIET:    Treatment(QUIET,    "analogous",     0.55, 0.55, "sparkle",   4.0, True),
-    CRUISING: Treatment(CRUISING, "split",         0.85, 0.80, "comet",     4.0),
-    BUILDING: Treatment(BUILDING, "complementary", 0.95, 0.90, "pairs",     2.0),
-    HOT:      Treatment(HOT,      "triadic",       1.00, 1.00, "alternate", 1.0),
+    SILENT:   Treatment(SILENT,   "analogous",     0.45, 0.40, "comet",    16.0, 16.0, True),
+    QUIET:    Treatment(QUIET,    "analogous",     0.55, 0.55, "sparkle",   4.0,  8.0, True),
+    CRUISING: Treatment(CRUISING, "split",         0.85, 0.80, "comet",     4.0,  4.0),
+    BUILDING: Treatment(BUILDING, "complementary", 0.95, 0.90, "pairs",     2.0,  4.0),
+    HOT:      Treatment(HOT,      "triadic",       1.00, 1.00, "alternate", 1.0,  4.0),
 }
 
 
@@ -112,10 +117,24 @@ class Arranger:
     def locate(self, t: float):
         """(journey index, treatment, progress through the current phrase)."""
         treat = self.treatment()
+        bars = self.clock.bar_phase(t) + self._bars_elapsed(t)
+        phrase = self._phrase_bars(treat)
+        return self.journey, treat, (bars % phrase) / phrase
+
+    def _phrase_bars(self, treat: Treatment) -> float:
+        rate = self.settings.corridor_rate if self.settings else 1.0
+        return max(0.25, treat.phrase_bars / max(rate, 1e-3))
+
+    def phrase_index(self, t: float, treat: Treatment) -> int:
+        """Which phrase we are in.  The corridor draws a new pattern on each.
+
+        Counted in ``pattern_bars``, not ``phrase_bars``: the gesture rate and
+        the redraw rate are different questions.  Sharing one number gave a
+        drop a new pattern every 1.9 s, which reads as thrashing.
+        """
         rate = self.settings.corridor_rate if self.settings else 1.0
         bars = self.clock.bar_phase(t) + self._bars_elapsed(t)
-        phrase = max(0.25, treat.phrase_bars / max(rate, 1e-3))
-        return self.journey, treat, (bars % phrase) / phrase
+        return int(bars // max(0.5, treat.pattern_bars / max(rate, 1e-3)))
 
     def _bars_elapsed(self, t: float) -> float:
         index = self.clock.beat_index_at(t)
@@ -136,7 +155,23 @@ class Arranger:
             self._palettes[key] = cached
         return cached
 
-    def pattern_for(self, treat: Treatment) -> str:
+    def pattern_for(self, treat: Treatment, phrase: int = 0) -> str:
+        """Which corridor pattern this phrase draws.
+
+        ``vocabulary`` returns the three patterns nearest the energy we want,
+        and the corridor takes a different one each phrase rather than the
+        nearest one every time.  The offline show learned this: a single
+        travelling comet repeated for ninety seconds reads as one idea however
+        well it tracks the music.  Holding one pattern for a whole section was
+        measured here as four patterns across a hundred and fifty seconds.
+
+        The walk is deterministic -- a step derived from the phrase number,
+        never zero -- so consecutive phrases always differ and the whole show
+        still renders identically twice, which is what keeps the fseq
+        comparison usable as an oracle.  It uses crc32 rather than ``hash()``,
+        which is salted per process: with ``hash()`` two runs of the same show
+        drew different patterns.
+        """
         if self.settings is not None and self.settings.pattern != "auto":
             return self.settings.pattern
         articulation = self.settings.articulation if self.settings else 0.5
@@ -144,7 +179,12 @@ class Arranger:
         # patterns; fall back toward the sparse end instead.
         trust = self.clock.confidence
         target = (fx.DENSITY[treat.pattern] + (articulation - 0.5)) * (0.5 + 0.5 * trust)
-        return fx.vocabulary(min(max(target, 0.0), 1.0), quiet=treat.quiet)[0]
+        candidates = fx.vocabulary(min(max(target, 0.0), 1.0), quiet=treat.quiet)
+        if len(candidates) < 2:
+            return candidates[0]
+        key = f"{self.seed}:{treat.kind}:{phrase}".encode()
+        step = 1 + zlib.crc32(key) % (len(candidates) - 1)
+        return candidates[(phrase * step) % len(candidates)]
 
     # -- render ------------------------------------------------------------ #
 
@@ -171,9 +211,10 @@ class Arranger:
         kick = _kick(beat)
         features = self.features
 
-        levels = fx.PATTERNS[self.pattern_for(treat)](
+        name = self.pattern_for(treat, self.phrase_index(t, treat))
+        levels = fx.PATTERNS[name](
             len(canvas.arch_names), phrase,
-            **({"seed": self.seed} if self.pattern_for(treat) == "sparkle" else {}))
+            **({"seed": self.seed} if name == "sparkle" else {}))
         fx.corridor(canvas, levels, palette, far,
                     brightness=treat.brightness, height=0.35)
 
