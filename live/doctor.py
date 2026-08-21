@@ -133,7 +133,7 @@ def check_audio(report: Report, config: Config, deep: bool) -> None:
     # device can exist, be selected, and be silent because nobody plugged the
     # aux cable in, and nothing else here would notice.
     try:
-        recorded = sd.rec(int(0.75 * 44100), samplerate=44100, channels=1,
+        recorded = sd.rec(int(2.0 * 44100), samplerate=44100, channels=1,
                           dtype="float32", device=device)
         sd.wait()
     except Exception as exc:                       # noqa: BLE001
@@ -141,15 +141,32 @@ def check_audio(report: Report, config: Config, deep: bool) -> None:
                    "check the device index with `live listen --devices`")
         return
     peak = float(np.abs(recorded).max())
+    rms = float(np.sqrt(np.mean(recorded.astype(np.float64) ** 2)))
     dbfs = 20 * np.log10(peak) if peak > 1e-9 else -120.0
-    if peak < 1e-4:
-        report.add("audio input", WARN, f"silent ({dbfs:.0f} dBFS over 0.75 s)",
-                   "is the aux cable in, and is the XR16 bus turned up?")
-    elif peak > 0.99:
-        report.add("audio input", WARN, f"clipping ({dbfs:.1f} dBFS)",
+    rms_dbfs = 20 * np.log10(rms) if rms > 1e-9 else -120.0
+    if peak > 0.99:
+        report.add("audio input", WARN, f"clipping ({dbfs:.1f} dBFS peak)",
                    "turn the send down; a clipped feed ruins onset detection")
     else:
-        report.add("audio input", OK, f"signal at {dbfs:.1f} dBFS peak")
+        report.add("audio input", OK,
+                   f"{dbfs:.1f} dBFS peak, {rms_dbfs:.1f} dBFS rms")
+
+    # What "silence" means depends entirely on the input -- about 40 dB
+    # between a line feed and a room mic -- so measure it rather than assume.
+    # Whatever was playing during the sample sets the reading; the useful run
+    # is with nothing playing.
+    configured = config.audio.silence_dbfs
+    suggested = round(rms_dbfs + 8)
+    if rms_dbfs > configured:
+        report.add("silence threshold", WARN,
+                   f"input is {rms_dbfs:.0f} dBFS but [audio] silence_dbfs is "
+                   f"{configured:.0f} -- silence will never be detected",
+                   f"if nothing was playing just now, set silence_dbfs = "
+                   f"{suggested}")
+    else:
+        report.add("silence threshold", OK,
+                   f"{configured:.0f} dBFS, input measured {rms_dbfs:.0f} "
+                   f"({configured - rms_dbfs:+.0f} dB of headroom)")
 
 
 def check_output(report: Report, config: Config) -> None:

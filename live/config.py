@@ -59,6 +59,10 @@ class AudioConfig:
     #: 21.5 Hz bins, which is what makes the kick detector work.  1024 is
     #: cheaper and worse: 50% of beats within 30 ms in the same test.
     window: int = 2048
+    #: Level below which nothing is playing, dBFS.  -70 suits a line feed;
+    #: a room microphone wants roughly -45.  `live doctor` measures your input
+    #: and tells you what to set.
+    silence_dbfs: float = -70.0
 
 
 @dataclass

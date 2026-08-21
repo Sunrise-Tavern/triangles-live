@@ -37,27 +37,30 @@ NOVELTY_BANDS = 16
 #: as a quiet passage worth learning from.
 SILENCE_GATE = 0.05
 
-#: Absolute floor, dBFS, below which there is no music playing at all.
+#: Level below which nothing is playing, dBFS, on the 3-second smoothed RMS.
 #:
-#: Every other loudness measure here is relative on purpose, so the show tracks
-#: the music and not the DJ's gain knob.  But a purely relative measure cannot
-#: detect silence: it normalises by whatever it is hearing, so a dead input
-#: reads as perfectly average.  Measured on a silent feed followed by music,
-#: `energy` was 1.00 then 1.56 and `level` 1.18 then 1.00 -- neither separates
-#: them, while the broadband noise floor made `high_share` read 0.80, i.e. a
-#: permanent build.
+#: Every other loudness measure here is relative on purpose, so the show
+#: follows the music and not the DJ's gain knob.  That is exactly why none of
+#: them can detect silence: they normalise by whatever they are hearing.
+#: Measured on a dead feed followed by music, `energy` read 1.00 then 1.56 and
+#: `level` 1.01 then 1.06 -- neither separates them.
 #:
-#: "Is this loud for this set" is relative.  "Is there any signal" is not, and
-#: this is the one place an absolute number belongs.
+#: What makes this one number rather than a clever detector: **"silence"
+#: depends on the input, by about 40 dB.**  A line feed with nothing on it
+#: sits near -90 dBFS; a microphone in a room sits near -51.  Three attempts
+#: at inferring it failed on one side or the other -- a fixed -70 dBFS called
+#: room tone "music"; a noise-floor gate called a quiet intro "silence",
+#: because the floor initialised to it; peak-to-median "peakiness" put room
+#: tone at 1.09 and a real breakdown at 1.16, too thin to split.
 #:
-#: Applied to the **smoothed** level, not per-block RMS.  Measured: the median
-#: block of a click track is digitally silent (-180 dBFS) because most blocks
-#: fall between the clicks, so a per-block threshold calls busy music silent.
-#: Smoothed over three seconds the separation is clean -- a dead input sits at
-#: -90 dBFS, and music attenuated twentyfold still reads -51 -- so the floor
-#: goes between them with about 20 dB of margin either side.
+#: So it is configurable, and `live doctor` measures your input and tells you
+#: what to set.  The default suits the rig's line feed from the XR16.  A room
+#: mic wants roughly -45.
 SILENCE_DBFS = -70.0
-SILENCE_RMS = 10.0 ** (SILENCE_DBFS / 20.0)
+
+#: Applied to the smoothed level, never per-block RMS: the median block of a
+#: click track is digitally silent (-180 dBFS) because most blocks fall between
+#: the clicks, so a per-block threshold calls busy music silent.
 
 #: (name, low Hz, high Hz).  Bass is the kick, high is where builds live.
 BANDS = (("bass", 20.0, 160.0), ("mid", 160.0, 2000.0), ("high", 2000.0, 10000.0))
@@ -110,7 +113,10 @@ class Features:
     #: Spectral centroid in Hz; a build sweeps it upward.
     centroid: float
     baseline: float
-    #: No music is playing.  Absolute, unlike every other level here.
+    #: No music is playing.  The one absolute number in this module, because
+    #: "silence" is -90 dBFS on a line feed and -51 through a room mic and no
+    #: relative measure can tell them apart.  Configurable; `live doctor`
+    #: measures your input and says what to set.
     silent: bool
     #: How much of the baseline's window has actually been heard, 0..1.
     #: Until this is near 1 the loudness baseline is a small, unrepresentative
@@ -152,7 +158,8 @@ class Analyzer:
     def __init__(self, samplerate: int = SAMPLERATE, blocksize: int = BLOCKSIZE,
                  window: int = WINDOW, baseline_s: float = 45.0,
                  flux_tau_s: float = 1.5, novelty_tau_s: float = 2.0,
-                 peak_release_s: float = 120.0) -> None:
+                 peak_release_s: float = 120.0,
+                 silence_dbfs: float = SILENCE_DBFS) -> None:
         self.samplerate = samplerate
         self.blocksize = blocksize
         self.window = window
@@ -189,6 +196,7 @@ class Analyzer:
         # kick and the gap after it -- which is a property of the mix, not of
         # the section.  Measured that way a verse and a drop both read 0.85.
         self._smooth_rms = _Ema(3.0, block_s, initial=0.0)
+        self._silence_rms = 10.0 ** (silence_dbfs / 20.0)
         # Short window: energy-weighting is what makes the shares robust, so
         # the smoothing only has to steady them, not rescue them.  Long enough
         # and the drop arrives before the band shape catches up.
@@ -232,7 +240,7 @@ class Analyzer:
         # quiet feed from the desk would fall entirely below it, and the
         # baseline would never learn anything at all.
         smooth = self._smooth_rms.push(rms)
-        silent = smooth < SILENCE_RMS
+        silent = smooth < self._silence_rms
         baseline = self._baseline.value
         # Silence must not teach the baseline anything.  Letting it meant that
         # starting the engine before the music left the baseline at the noise

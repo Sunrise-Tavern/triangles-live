@@ -86,7 +86,7 @@ class Engine:
                  seed: int = 7, audio: AudioSource | None = None,
                  backend: str = "aubio",
                  thresholds: StateThresholds | None = None,
-                 window: int = 2048) -> None:
+                 window: int = 2048, silence_dbfs: float = -70.0) -> None:
         self.layout = layout or load_layout()
         self.settings = settings or Settings()
         self.fps = float(fps)
@@ -99,7 +99,8 @@ class Engine:
         self.listener: Listener | None = None
         self.machine: StateMachine | None = None
         if audio is not None:
-            self.listener = Listener(audio, backend=backend, window=window)
+            self.listener = Listener(audio, backend=backend, window=window,
+                                     silence_dbfs=silence_dbfs)
             self.machine = StateMachine(thresholds)
             self.script = Arranger(self.canvas, self.listener,
                                    settings=self.settings, state=self.machine,

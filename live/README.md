@@ -342,7 +342,16 @@ them, while the broadband noise floor made `high_share` 0.80 — so silence read
 as a permanent *build*, and once music started the poisoned baseline held the
 machine in `hot` for over a minute.
 
-So there is a floor, at −70 dBFS, and two details matter:
+So there is a floor — and it is **configurable**, because "silence" depends
+on the input by about 40 dB.  A line feed with nothing on it sits near
+−90 dBFS; a microphone in a room sits near −51.  Three attempts to infer it
+all failed on one side or the other: a fixed −70 dBFS called room tone
+"music"; a noise-floor gate called a quiet intro "silence", because the floor
+initialised to it; peak-to-median "peakiness" put room tone at 1.09 and a real
+breakdown at 1.16, too thin to split.
+
+`./live.sh doctor`, run with nothing playing, measures your input and tells you
+what to set.  Two details still matter:
 
 * it applies to the **3-second smoothed** level, not per-block RMS — the median
   block of a click track is digitally silent (−180 dBFS) because most blocks
@@ -350,8 +359,10 @@ So there is a floor, at −70 dBFS, and two details matter:
 * **silence never teaches the loudness baseline anything**, which is what
   stopped the first track after a silent start reading as 20× normal.
 
-Measured separation: a dead input sits at −90 dBFS, music attenuated twentyfold
-still reads −51, so the floor has about 20 dB of margin either side.
+| input | `silence_dbfs` |
+|---|---|
+| line feed from the XR16 (the rig) | −70 (default) |
+| room mic, or Spotify via loopback in a noisy room | ≈ −45 |
 
 The idle look is deliberately not a show: one smooth swell travelling the
 corridor over 48 s, a very slow plasma, hue drifting one turn per five minutes,

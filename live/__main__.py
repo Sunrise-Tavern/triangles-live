@@ -284,6 +284,7 @@ def cmd_serve(args) -> int:
     engine = Engine(load_layout(), fps=args.fps, host=args.ddp or None,
                     port=args.ddp_port, controller=args.controller or None,
                     audio=audio, backend=args.backend, window=config.audio.window,
+                    silence_dbfs=config.audio.silence_dbfs,
                     record=Path(args.record) if args.record else None)
     engine.settings.apply({
         "brightness": config.show.brightness,

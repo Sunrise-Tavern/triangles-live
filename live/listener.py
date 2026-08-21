@@ -45,10 +45,10 @@ class Listener:
     def __init__(self, source: AudioSource, *, backend: str = "aubio",
                  clock: BeatClock | None = None, backend_kwargs: dict | None = None,
                  on_beat=None, bars: BarTracker | None = None,
-                 window: int = 2048) -> None:
+                 window: int = 2048, silence_dbfs: float = -70.0) -> None:
         self.source = source
         self.analyzer = Analyzer(source.samplerate, source.blocksize,
-                                 window=window)
+                                 window=window, silence_dbfs=silence_dbfs)
         self.backend = make_backend(
             backend,
             **{"samplerate": source.samplerate, "blocksize": source.blocksize,
