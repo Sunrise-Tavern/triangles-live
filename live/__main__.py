@@ -21,6 +21,7 @@ from pathlib import Path
 
 from .ddp import DDP_PORT, DEFAULT_CHANNELS_PER_PACKET, DDPSender
 from .fake_falcon import FakeFalcon
+from .audio import AutoGain, FileSource, LineInSource
 from .engine import Engine
 from .fseq import FseqWriter, read_header
 from .layout import load_layout
@@ -258,13 +259,27 @@ def cmd_preview(args) -> int:
     return 0
 
 
+def _audio_source(args):
+    """Build the audio input from the flags, or None for the scripted show."""
+    if getattr(args, "audio", None):
+        return FileSource(args.audio, realtime=True, loop=getattr(args, "loop", False),
+                          gain=AutoGain() if getattr(args, "autogain", False) else None)
+    if getattr(args, "audio_device", None) is not None:
+        device = args.audio_device
+        return LineInSource(device=int(device) if str(device).isdigit() else device)
+    return None
+
+
 def cmd_serve(args) -> int:
     """Run the engine with its browser UI -- the dev preview and the show desk."""
     from .web import serve
 
+    audio = _audio_source(args)
     engine = Engine(load_layout(), fps=args.fps, host=args.ddp, port=args.ddp_port,
-                    controller=args.controller,
+                    controller=args.controller, audio=audio,
+                    backend=args.backend,
                     record=Path(args.record) if args.record else None)
+    print(f"audio   : {args.audio or args.audio_device or 'none (scripted show)'}")
     url = f"http://{'localhost' if args.bind in ('0.0.0.0', '') else args.bind}:{args.port}"
     print(f"engine  : {args.fps:g} fps -> "
           f"{args.ddp + ':' + str(args.ddp_port) if args.ddp else 'no output'}")
@@ -331,6 +346,69 @@ def cmd_listen(args) -> int:
           f"{clock.relocks} relocks, {clock.slips} half-beat corrections, "
           f"{clock.offbeat_events} offbeat detections used for phase")
     return 0
+
+
+def cmd_sim(args) -> int:
+    """The whole loop on one machine: audio in, DDP out, fseq and preview back.
+
+    This is M6's verification in one command -- it runs the real engine, sends
+    real packets, and the fake Falcon writes exactly what a controller would
+    have received.  With --play the same audio comes out of the speakers, so a
+    person can watch the preview against the music instead of trusting numbers.
+    """
+    import subprocess
+
+    from .fake_falcon import FakeFalcon
+
+    layout = load_layout()
+    falcon = FakeFalcon(layout=layout, port=args.port, bind="127.0.0.1",
+                        out=Path(args.out), fps=args.fps, media_file=args.file,
+                        quiet=True)
+    ready = threading.Event()
+    receiver = threading.Thread(
+        target=falcon.run,
+        kwargs=dict(duration=args.seconds + 30.0, idle_timeout=2.0, ready=ready),
+        daemon=True)
+    receiver.start()
+    if not ready.wait(5.0):
+        print("fake Falcon failed to bind", file=sys.stderr)
+        return 1
+
+    engine = Engine(layout, fps=args.fps, host="127.0.0.1", port=args.port,
+                    audio=FileSource(args.file, realtime=True, loop=args.loop),
+                    backend=args.backend)
+    player = None
+    if args.play:
+        player = subprocess.Popen(["afplay", args.file],
+                                  stdout=subprocess.DEVNULL,
+                                  stderr=subprocess.DEVNULL)
+    print(f"simulating {args.file} for {args.seconds:g}s at {args.fps:g} fps")
+    engine.start()
+    started = time.perf_counter()
+    try:
+        while time.perf_counter() - started < args.seconds:
+            time.sleep(0.5)
+            if engine.listener is not None and not engine.listener.stats.running \
+                    and engine.status.frames > 10:
+                break
+    except KeyboardInterrupt:
+        pass
+    finally:
+        engine.stop()
+        if player is not None:
+            player.terminate()
+    receiver.join(timeout=10.0)
+
+    d = engine.status.to_dict()
+    print()
+    print(falcon.report())
+    print()
+    print(f"engine  : {d['fps']:.2f} fps, {d['render_ms']:.2f} ms/frame, "
+          f"{d['late_frames']} late, {d['skipped_frames']} skipped")
+    print(f"audio   : lag {d['audio_lag_ms']:.1f} ms, tempo {d['bpm']:.2f}, "
+          f"confidence {d['confidence']:.2f}, bar confidence {d['bar_confidence']:.2f}")
+    print(f"last    : state {d['scene']}, corridor {d['pattern']}")
+    return 0 if falcon.stats.frames else 1
 
 
 def cmd_inspect(args) -> int:
@@ -433,6 +511,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--preview-detail", type=float, default=1.0,
                    help="preview pixel density; 1.0 is ~3300 dots, 2.0 doubles "
                         "it and the bandwidth")
+    p.add_argument("--audio", help="drive the show from this audio file")
+    p.add_argument("--audio-device", help="drive it from a line input (see "
+                                          "'live listen --devices')")
+    p.add_argument("--backend", default="aubio", help="beat tracker backend")
+    p.add_argument("--loop", action="store_true", help="loop the audio file")
+    p.add_argument("--autogain", action="store_true")
     p.set_defaults(func=cmd_serve)
 
     p = sub.add_parser("beats", help="measure the beat clock against ground truth")
@@ -453,6 +537,19 @@ def build_parser() -> argparse.ArgumentParser:
                    help="run a file as fast as possible instead of in real time")
     p.add_argument("--autogain", action="store_true")
     p.set_defaults(func=cmd_listen)
+
+    p = sub.add_parser("sim", help="the whole loop: audio -> DDP -> fseq")
+    p.add_argument("file", help="audio to drive the show")
+    p.add_argument("--out", default="out/sim.fseq")
+    p.add_argument("--seconds", type=float, default=60.0)
+    p.add_argument("--fps", type=float, default=40.0)
+    p.add_argument("--port", type=int, default=DDP_PORT)
+    p.add_argument("--backend", default="aubio")
+    p.add_argument("--play", action="store_true",
+                   help="play the audio too, so you can watch against it")
+    p.add_argument("--loop", action="store_true",
+                   help="restart the audio when it ends -- for soak tests")
+    p.set_defaults(func=cmd_sim)
 
     p = sub.add_parser("inspect", help="print an fseq header")
     p.add_argument("files", nargs="+")

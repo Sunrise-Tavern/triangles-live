@@ -50,6 +50,10 @@ class Fired:
     index: int
     predicted: float        # when the renderer thought the beat would be
     lead: float             # how far ahead that prediction was made
+    #: Whether the clock called this a downbeat *at the time it fired* -- the
+    #: bar line moves as evidence accumulates, so deciding afterwards from the
+    #: final value would score a run the show never actually had.
+    downbeat: bool = False
 
 
 def _verdict(ours: float, reference: float, tie: float = 0.05) -> str:
@@ -207,7 +211,10 @@ def run(source, *, fps: float = 40.0, backend: str = "aubio",
             for index in beat_clock.crossed(previous, now):
                 when, ahead = pending.pop(
                     index, (beat_clock.beat_time(index), 0.0))
-                fired.append(Fired(index=index, predicted=when, lead=ahead))
+                fired.append(Fired(
+                    index=index, predicted=when, lead=ahead,
+                    downbeat=(index - beat_clock.downbeat)
+                    % beat_clock.bar_length == 0))
             if watch is not None:
                 watch(now, listener)
             previous = now
@@ -233,6 +240,32 @@ def librosa_grid(path: Path) -> np.ndarray:
     y, sr = librosa.load(str(path), sr=None, mono=True)
     _tempo, beats = librosa.beat.beat_track(y=y, sr=sr, units="time")
     return np.asarray(beats)
+
+
+def check_downbeats(path: Path, *, bpm: float, bar_length: int = 4,
+                    fps: float = 40.0, backend: str = "aubio",
+                    start_offset: int = 0) -> Report:
+    """Do our bar lines land on the track's bar lines?
+
+    Only for material whose grid is known exactly -- there is no offline
+    downbeat oracle in this project, and the BeatNet spike showed the obvious
+    candidate is not one either.
+
+    ``start_offset`` deliberately mis-aligns the clock's bar counter before the
+    run, so the test measures the tracker *finding* the bar line rather than
+    being handed it.
+    """
+    from .clock import BeatClock
+
+    clock = BeatClock()
+    clock.downbeat = start_offset
+    source = FileSource(path, realtime=False)
+    fired, listener = run(source, fps=fps, backend=backend, clock=clock)
+    downbeats = [f for f in fired if f.downbeat]
+    bar = 60.0 / bpm * bar_length
+    reference = np.arange(int(listener.audio_time / bar) + 1) * bar
+    return Report(label=f"{path.name} downbeats [+{start_offset}]",
+                  fired=downbeats, reference=reference, listener=listener)
 
 
 def check_file(path: Path, *, fps: float = 40.0, backend: str = "aubio",
@@ -275,13 +308,77 @@ def check_file(path: Path, *, fps: float = 40.0, backend: str = "aubio",
 # --------------------------------------------------------------------------- #
 
 
-def click_track(segments: list[tuple[float, float]], *,
+def arc_track(samplerate: int = SAMPLERATE) -> tuple[np.ndarray, list[tuple[str, float, float]]]:
+    """A miniature arrangement: quiet, cruising, a sweep, then a drop.
+
+    Small enough to run inside the self-test, and shaped like music rather
+    than like a test signal.  That matters: a first attempt used isolated
+    thumps in silence, and every section read 0.43-0.78 high-band share
+    because between the thumps there was nothing but noise floor.  Sections
+    need *sustained* content -- a bass note, hats -- or the band shares
+    measure the gaps instead of the music.
+    """
+    bpm, sr = 128.0, samplerate
+    beat = 60.0 / bpm
+    bar = beat * 4
+    #: (kind, bars, kick, bass, hat, sweep)
+    plan = [("quiet", 6, 0.0, 0.30, 0.15, 0.0),
+            ("cruising", 8, 0.75, 0.55, 0.30, 0.0),
+            ("building", 6, 0.50, 0.40, 0.55, 1.0),
+            ("hot", 8, 1.00, 0.90, 0.60, 0.0)]
+
+    rng = np.random.default_rng(11)
+    n = int(0.18 * sr)
+    t = np.arange(n) / sr
+    freq = 150 * np.exp(-t * 40) + 45
+    kick = (np.sin(2 * np.pi * np.cumsum(freq) / sr) * np.exp(-t * 18)).astype(np.float32)
+    hn = int(0.05 * sr)
+    hat = (rng.standard_normal(hn) * np.exp(-np.arange(hn) / sr * 90)).astype(np.float32)
+
+    parts, sections, cursor = [], [], 0.0
+    for kind, bars, kick_lv, bass_lv, hat_lv, sweep in plan:
+        span = np.zeros(int(bars * bar * sr), dtype=np.float32)
+        for b in range(bars):
+            frac = b / max(bars - 1, 1)
+            base = b * bar
+            for k in range(4):
+                at = base + k * beat
+                _mix(span, kick * kick_lv, int(at * sr))
+                for h in range(2 if sweep < 0.5 else 2 + int(frac * 2)):
+                    _mix(span, hat * hat_lv,
+                         int((at + h * beat / (2 + int(frac * 2) if sweep else 2)) * sr))
+            seg = np.arange(int(bar * sr)) / sr
+            note = 55 * 2 ** (rng.integers(0, 3) / 12)
+            _mix(span, (np.sin(2 * np.pi * note * seg) * bass_lv * 0.8).astype(np.float32),
+                 int(base * sr))
+            if sweep:
+                _mix(span, (rng.standard_normal(len(seg))
+                            * (0.05 + 0.45 * frac)).astype(np.float32) * 0.6,
+                     int(base * sr))
+        parts.append(span)
+        sections.append((kind, cursor, cursor + bars * bar))
+        cursor += bars * bar
+    audio = np.concatenate(parts)
+    return (audio / (np.abs(audio).max() * 1.05)).astype(np.float32), sections
+
+
+def _mix(buffer: np.ndarray, signal: np.ndarray, at: int) -> None:
+    end = min(at + len(signal), len(buffer))
+    if at < len(buffer):
+        buffer[at:end] += signal[:end - at]
+
+
+def click_track(segments: list[tuple[float, float]], *, accent_every: int = 0,
                 samplerate: int = SAMPLERATE) -> tuple[np.ndarray, np.ndarray]:
     """Build a click track from (bpm, seconds) segments.  ``bpm=0`` is silence.
 
     Returns the audio and the true beat grid.  Clicks are a kick-ish thump
     plus a tick, because a pure impulse is easier to track than any real music
     and would flatter the result.
+
+    ``accent_every`` puts a different sound on every Nth click -- a bar line.
+    Without one there is genuinely nothing to find, so a downbeat test on a
+    plain click track would be testing nothing.
     """
     audio: list[np.ndarray] = []
     grid: list[float] = []
@@ -298,14 +395,25 @@ def click_track(segments: list[tuple[float, float]], *,
                     * np.exp(-t * 22)).astype(np.float32)
             body += (rng.standard_normal(n) * np.exp(-t * 120) * 0.25
                      ).astype(np.float32)
+            # What a bar line actually carries in this music: a bass note
+            # struck with the kick, and a crash.  A mid-range tone would mark
+            # the bar to a listener but exercises neither cue the tracker
+            # uses, so it would be testing nothing.
+            accent = ((np.sin(2 * np.pi * 62 * t) * np.exp(-t * 4) * 0.9
+                       + rng.standard_normal(n) * np.exp(-t * 9) * 0.35)
+                      ).astype(np.float32)
             at = 0.0
+            beat_number = 0
             while at < seconds:
                 start = int(at * samplerate)
                 end = min(len(span), start + n)
                 if end > start:
                     span[start:end] += body[:end - start]
+                    if accent_every and beat_number % accent_every == 0:
+                        span[start:end] += accent[:end - start]
                 grid.append(cursor + at)
                 at += period
+                beat_number += 1
         audio.append(span)
         cursor += seconds
     return np.concatenate(audio) * 0.6, np.array(grid)

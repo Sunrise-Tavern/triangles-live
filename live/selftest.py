@@ -713,6 +713,142 @@ def test_beat_pipeline(layout: Layout) -> str:
             f"free-runs a 7.5 s break and re-locks to {relock:.1f} ms")
 
 
+def test_downbeat(layout: Layout) -> str:
+    """Does the bar tracker *find* the bar line, from any wrong start?"""
+    from .audio import ArraySource
+    from .clock import BeatClock
+    from .listener import Listener
+    from .verify import click_track
+
+    # A plain click track has no bar line to find, so there would be nothing
+    # to test: every beat is identical.  accent_every marks one.
+    audio, grid = click_track([(128.0, 40.0)], accent_every=4)
+    bar = 60.0 / 128.0 * 4
+    truth = np.arange(1, int(40.0 / bar)) * bar
+
+    results = []
+    for offset in range(4):
+        clock = BeatClock()
+        clock.downbeat = offset
+        listener = Listener(ArraySource(audio), clock=clock)
+        marks: list[tuple[float, int]] = []
+        for block in listener.source.blocks():
+            features = listener.step(block)
+            marks.append((features.t, (clock.beat_index_at(features.t)
+                                       - clock.downbeat) % 4))
+        # Score by comparing *times*, never "which beat are we in" at the
+        # instant of a beat -- that is ambiguous by half a beat and reports
+        # about 50% no matter how right the tracker is.
+        stamps = np.array([m[0] for m in marks])
+        phases = np.array([m[1] for m in marks])
+        hits = 0
+        for T in truth:
+            j = min(int(np.searchsorted(stamps, T)), len(stamps) - 1)
+            window = phases[max(0, j - 2):j + 3]
+            hits += int((window == 0).any())
+        settled = hits / max(1, len(truth))
+        results.append((offset, settled, listener.bars.shifts))
+
+    for offset, share, shifts in results:
+        check(share > 0.8,
+              f"from offset +{offset} only {100 * share:.0f}% of bar lines were "
+              f"found ({shifts} shifts)")
+    moved = [r for r in results if r[0] != 0]
+    check(all(r[2] >= 1 for r in moved),
+          "the tracker never moved the bar line from a wrong start")
+    check(all(r[2] <= 3 for r in results),
+          f"the bar line moved too often: {[r[2] for r in results]}")
+    return (f"bar line found from all four starts "
+            f"({min(100 * r[1] for r in results):.0f}%+ of bars, "
+            f"{max(r[2] for r in results)} shift(s) at most)")
+
+
+def test_state_machine(layout: Layout) -> str:
+    """Quiet -> cruising -> build -> drop, with the drop on time."""
+    from .audio import ArraySource
+    from .listener import Listener
+    from .state import BUILDING, HOT, StateMachine
+    from .verify import arc_track
+
+    audio, sections = arc_track()
+    machine = StateMachine()
+    listener = Listener(ArraySource(audio))
+    for block in listener.source.blocks():
+        machine.push(listener.step(block))
+
+    history = machine.history
+    check(history, "the state machine never changed state at all")
+    check(len(history) <= 6,
+          f"{len(history)} state changes for a four-section arc -- it is "
+          f"flapping: {[(round(t, 1), s) for t, s in history]}")
+
+    wanted = {kind: start for kind, start, _ in sections}
+    for kind, tolerance in ((BUILDING, 4.0), (HOT, 2.5)):
+        hit = next((t for t, s in history if s == kind), None)
+        check(hit is not None, f"never entered {kind}")
+        late = hit - wanted[kind]
+        check(-0.5 <= late <= tolerance,
+              f"entered {kind} {late:+.1f}s from the real boundary "
+              f"(allowed -0.5 to +{tolerance})")
+
+    order = [s for _, s in history]
+    check(order.index(BUILDING) < order.index(HOT),
+          "reached the drop without going through the build first")
+    drop = next(t for t, s in history if s == HOT)
+    return (f"{len(history)} transitions, build and drop in order, "
+            f"drop {drop - wanted[HOT]:+.1f}s from the boundary")
+
+
+def test_arranger(layout: Layout) -> str:
+    """Audio in, pixels out: the whole chain, interleaved as the engine runs it."""
+    from .arranger import Arranger
+    from .audio import ArraySource
+    from .listener import Listener
+    from .state import StateMachine
+    from .verify import arc_track
+
+    audio, _sections = arc_track()
+    fps = 40.0
+
+    def render_all() -> tuple[np.ndarray, int]:
+        canvas = Canvas(layout)
+        listener = Listener(ArraySource(audio))
+        machine = StateMachine()
+        arranger = Arranger(canvas, listener, state=machine)
+        out = np.zeros(layout.channel_count, dtype=np.uint8)
+        lit = np.zeros(layout.channel_count, dtype=bool)
+        now, index = 0.0, 0
+        frames = []
+        for block in listener.source.blocks():
+            features = listener.step(block)
+            machine.push(features)
+            while now <= features.t:
+                arranger.render(index, now)
+                canvas.to_channels(out)
+                np.logical_or(lit, out > 0, out=lit)
+                if index % 97 == 0:
+                    frames.append(out.copy())
+                index += 1
+                now += 1.0 / fps
+        return lit, index, frames, arranger
+
+    lit, frames_a, sample_a, arranger = render_all()
+    check(frames_a > 1000, f"only {frames_a} frames rendered")
+    check(lit.all(),
+          f"{int((~lit).sum())} channels never lit across the whole arc")
+    check(arranger.journey >= 1,
+          "the palette never advanced -- the hue journey is not moving")
+
+    # The same audio must give the same show, or a capture cannot be compared
+    # with a re-render and the fseq oracle stops working.
+    _lit2, frames_b, sample_b, _ = render_all()
+    check(frames_a == frames_b, f"frame counts differ: {frames_a} vs {frames_b}")
+    for i, (a, b) in enumerate(zip(sample_a, sample_b)):
+        check(np.array_equal(a, b), f"sampled frame {i} differs between runs")
+    return (f"{frames_a} frames from {len(audio) / 44100:.0f}s of audio, "
+            f"every channel used, {arranger.journey} palette steps, deterministic")
+
+
 TESTS = (
     ("channel map", test_layout),
     ("fseq round-trip", test_fseq_roundtrip),
@@ -726,6 +862,9 @@ TESTS = (
     ("audio features", test_analysis),
     ("beat clock", test_clock),
     ("audio -> beats", test_beat_pipeline),
+    ("bar tracking", test_downbeat),
+    ("state machine", test_state_machine),
+    ("arranger", test_arranger),
 )
 
 

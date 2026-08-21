@@ -255,6 +255,19 @@ function setStatus(status) {
   put('s-pattern', status.pattern);
   put('s-bpm', status.bpm.toFixed(0));
   put('s-late', status.late_frames);
+  if (status.audio) {
+    put('s-conf', status.confidence.toFixed(2));
+    put('s-barconf', status.bar_confidence.toFixed(2));
+    put('s-bar', status.bar);
+    document.querySelector('#bar i').style.width =
+      `${(1 - status.bar_phase) * 100}%`;
+    document.getElementById('why').textContent = status.free_running
+      ? 'beat clock free-running — no beats detected'
+      : (status.reason ? `state: ${status.reason}` : '');
+  } else {
+    put('s-conf', '—'); put('s-barconf', '—'); put('s-bar', '—');
+    document.getElementById('why').textContent = 'scripted show — no audio input';
+  }
   document.getElementById('target').textContent = status.target;
   document.querySelector('#beat i').style.width =
     `${(1 - status.beat_phase) * 100}%`;

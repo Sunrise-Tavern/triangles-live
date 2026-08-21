@@ -27,7 +27,11 @@ from pathlib import Path
 import numpy as np
 
 from . import effects as fx
+from .arranger import Arranger
+from .audio import AudioSource
 from .ddp import DDP_PORT, DDPSender
+from .listener import Listener
+from .state import STATES, StateMachine, StateThresholds
 from .frame import Canvas
 from .fseq import FseqWriter
 from .layout import Layout, load_layout
@@ -38,7 +42,8 @@ from .timing import FrameClock
 # The vocabularies the UI offers.  Registered here rather than in settings.py
 # because this is where the effect and scene tables actually live.
 CHOICES["pattern"] = ["auto", *fx.PATTERNS]
-CHOICES["scene"] = ["auto", *(scene.kind for scene in SCENES)]
+# With audio the "scene" knob holds a *state*; without it, a script scene.
+CHOICES["scene"] = ["auto", *STATES, *(scene.kind for scene in SCENES)]
 
 
 @dataclass
@@ -56,6 +61,18 @@ class EngineStatus:
     beat_phase: float = 0.0
     target: str = "-"
     elapsed_s: float = 0.0
+    # -- only meaningful when driven by audio --
+    audio: bool = False
+    confidence: float = 0.0
+    bar_phase: float = 0.0
+    bar: int = 0
+    bar_confidence: float = 0.0
+    locked: bool = False
+    free_running: bool = False
+    energy: float = 0.0
+    level: float = 0.0
+    audio_lag_ms: float = 0.0
+    reason: str = ""
 
     def to_dict(self) -> dict:
         return {k: (round(v, 3) if isinstance(v, float) else v)
@@ -66,7 +83,9 @@ class Engine:
     def __init__(self, layout: Layout | None = None, settings: Settings | None = None,
                  *, fps: float = 40.0, host: str | None = None, port: int = DDP_PORT,
                  controller: str | None = None, record: Path | None = None,
-                 seed: int = 7) -> None:
+                 seed: int = 7, audio: AudioSource | None = None,
+                 backend: str = "aubio",
+                 thresholds: StateThresholds | None = None) -> None:
         self.layout = layout or load_layout()
         self.settings = settings or Settings()
         self.fps = float(fps)
@@ -75,8 +94,18 @@ class Engine:
         self.record = Path(record) if record else None
 
         self.canvas = Canvas(self.layout)
-        self.script = Script(self.canvas, settings=self.settings, seed=seed)
-        self.status = EngineStatus()
+        self.audio = audio
+        self.listener: Listener | None = None
+        self.machine: StateMachine | None = None
+        if audio is not None:
+            self.listener = Listener(audio, backend=backend)
+            self.machine = StateMachine(thresholds)
+            self.script = Arranger(self.canvas, self.listener,
+                                   settings=self.settings, state=self.machine,
+                                   seed=seed)
+        else:
+            self.script = Script(self.canvas, settings=self.settings, seed=seed)
+        self.status = EngineStatus(audio=audio is not None)
 
         self.span = slice(0, self.layout.channel_count)
         if controller:
@@ -91,6 +120,7 @@ class Engine:
         self._sender: DDPSender | None = None
         self._writer: FseqWriter | None = None
         self._thread: threading.Thread | None = None
+        self._audio_thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._listeners: list = []
 
@@ -108,15 +138,40 @@ class Engine:
         self.status.target = (f"{self.host}:{self.port}" if self.host
                               else "no output")
         self._stop.clear()
+        if self.listener is not None:
+            # Audio first: the render loop's show time is the *audio's*
+            # timeline, because that is the timeline the beat clock's anchor
+            # lives on.  Starting the frame clock from the moment audio began
+            # keeps the two within a block of each other.
+            self.listener.on_beat = None
+            self._audio_thread = threading.Thread(
+                target=self._pump_audio, name="listen", daemon=True)
+            self._audio_thread.start()
         self._thread = threading.Thread(target=self._run, name="render",
                                         daemon=True)
         self._thread.start()
+
+    def _pump_audio(self) -> None:
+        """Analysis on its own thread; the render loop only ever reads."""
+        assert self.listener is not None and self.machine is not None
+        self.listener.stats.running = True
+        try:
+            for block in self.listener.source.blocks():
+                if self._stop.is_set():
+                    break
+                self.machine.push(self.listener.step(block))
+        finally:
+            self.listener.source.close()
+            self.listener.stats.running = False
 
     def stop(self, timeout: float = 5.0) -> None:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=timeout)
             self._thread = None
+        if self._audio_thread is not None:
+            self._audio_thread.join(timeout=timeout)
+            self._audio_thread = None
         if self._sender is not None:
             self._sender.close()
             self._sender = None
@@ -144,6 +199,15 @@ class Engine:
         while not self._stop.is_set():
             index, t = clock.wait()
             started = time.perf_counter()
+
+            if self.machine is not None:
+                # The panel's state knobs, applied live.  Copied rather than
+                # shared so the state machine keeps working with no UI at all.
+                self.machine.t.quiet_enter = settings.quiet_enter
+                self.machine.t.build_high_share = settings.build_high_share
+                self.machine.t.drop_kick = settings.drop_kick
+            if self.listener is not None:
+                self.listener.clock.latency = settings.latency_ms / 1000.0
 
             out = self._buffers[self._which]
             self.script.render(index, t)
@@ -175,6 +239,21 @@ class Engine:
     def _publish(self, clock: FrameClock, render_ms: float, t: float) -> None:
         _, scene, _ = self.script.locate(t)
         s = self.status
+        if self.listener is not None and self.machine is not None:
+            beat = self.listener.clock
+            state = beat.state(t)
+            s.confidence = round(state.confidence, 3)
+            s.bar_phase = round(state.bar_phase, 3)
+            s.bar = state.bar
+            s.locked = state.locked
+            s.free_running = state.free_running
+            s.bar_confidence = round(self.listener.bars.confidence, 3)
+            s.audio_lag_ms = round(self.listener.stats.lag_ms, 1)
+            report = self.machine.report
+            s.energy = round(report.energy, 3)
+            s.reason = report.reason or s.reason
+            if self.listener.features is not None:
+                s.level = round(self.listener.features.level, 3)
         s.frames = clock.stats.frames
         s.fps = round(clock.stats.actual_fps, 2)
         s.late_frames = clock.stats.late_frames

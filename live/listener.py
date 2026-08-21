@@ -22,6 +22,7 @@ from .analysis import Analyzer, Features
 from .audio import AudioSource, Block
 from .beats import BeatEvent, make_backend
 from .clock import BeatClock
+from .downbeat import BarTracker
 
 
 @dataclass
@@ -43,7 +44,7 @@ class ListenerStats:
 class Listener:
     def __init__(self, source: AudioSource, *, backend: str = "aubio",
                  clock: BeatClock | None = None, backend_kwargs: dict | None = None,
-                 on_beat=None) -> None:
+                 on_beat=None, bars: BarTracker | None = None) -> None:
         self.source = source
         self.analyzer = Analyzer(source.samplerate, source.blocksize)
         self.backend = make_backend(
@@ -53,6 +54,7 @@ class Listener:
             if backend == "aubio" else (backend_kwargs or {}),
         )
         self.clock = clock or BeatClock()
+        self.bars = bars or BarTracker()
         self.stats = ListenerStats()
         self.features: Features | None = None
         self.on_beat = on_beat
@@ -73,6 +75,7 @@ class Listener:
         # it needs every block, not just the ones with a beat on them.
         self.clock.observe(features.t, features.kick)
         self.clock.tick(features.t)
+        self.bars.push(features, self.clock)
         if event is not None:
             self.stats.beats += 1
             if self.clock.on_beat(event) and self.on_beat is not None:

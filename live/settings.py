@@ -51,8 +51,18 @@ class Settings:
     hue_lock: bool = False
     #: Tempo the scripted show runs at, until M4's beat clock supplies one.
     bpm: float = 128.0
-    #: Freeze on one scene instead of cycling intro -> verse -> build -> drop.
+    #: Freeze on one scene instead of following the music.
     scene: str = "auto"
+
+    # -- state machine (only meaningful when driven by audio) -------------- #
+    #: Loudness, relative to a 45 s baseline, below which a passage is quiet.
+    quiet_enter: float = 0.62
+    #: Share of spectral energy in the high band that marks a build.
+    build_high_share: float = 0.40
+    #: How hard a kick must hit, out of a build, to call the drop.
+    drop_kick: float = 3.0
+    #: Shift the lights against the PA, milliseconds. Positive fires later.
+    latency_ms: float = 0.0
 
     def __post_init__(self) -> None:
         self._lock = threading.Lock()
@@ -97,6 +107,10 @@ SCHEMA: dict[str, tuple] = {
     "hue_lock": ("bool", None, None, None, "Lock hue"),
     "bpm": ("float", 60.0, 200.0, 0.5, "Tempo"),
     "scene": ("choice", None, None, None, "Scene"),
+    "quiet_enter": ("float", 0.2, 1.2, 0.01, "Quiet threshold"),
+    "build_high_share": ("float", 0.2, 0.8, 0.01, "Build sensitivity"),
+    "drop_kick": ("float", 1.5, 8.0, 0.1, "Drop sensitivity"),
+    "latency_ms": ("float", -200.0, 200.0, 1.0, "Latency offset (ms)"),
 }
 
 #: Filled in by :mod:`live.engine`, which owns the vocabularies.

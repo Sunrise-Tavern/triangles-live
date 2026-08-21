@@ -29,6 +29,10 @@ from .audio import BLOCKSIZE, SAMPLERATE, Block
 
 WINDOW = 2048
 
+#: Bands in the coarse profile used for novelty.  Enough to separate a bass
+#: note change from a hi-hat, few enough that noise averages out.
+NOVELTY_BANDS = 16
+
 #: How far below the running baseline a block counts as silence, rather than
 #: as a quiet passage worth learning from.
 SILENCE_GATE = 0.05
@@ -49,17 +53,46 @@ class Features:
     flux: float
     #: Flux over its own rolling mean -- 1.0 is "as busy as usual".
     onset: float
+    #: How different the spectrum is from what has been playing for the last
+    #: couple of seconds, 0..1-ish.  A kick repeats every beat, so it lives in
+    #: the average and does *not* spike this; a bassline changing note or a new
+    #: loop starting does.  That is the bar-line cue :mod:`live.downbeat` needs
+    #: -- transient energy alone cannot find a downbeat in four-on-the-floor,
+    #: because every beat has the same kick on it.
+    novelty: float
     #: Flux in the bass band only, over its own rolling mean: a kick detector.
     #: Deliberately not the bass *level* -- a bassline plays continuously, so
     #: level barely moves when the kick lands, while the transient is
     #: unmistakable.  This is what tells the clock which half of the beat it
     #: is on.
     kick: float
-    #: RMS over a slow baseline -- 1.0 is "as loud as this set has been".
+    #: RMS over a slow *mean* -- 1.0 is "about as loud as usual lately".
     energy: float
+    #: RMS over a slowly-decaying *peak* -- 1.0 is "as loud as this set gets".
+    #: The mean chases the music, which compresses exactly the distinction that
+    #: matters: measured on the test track, a verse and a drop differ by 1.8x
+    #: in raw level but only 1.55 vs 1.71 in ``energy``, because the mean has
+    #: already risen by the time the drop lands.  Against a peak they are 0.55
+    #: and 1.00.
+    level: float
+    #: Share of spectral energy in the bass band, 0..1, over a short window.
+    #: Energy-weighted rather than a running mean of per-frame ratios: in the
+    #: gaps between transients almost all that is left is the noise floor,
+    #: which is broadband, so averaging the ratios makes any sparse material
+    #: look like a build.
+    bass_share: float
+    #: Share in the high band.  A build sweeps this upward and it is the one
+    #: cue that separates a build from a drop without reference to loudness:
+    #: 0.57 during the test track's builds against 0.25 or less elsewhere.
+    high_share: float
     #: Spectral centroid in Hz; a build sweeps it upward.
     centroid: float
     baseline: float
+    #: How much of the baseline's window has actually been heard, 0..1.
+    #: Until this is near 1 the loudness baseline is a small, unrepresentative
+    #: sample, and "loud for this set" does not mean anything yet -- the very
+    #: start of a track always reads as average, because it is all there is.
+    warm: float
 
     def as_dict(self) -> dict:
         return {k: round(v, 5) for k, v in self.__dict__.items()}
@@ -94,7 +127,8 @@ class _Ema:
 class Analyzer:
     def __init__(self, samplerate: int = SAMPLERATE, blocksize: int = BLOCKSIZE,
                  window: int = WINDOW, baseline_s: float = 45.0,
-                 flux_tau_s: float = 1.5) -> None:
+                 flux_tau_s: float = 1.5, novelty_tau_s: float = 2.0,
+                 peak_release_s: float = 120.0) -> None:
         self.samplerate = samplerate
         self.blocksize = blocksize
         self.window = window
@@ -112,7 +146,33 @@ class Analyzer:
 
         self._flux_mean = _Ema(flux_tau_s, block_s, initial=1e-6)
         self._kick_mean = _Ema(flux_tau_s, block_s, initial=1e-6)
+
+        # A coarse log-spaced view of the spectrum, and a slow average of it.
+        # Coarse on purpose: at this resolution a note change moves several
+        # bins while vibrato and noise do not.
+        edges = np.geomspace(40.0, 12000.0, NOVELTY_BANDS + 1)
+        self._novelty_bins = [
+            (np.searchsorted(freqs, lo), max(np.searchsorted(freqs, hi),
+                                             np.searchsorted(freqs, lo) + 1))
+            for lo, hi in zip(edges[:-1], edges[1:])
+        ]
+        self._profile = np.zeros(NOVELTY_BANDS, dtype=np.float32)
+        self._profile_alpha = 1.0 - float(np.exp(-block_s / novelty_tau_s))
+        self._novelty_mean = _Ema(flux_tau_s * 4, block_s, initial=1e-6)
         self._baseline = _Ema(baseline_s, block_s, initial=0.0)
+        # The peak tracks a *smoothed* level, not the raw RMS.  Following raw
+        # RMS with a fast attack measures crest factor -- the gap between a
+        # kick and the gap after it -- which is a property of the mix, not of
+        # the section.  Measured that way a verse and a drop both read 0.85.
+        self._smooth_rms = _Ema(3.0, block_s, initial=0.0)
+        # Short window: energy-weighting is what makes the shares robust, so
+        # the smoothing only has to steady them, not rescue them.  Long enough
+        # and the drop arrives before the band shape catches up.
+        self._band_ema = {name: _Ema(0.4, block_s, initial=0.0)
+                          for name, _, _ in BANDS}
+        self._peak = 0.0
+        self._peak_up = 1.0 - float(np.exp(-block_s / 5.0))
+        self._peak_down = 1.0 - float(np.exp(-block_s / peak_release_s))
         self.blocks = 0
 
     def push(self, block: Block) -> Features:
@@ -153,6 +213,23 @@ class Analyzer:
         flux_mean = self._flux_mean.push(flux)
         kick_mean = self._kick_mean.push(kick_flux)
 
+        profile = np.array([spectrum[lo:hi].mean() for lo, hi in self._novelty_bins],
+                           dtype=np.float32)
+        total = profile.sum()
+        if total > 1e-9:
+            profile /= total          # shape, not loudness: novelty must not
+        # simply follow the volume, or every drop reads as a bar line.
+        raw_novelty = float(np.maximum(profile - self._profile, 0.0).sum())
+        self._profile += (profile - self._profile) * self._profile_alpha
+        novelty_mean = self._novelty_mean.push(raw_novelty)
+
+        smooth = self._smooth_rms.push(rms)
+        self._peak += (smooth - self._peak) * (self._peak_up if smooth > self._peak
+                                               else self._peak_down)
+        smoothed_bands = {name: self._band_ema[name].push(value)
+                          for name, value in bands.items()}
+        total_bands = sum(smoothed_bands.values()) + 1e-12
+
         self.blocks += 1
         return Features(
             t=block.t + self.blocksize / self.samplerate,
@@ -160,6 +237,12 @@ class Analyzer:
             bass=bands["bass"], mid=bands["mid"], high=bands["high"],
             flux=flux, onset=flux / max(flux_mean, 1e-9),
             kick=kick_flux / max(kick_mean, 1e-9),
-            energy=rms / max(baseline, 1e-6), centroid=centroid,
+            novelty=raw_novelty / max(novelty_mean, 1e-9),
+            warm=min(1.0, self._baseline.count / self._baseline._warm),
+            energy=rms / max(baseline, 1e-6),
+            level=smooth / max(self._peak, 1e-6),
+            bass_share=smoothed_bands["bass"] / total_bands,
+            high_share=smoothed_bands["high"] / total_bands,
+            centroid=centroid,
             baseline=baseline,
         )

@@ -4,10 +4,9 @@ Real-time lighting for the Triangles rig: audio in, DDP out, no pre-rendered
 sequence.  The plan and its milestones live in [`../LIVE_PLAN.md`](../LIVE_PLAN.md).
 This file is the operator's guide to what exists **now**.
 
-Status: **M1–M4 complete** — DDP out, fake Falcon, `.fseq`, the renderer and its
-effect vocabulary, the browser UI, and streaming analysis with a predictive
-beat clock.  The clock is not yet wired into the show (that is M6).
-M5–M7 pending.
+Status: **M1–M6 complete** — the loop closes.  Audio in, analysed, tracked,
+arranged, rendered, and out over DDP, with a browser preview and controls.
+Only M7 (deploy prep) remains.
 
 ## Quick start
 
@@ -290,6 +289,130 @@ least honest about it.
 **Real DJ material is not solved.**  That is the open item going into M6, and
 the reason `BeatBackend` exists: the plan's BeatNet spike has something to
 prove against these same numbers.
+
+## What M5 adds — bar phase, state, and the live arranger
+
+| Module | Job |
+|---|---|
+| `downbeat.py` | which beat starts the bar |
+| `state.py` | quiet / cruising / building / hot |
+| `arranger.py` | state + clock → pixels, the offline recipes as a stepping loop |
+
+### Finding the bar line
+
+The clock counts beats consistently but has no idea where a bar begins, and
+phrase-level behaviour — "this build resolves in two bars" — is worthless
+counted from the wrong place.  aubio gives no downbeats, and the BeatNet spike
+found the modes we could run live don't either.
+
+**Transient energy alone cannot do it**: in four-on-the-floor every beat has
+the same kick, so "which beat is loudest" is noise.  Two cues that do carry
+bar information, failing in different places, so both are used:
+
+* `kick` — bass-band *transient*.  Works when the bar line is reinforced.
+  Useless when every kick is identical.
+* `novelty` — how much the *shape* of the spectrum differs from the last
+  couple of seconds.  A kick that repeats every beat is part of that average
+  and doesn't register; a bassline changing note does.  This is the cue that
+  survives a machine-perfect drum pattern.
+
+Measured, taking each beat's peak: `kick` leads the other three bar positions
+by **1.66×** and `novelty` by **1.27×**, both pointing at the true bar line,
+while broadband onset (1.07×) and the mid and high bands (~1.0×) say nothing.
+
+From any of the four wrong starting offsets it takes **exactly one shift and
+locks in 4 bars (7.5 s)**, then 100 % of bar lines are right.
+
+Caveat worth knowing: it keys on bass and broadband cues, so a bar line marked
+only in the mid-range would be missed.
+
+### The state machine
+
+Each cue is used where it is actually discriminative, which took measuring
+rather than guessing:
+
+| question | cue | why not the obvious one |
+|---|---|---|
+| is it quiet? | loudness vs a 45 s baseline | — |
+| is it a build? | **high-band share** (0.57 vs ≤0.33) | loudness *falls* in a build |
+| is it a drop? | **an event**: a kick out of a build, with the energy back in the bass | a verse reads 1.52 and a drop 1.67 — no threshold splits them |
+
+A drop is not a level, it's the moment a build resolves.  Waiting for a
+loudness threshold puts the lights behind the room by however long the
+smoothing takes; the kick is audible in one block.
+
+Three findings that shaped it:
+
+* **Band shares must be energy-weighted.**  A running mean of per-frame ratios
+  is dominated by the near-silent frames between transients, where all that's
+  left is a broadband noise floor — so sparse material looks like a permanent
+  build.
+* **A build has kicks too.**  Their peaks (9.5–67) completely overlap the
+  drop's (18–21).  What separates them is where the energy is: 0.19–0.26 bass
+  in a build, 0.44–0.63 in a drop.
+* **The energy fallback needs a warm baseline.**  Early in a track everything
+  is "average", so the first loud passage spikes the ratio whether or not it's
+  a drop — a verse reached 1.77 while the track's actual second drop only
+  reached 1.73.  The build-then-kick rule needs no history and works from the
+  first bar.
+
+Measured against the test track's known arrangement:
+
+| section | true | detected | late by |
+|---|---|---|---|
+| build | 30.0 s | 32.3 s | +2.3 s |
+| **drop** | 45.0 s | **45.5 s** | **+0.5 s** |
+| break | 75.0 s | 75.4 s | +0.4 s |
+| build | 90.0 s | 93.3 s | +3.3 s |
+| **drop** | 105.0 s | **105.5 s** | **+0.5 s** |
+| outro | 135.0 s | 135.3 s | +0.3 s |
+
+Every boundary found, no spurious transitions.  The intro reads as *cruising*
+rather than *quiet*, and that is inherent: nothing causal can call a passage
+quiet before it has heard anything loud.
+
+### The arranger
+
+The offline recipes as a stepping loop.  The palette journey advances on each
+state change, the corridor phrase rotates every few bars picking patterns by
+density, and articulation comes from how clear the pulse actually is right now
+(`clock.confidence`) rather than an offline `drive` number.  When the clock is
+not confident it leans on energy instead of the grid — beat-locked strobing off
+a *wrong* grid looks far worse than a wash that merely breathes.
+
+Anticipation is **abortable** by construction: a build ramps tension with time
+elapsed, and if the sweep ends without a drop it simply relaxes.  Nothing
+pre-fires the resolution.
+
+## What M6 adds — the loop closes
+
+```bash
+./live.sh sim track.mp3 --play          # audio -> DDP -> fseq, with the sound
+./live.sh serve --audio track.mp3       # the show, in the browser
+./live.sh serve --audio-device 2 --ddp 192.168.50.20 --controller Falcon_F16V5_0E1C
+```
+
+`sim` runs the real engine, sends real packets, and the fake Falcon writes
+exactly what a controller would have received.  `--play` plays the same audio
+so a person can watch the preview against the music rather than trusting
+numbers.
+
+Measured over the whole 150 s test track: **6011 frames at 40.0 fps**, 156 286
+packets, all 37 084 channels lit, **4.09 ms/frame**, 15 late frames, audio lag
+0.0 ms, tempo locked at 127.93.
+
+And the plan's soak — ten minutes unbroken, through four restarts of the audio:
+
+```
+frames  : 24819 in 620.4s (40.0 fps)
+packets : 645294        channels lit: 37084 / 37084
+engine  : 40.00 fps, 2.65 ms/frame, 11 late, 0 skipped
+audio   : lag 0.0 ms, tempo 128.11, confidence 1.00, bar confidence 0.77
+```
+
+Eleven late frames in ten minutes, none skipped, and the clock still locked at
+the end.  Note that a soak capture is large — 37 084 channels x 24 819 frames
+is 920 MB — so delete it or point `--out` somewhere disposable.
 
 ### Colour
 

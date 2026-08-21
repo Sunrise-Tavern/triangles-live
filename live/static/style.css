@@ -41,8 +41,11 @@ main { display: flex; height: 100vh; }
 .stat b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
 .stat small { color: var(--dim); font-size: 11px; }
 
-#beat { height: 4px; background: #10141a; border-radius: 2px; margin: 10px 0 14px; }
-#beat i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+#beat, #bar { height: 4px; background: #10141a; border-radius: 2px; margin: 8px 0; }
+#beat i, #bar i { display: block; height: 100%; border-radius: 2px; }
+#beat i { background: var(--accent); }
+#bar i { background: #6a7a8a; }
+#why { font-size: 11px; color: var(--dim); margin: 6px 0 14px; min-height: 14px; }
 
 button {
   font: inherit; color: var(--text); background: #1c222a;

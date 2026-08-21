@@ -248,27 +248,70 @@ Installing aubio needed two build flags (its 2019 release predates FFmpeg 5 and
 modern numpy); `setup.sh` records them, and notes `apt install python3-aubio`
 as the easier path on the Pi.
 
-### M5 · State machine + live arranger
-- `live/state.py` — quiet/cruising/building/hot from energy vs baseline with
-  hysteresis; "building" from a rising slope + high-band sweep; "hot" on the
-  first strong low-band kick after a build.
-- `live/arranger.py` — the offline recipes as a stepping loop: palette journey,
-  corridor phrase rotation, articulation from live pulse clarity, per-state
-  treatment.
-- **Verify — golden test**: run live end-to-end on a track we have an offline
-  sequence for; compare per-element events-per-beat, on-beat alignment and
-  brightness-by-state against the offline `.xsq`; render to `.fseq` and view
-  beside it in xLights. Won't match exactly (no lookahead) — the point is that
-  it's in the same family and beat-tight.
+### M5 · State machine + live arranger — **done**
+- `live/downbeat.py` — bar phase, which neither aubio nor (per the spike)
+  BeatNet gives us live. Transient energy alone cannot find it — in
+  four-on-the-floor every beat carries the same kick — so it uses two cues that
+  fail in different places: bass *transient*, and **novelty** (how far the
+  spectrum's shape is from the last couple of seconds, which a repeating kick
+  is part of and a changing bassline is not). Measured per-beat peaks: kick
+  leads the other bar positions 1.66×, novelty 1.27×, while broadband onset
+  (1.07×) and the mid and high bands (~1.0×) carry nothing. From any of the
+  four wrong offsets: **one shift, locked in 4 bars (7.5 s)**, then 100 %.
+- `live/state.py` — quiet / cruising / building / hot. Each cue used where it
+  is actually discriminative: loudness for quiet, **high-band share** for a
+  build (0.57 against ≤0.33 — loudness *falls* during a build), and an
+  **event** for the drop, because a verse reads 1.52 and a drop 1.67 and no
+  threshold splits them.
+- `live/arranger.py` — the offline recipes as a stepping loop: palette journey
+  per state change, corridor phrase rotation by density, articulation from
+  `clock.confidence`. Anticipation is abortable by construction — a build that
+  never resolves simply relaxes.
 
-### M6 · Full loop in simulation
-- mp3 streamer → analysis → clock → state → arranger → renderer → DDP → fake
-  Falcon → preview + `.fseq`, with `afplay` playing the same mp3 so a person can
-  watch preview vs sound.
-- **Verify**: audio-in → frame latency (should be ~0 on predicted beats,
-  ~1 block + 1 frame on reactive accents); CPU per frame; sustained 40 fps for
-  10 minutes; behaviour through a simulated track transition (crossfade two
-  mp3s of different tempo).
+**Verified** against the test track's known arrangement: every boundary found,
+no spurious transitions, drops at **+0.5 s** and builds within 3.3 s. The intro
+reads as cruising rather than quiet, which is inherent — nothing causal can
+call a passage quiet before it has heard anything loud.
+
+Three things the measurements forced:
+- **Band shares must be energy-weighted.** A running mean of per-frame ratios
+  is dominated by the near-silent frames between transients, where all that is
+  left is a broadband noise floor, so sparse material looks like a permanent
+  build.
+- **A build has kicks too** — their peaks (9.5–67) completely overlap the
+  drop's (18–21). What separates them is where the energy is: 0.19–0.26 bass
+  in a build against 0.44–0.63 in a drop.
+- **The energy fallback needs a warm baseline.** Early in a track everything is
+  "average": a verse reached 1.77 while the track's actual second drop only
+  reached 1.73. The build-then-kick rule needs no history and works from bar 1.
+
+The golden test against an offline `.xsq` was not run — comparing event
+timelines needs an `.xsq` reader we do not have, and the arrangement of the
+synthetic track is exact ground truth for the same question. Worth revisiting
+if live and offline output start disagreeing in ways the section timings miss.
+
+### M6 · Full loop in simulation — **done**
+- `./live.sh sim track.mp3 --play` — the real engine, real packets, the fake
+  Falcon writing exactly what a controller would have received, and the same
+  audio out of the speakers so a person can watch the preview against it.
+- `./live.sh serve --audio track.mp3` — the same thing with the browser UI;
+  `--audio-device N` for line-in at the rig.
+- The panel now carries what M3 promised and could not yet deliver: beat and
+  bar confidence, bar counter, state and the reason it changed, plus live
+  knobs for the quiet threshold, build and drop sensitivity, and a latency
+  offset for lining the lights up against the PA.
+
+**Verified** over the whole 150 s test track: **6011 frames at 40.0 fps**,
+156 286 packets, all 37 084 channels lit, **4.09 ms/frame**, 15 late frames,
+audio lag 0.0 ms, tempo locked at 127.93.
+
+And the ten-minute soak this milestone asks for, through four restarts of the
+audio: **24 819 frames in 620.4 s at 40.00 fps, 2.65 ms/frame, 11 late frames,
+0 skipped**, tempo still locked at 128.11 with confidence 1.00 at the end.
+
+Still open from this milestone's list: behaviour through a real crossfade
+between two tracks of different tempo. The tempo-step fault test covers the
+mechanism (128 → 140 settles in ~16 s) but not two tracks overlapping.
 
 ### M7 · Deploy prep
 - Config (Falcon IP, audio device, frame rate), `systemd` unit, Pi install
