@@ -37,6 +37,28 @@ NOVELTY_BANDS = 16
 #: as a quiet passage worth learning from.
 SILENCE_GATE = 0.05
 
+#: Absolute floor, dBFS, below which there is no music playing at all.
+#:
+#: Every other loudness measure here is relative on purpose, so the show tracks
+#: the music and not the DJ's gain knob.  But a purely relative measure cannot
+#: detect silence: it normalises by whatever it is hearing, so a dead input
+#: reads as perfectly average.  Measured on a silent feed followed by music,
+#: `energy` was 1.00 then 1.56 and `level` 1.18 then 1.00 -- neither separates
+#: them, while the broadband noise floor made `high_share` read 0.80, i.e. a
+#: permanent build.
+#:
+#: "Is this loud for this set" is relative.  "Is there any signal" is not, and
+#: this is the one place an absolute number belongs.
+#:
+#: Applied to the **smoothed** level, not per-block RMS.  Measured: the median
+#: block of a click track is digitally silent (-180 dBFS) because most blocks
+#: fall between the clicks, so a per-block threshold calls busy music silent.
+#: Smoothed over three seconds the separation is clean -- a dead input sits at
+#: -90 dBFS, and music attenuated twentyfold still reads -51 -- so the floor
+#: goes between them with about 20 dB of margin either side.
+SILENCE_DBFS = -70.0
+SILENCE_RMS = 10.0 ** (SILENCE_DBFS / 20.0)
+
 #: (name, low Hz, high Hz).  Bass is the kick, high is where builds live.
 BANDS = (("bass", 20.0, 160.0), ("mid", 160.0, 2000.0), ("high", 2000.0, 10000.0))
 
@@ -88,6 +110,8 @@ class Features:
     #: Spectral centroid in Hz; a build sweeps it upward.
     centroid: float
     baseline: float
+    #: No music is playing.  Absolute, unlike every other level here.
+    silent: bool
     #: How much of the baseline's window has actually been heard, 0..1.
     #: Until this is near 1 the loudness baseline is a small, unrepresentative
     #: sample, and "loud for this set" does not mean anything yet -- the very
@@ -207,8 +231,14 @@ class Analyzer:
         # level-independent -- and it fails in the direction that matters: a
         # quiet feed from the desk would fall entirely below it, and the
         # baseline would never learn anything at all.
+        smooth = self._smooth_rms.push(rms)
+        silent = smooth < SILENCE_RMS
         baseline = self._baseline.value
-        if rms > max(SILENCE_GATE * baseline, 0.0) and rms > 0.0:
+        # Silence must not teach the baseline anything.  Letting it meant that
+        # starting the engine before the music left the baseline at the noise
+        # floor, so the first track read as 20x "normal" and the state machine
+        # sat in `hot` for over a minute.
+        if not silent and rms > max(SILENCE_GATE * baseline, 0.0):
             baseline = self._baseline.push(rms)
         flux_mean = self._flux_mean.push(flux)
         kick_mean = self._kick_mean.push(kick_flux)
@@ -223,7 +253,6 @@ class Analyzer:
         self._profile += (profile - self._profile) * self._profile_alpha
         novelty_mean = self._novelty_mean.push(raw_novelty)
 
-        smooth = self._smooth_rms.push(rms)
         self._peak += (smooth - self._peak) * (self._peak_up if smooth > self._peak
                                                else self._peak_down)
         smoothed_bands = {name: self._band_ema[name].push(value)
@@ -238,6 +267,7 @@ class Analyzer:
             flux=flux, onset=flux / max(flux_mean, 1e-9),
             kick=kick_flux / max(kick_mean, 1e-9),
             novelty=raw_novelty / max(novelty_mean, 1e-9),
+            silent=silent,
             warm=min(1.0, self._baseline.count / self._baseline._warm),
             energy=rms / max(baseline, 1e-6),
             level=smooth / max(self._peak, 1e-6),

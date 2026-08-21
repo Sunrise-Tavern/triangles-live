@@ -326,6 +326,39 @@ locks in 4 bars (7.5 s)**, then 100 % of bar lines are right.
 Caveat worth knowing: it keys on bass and broadband cues, so a bar line marked
 only in the mid-range would be missed.
 
+### Silence is its own state
+
+`silent` is separate from `quiet` on purpose: a breakdown is part of a track
+and still has a beat grid to be driven by, while silence has none — following
+a free-running clock there makes the rig twitch at an imaginary tempo when the
+room has gone home.
+
+Detecting it needed the one absolute number in the system.  **Every loudness
+measure here is relative by design** so the show tracks the music and not the
+DJ's gain knob — and a purely relative measure cannot detect silence, because
+it normalises by whatever it is hearing.  Measured on a dead feed followed by
+music: `energy` read 1.00 then 1.56, `level` 1.18 then 1.00.  Neither separates
+them, while the broadband noise floor made `high_share` 0.80 — so silence read
+as a permanent *build*, and once music started the poisoned baseline held the
+machine in `hot` for over a minute.
+
+So there is a floor, at −70 dBFS, and two details matter:
+
+* it applies to the **3-second smoothed** level, not per-block RMS — the median
+  block of a click track is digitally silent (−180 dBFS) because most blocks
+  fall between the clicks, so a per-block threshold calls busy music silent;
+* **silence never teaches the loudness baseline anything**, which is what
+  stopped the first track after a silent start reading as 20× normal.
+
+Measured separation: a dead input sits at −90 dBFS, music attenuated twentyfold
+still reads −51, so the floor has about 20 dB of margin either side.
+
+The idle look is deliberately not a show: one smooth swell travelling the
+corridor over 48 s, a very slow plasma, hue drifting one turn per five minutes,
+and nothing beat-locked — all driven by wall time. Measured, it changes about
+**2 units per channel per 5 seconds**. It never goes fully dark at either end
+of the corridor, because a dark rig reads as a fault rather than as rest.
+
 ### The state machine
 
 Each cue is used where it is actually discriminative, which took measuring

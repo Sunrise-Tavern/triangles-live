@@ -34,7 +34,7 @@ from .analysis import Features
 from .frame import Canvas
 from .listener import Listener
 from .settings import Settings
-from .state import BUILDING, CRUISING, HOT, QUIET, StateMachine
+from .state import BUILDING, CRUISING, HOT, QUIET, SILENT, StateMachine
 
 
 @dataclass(frozen=True)
@@ -54,6 +54,7 @@ class Treatment:
 
 
 TREATMENTS: dict[str, Treatment] = {
+    SILENT:   Treatment(SILENT,   "analogous",     0.45, 0.40, "comet",    16.0, True),
     QUIET:    Treatment(QUIET,    "analogous",     0.55, 0.55, "sparkle",   4.0, True),
     CRUISING: Treatment(CRUISING, "split",         0.85, 0.80, "comet",     4.0),
     BUILDING: Treatment(BUILDING, "complementary", 0.95, 0.90, "pairs",     2.0),
@@ -156,6 +157,13 @@ class Arranger:
             self._last_state = self.machine.state
 
         _, treat, phrase = self.locate(t)
+        if treat.kind == SILENT:
+            # Nothing is playing, so nothing here is driven by the beat clock:
+            # it is free-running on no evidence and following it would make the
+            # rig twitch at an imaginary tempo.  Everything below is a function
+            # of wall time, slow enough that you have to watch to see it move.
+            self._silent(t)
+            return
         palette = self.palette_for(treat)
         far = palette.rotated(70.0)
         beat = self.clock.phase(t)
@@ -173,6 +181,35 @@ class Arranger:
                                         kick, features)
 
     # Each treatment is the offline show's recipe for that kind of section.
+
+    #: Seconds for one full traverse of the corridor while idle, and for one
+    #: turn of the hue.  Both deliberately long: this is what the rig does
+    #: between sets, and anything that reads as "an effect" is wrong here.
+    IDLE_SWEEP_S = 48.0
+    IDLE_HUE_S = 300.0
+
+    def _silent(self, t: float) -> None:
+        canvas = self.canvas
+        offset = self.settings.hue_offset if self.settings else 0.0
+        lock = self.settings.hue_lock if self.settings else False
+        drift = 0.0 if lock else 360.0 * (t / self.IDLE_HUE_S)
+        palette = pal.generate(self.base_hue + offset + drift, "analogous",
+                               value=0.45).floored()
+        far = palette.rotated(40.0)
+
+        # One smooth swell travelling the tunnel, never fully off at either
+        # end -- a corridor that goes dark reads as a fault rather than as
+        # rest.  No pattern function: those all have discrete steps in them.
+        phase = t / self.IDLE_SWEEP_S
+        levels = 0.38 + 0.30 * np.sin(
+            2 * np.pi * (canvas.depth * 0.6 - phase)).astype(np.float32)
+        fx.corridor(canvas, levels, palette, far, brightness=0.40, height=0.25)
+
+        # A very slow plasma, and nothing else: no sparkle, no accents, no
+        # per-net trading.  Barely changing is the point.
+        fx.plasma(canvas, palette, t, scale=1.6, speed=0.06, level=0.45)
+        breath = 0.5 + 0.5 * float(np.sin(2 * np.pi * t / (self.IDLE_SWEEP_S / 2)))
+        fx.par(canvas, palette.color(0), 0.10 + 0.08 * breath)
 
     def _quiet(self, frame, t, phrase, palette, beat, bar, kick, features) -> None:
         fx.plasma(self.canvas, palette, t, scale=2.5, speed=0.35, level=0.7)

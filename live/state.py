@@ -28,11 +28,17 @@ from dataclasses import dataclass, field
 
 from .analysis import Features
 
+#: No music at all -- between sets, or the feed is dead.  Deliberately its own
+#: state rather than a very quiet ``QUIET``: a breakdown is part of a track and
+#: should still be driven by its beat grid, while silence has no grid to be
+#: driven by and nothing to react to.  Conflating them makes the rig twitch at
+#: a free-running clock when the room has gone home.
+SILENT = "silent"
 QUIET = "quiet"
 CRUISING = "cruising"
 BUILDING = "building"
 HOT = "hot"
-STATES = (QUIET, CRUISING, BUILDING, HOT)
+STATES = (SILENT, QUIET, CRUISING, BUILDING, HOT)
 
 
 @dataclass
@@ -69,6 +75,10 @@ class StateThresholds:
     #: second drop only reached 1.73.  The build-then-kick rule below needs no
     #: such history and stays live from the first bar.
     min_warm: float = 0.75
+    #: Seconds of no signal before the show goes idle.  Long enough that the
+    #: gap between two tracks, or a bar of dead air in a breakdown, does not
+    #: drop the rig out of the show.
+    silent_hold_s: float = 2.5
     #: Minimum time in a state before it may change again.
     dwell_s: float = 1.2
     #: Smoothing on energy before any of the above is applied.
@@ -109,6 +119,7 @@ class StateMachine:
         self._bright = 1.0
         self._high = 0.0
         self._rising_for = 0.0
+        self._quiet_for = 0.0
         self._now = 0.0
         self._alpha = 1.0 - math.exp(-block_s / self.t.energy_tau_s)
         self._slow_alpha = 1.0 - math.exp(-block_s / self.t.slope_tau_s)
@@ -158,6 +169,22 @@ class StateMachine:
         So: loudness decides quiet, band shape decides building, and an event
         decides hot.
         """
+        # Nothing is playing.  Checked before everything else and exempt from
+        # the dwell timer: with no signal the relative measures are all
+        # meaningless, and the broadband noise floor in particular reads as a
+        # high-band sweep, which put the machine in `building` through twenty
+        # seconds of silence.
+        if features.silent:
+            self._quiet_for += self.block_s
+            if self._quiet_for >= self.t.silent_hold_s:
+                return self._enter(SILENT, "no signal")
+            return ""
+        was_silent, self._quiet_for = self._quiet_for > 0.0, 0.0
+        if self.state == SILENT:
+            # Music is back.  Leave immediately -- waiting out a dwell timer
+            # here means the first bars of a track play to a dark room.
+            return self._enter(CRUISING, "signal returned")
+
         held = self._now - self.entered_at
 
         # The drop.  Checked first and exempt from the dwell timer: this is the
