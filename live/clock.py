@@ -129,6 +129,8 @@ class BeatClock:
     polarity_tau: float = 4.0
     #: How long the offbeat must stay ahead before shifting.
     polarity_hold: float = 1.5
+    #: Evidence multiplier while confidence is low.
+    polarity_unsure: float = 2.0
     #: Relative tempo disagreement that counts as a real change rather than
     #: the tracker's standing bias.
     tempo_jump: float = 0.04
@@ -143,6 +145,14 @@ class BeatClock:
     #: otherwise a clock that locked onto the wrong pulse to begin with could
     #: never be talked out of it.
     metrical_trust: float = 0.6
+    #: How many beats of sustained metrical disagreement to hold out for.
+    #: Without a limit the guard cuts both ways: if the clock ever settles on
+    #: the wrong pulse, every correction back looks metrical and gets refused
+    #: forever.  Measured on one track the clock sat at 149 BPM while the
+    #: tracker said 117 -- a 3/4 ratio -- and the guard kept it there.
+    #: Holding against a momentary flip is the point; holding against a
+    #: tracker that has said the same thing for twenty-odd beats is not.
+    metrical_patience: int = 20
     metrical_rejects: int = 0
     #: Accepted beats of history before the long-baseline estimate is trusted.
     baseline_beats: int = 24
@@ -161,6 +171,7 @@ class BeatClock:
     _off_energy: float = 0.0
     _slip_for: float = 0.0
     _disagree: int = 0
+    _metrical_run: int = 0
     #: (time, beat index) for accepted beats -- the long tempo baseline.
     history: list[tuple[float, int]] = field(default_factory=list)
 
@@ -303,16 +314,19 @@ class BeatClock:
         # crawls.  Measured on a 128 -> 140 step it reached 130.9 and stalled,
         # which tracks each beat while predicting the next one 116 ms wrong.
         if abs(hint - tempo) > self.tempo_jump * tempo:
-            if self.confidence > self.metrical_trust and _metrical(hint, tempo,
-                                                                   self.metrical_tolerance):
+            if (self.confidence > self.metrical_trust
+                    and self._metrical_run < self.metrical_patience
+                    and _metrical(hint, tempo, self.metrical_tolerance)):
                 # The tracker is counting a different pulse, not hearing a
                 # different tempo.  Our own estimate comes from observed beat
                 # times and is anchored to the grid that is currently working,
                 # so it wins -- but only while we are confident in it, or a
                 # bad initial lock could never be corrected.
                 self.metrical_rejects += 1
+                self._metrical_run += 1
                 self._disagree = 0
             else:
+                self._metrical_run = 0
                 self._disagree += 1
             if self._disagree >= self.tempo_jump_beats:
                 tempo += (hint - tempo) * self.tempo_jump_gain
@@ -397,7 +411,7 @@ class BeatClock:
         # was needed.  Measured on a 128 BPM track, that left the clock half a
         # beat out for its entire five minutes at confidence 0.19.
         needed = (self.polarity_ratio if self.confidence > 0.4
-                  else self.polarity_ratio * 1.6)
+                  else self.polarity_ratio * self.polarity_unsure)
         if (loud_enough and self.confidence > 0.1 and not self.free_running
                 and off > on * needed):
             self._slip_for += dt

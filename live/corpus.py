@@ -123,6 +123,8 @@ def run_track(path: Path, layout: Layout, *, fps: float = 40.0,
     stamps: list[float] = []
     kicks: list[float] = []
     tempi: list[float] = []
+    beat_times: list[float] = []
+    previous_beat = 0.0
     locked = 0
     total = 0
     now = 0.0
@@ -136,6 +138,9 @@ def run_track(path: Path, layout: Layout, *, fps: float = 40.0,
         stamps.append(features.t)
         kicks.append(features.kick)
         tempi.append(listener.clock.tempo)
+        for index in listener.clock.crossed(previous_beat, features.t):
+            beat_times.append(listener.clock.beat_time(index))
+        previous_beat = features.t
         total += 1
         locked += int(listener.clock.locked)
         if render:
@@ -160,17 +165,20 @@ def run_track(path: Path, layout: Layout, *, fps: float = 40.0,
     result.slips = clock.slips
     result.offbeat_used = clock.offbeat_events
 
-    # The oracle-free phase check: rebuild the grid the clock ended up with and
-    # ask where the low end actually is.
+    # The oracle-free phase check: where did the low end land relative to the
+    # beats we actually fired?
+    #
+    # Not a grid rebuilt from the final tempo and anchor, which was the first
+    # attempt: on a track whose tempo wandered 43 BPM that grid never existed,
+    # and comparing against it reported a phase error the show never had.  The
+    # fired beats are what the renderer really used.
     stamp_a = np.array(stamps)
     kick_a = np.array(kicks)
-    period = 60.0 / max(clock.tempo, 1e-6)
-    grid = clock.anchor + np.arange(
-        math.floor((stamp_a[0] - clock.anchor) / period),
-        math.ceil((stamp_a[-1] - clock.anchor) / period)) * period
-    grid = grid[(grid >= stamp_a[0]) & (grid <= stamp_a[-1])]
-    result.kick_ours = kick_alignment(grid, stamp_a, kick_a)
-    result.kick_offbeat = kick_alignment(grid + period / 2, stamp_a, kick_a)
+    beats = np.array(beat_times)
+    if len(beats) > 2:
+        period = float(np.median(np.diff(beats)))
+        result.kick_ours = kick_alignment(beats, stamp_a, kick_a)
+        result.kick_offbeat = kick_alignment(beats + period / 2, stamp_a, kick_a)
 
     result.bar_shifts = listener.bars.shifts
     result.bar_confidence = listener.bars.confidence

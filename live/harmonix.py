@@ -231,7 +231,8 @@ def scan(paths: list[Path], entries: list[Entry] | None = None,
 
 
 def render(entry: Entry, root: Path = ROOT, samplerate: int = 44100,
-           seed: int = 5) -> np.ndarray:
+           seed: int = 5, grid: tuple[np.ndarray, np.ndarray] | None = None
+           ) -> np.ndarray:
     """Turn one track's annotation into audio that follows it exactly.
 
     Not a substitute for the real recording -- the timbres are ours, so this
@@ -247,10 +248,17 @@ def render(entry: Entry, root: Path = ROOT, samplerate: int = 44100,
     balance their mapped state implies, so a "prechorus" really does sweep the
     high band.
     """
-    times, position = entry.beats(root)
+    times, position = grid if grid is not None else entry.beats(root)
     if len(times) < 8:
         raise ValueError(f"{entry.file}: too few annotated beats")
     timeline = entry.state_timeline(root) or [(0.0, CRUISING)]
+    if grid is not None:
+        # The caller re-timed the grid; move the sections with it, or a
+        # scaled track would keep its original section boundaries.
+        original, _ = entry.beats(root)
+        scale = (times[-1] - times[0]) / max(original[-1] - original[0], 1e-9)
+        shift = times[0] - original[0] * scale
+        timeline = [(t * scale + shift, state) for t, state in timeline]
     rng = np.random.default_rng(seed)
     total = int((times[-1] + 2.0) * samplerate)
     audio = np.zeros(total, dtype=np.float32)
@@ -551,3 +559,102 @@ def sample(entries: list[Entry], count: int, seed: int = 0) -> list[Entry]:
             if len(picked) >= count:
                 break
     return picked
+
+
+# --------------------------------------------------------------------------- #
+# Crossfades
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class Transition:
+    """Two tracks mixed, with the true grid on each side of the blend."""
+
+    audio: np.ndarray
+    before: np.ndarray          # track A's beat times, in mix time
+    after: np.ndarray           # track B's beat times, in mix time
+    after_downbeats: np.ndarray
+    blend_start: float
+    blend_end: float
+    tempo_a: float
+    tempo_b: float
+    label: str = ""
+
+    @property
+    def duration(self) -> float:
+        return len(self.audio) / 44100.0
+
+
+def crossfade(a: Entry, b: Entry, *, lead: float = 40.0, overlap: float = 16.0,
+              tail: float = 40.0, match_tempo: bool = True,
+              beat_offset: int = 0, root: Path = ROOT,
+              samplerate: int = 44100, label: str = "") -> Transition:
+    """Mix two annotated tracks the way a DJ would, and keep both grids.
+
+    ``match_tempo`` beatmatches B to A, which is what actually happens on a
+    CDJ; without it the two tempos genuinely differ across the blend, which is
+    the harder case.  ``beat_offset`` slides B's downbeat, so a mix can be
+    tempo-matched but bar-misaligned -- a real and common mistake, and the one
+    that most confuses a bar tracker.
+
+    Scaling the annotation times *is* the tempo change: the audio is rendered
+    from those times, so no resampling is involved and the ground truth stays
+    exact.
+    """
+    a_times, a_pos = a.beats(root)
+    b_times, b_pos = b.beats(root)
+    a_period = float(np.median(np.diff(a_times)))
+    b_period = float(np.median(np.diff(b_times)))
+    scale = (a_period / b_period) if match_tempo else 1.0
+
+    # A runs from 0; B starts at the top of the blend, shifted so its beats
+    # line up with A's (plus any deliberate offset).
+    blend_start = lead
+    a_keep = a_times[a_times <= blend_start + overlap + 1e-6]
+    if len(a_keep) < 8:
+        raise ValueError(f"{a.file}: not enough beats before the blend")
+    b_scaled = b_times * scale
+    b_scaled = b_scaled - b_scaled[0]
+    grid_at_blend = a_times[np.searchsorted(a_times, blend_start)]
+    b_shift = grid_at_blend + beat_offset * a_period
+    b_placed = b_scaled + b_shift
+    keep = b_placed <= blend_start + overlap + tail
+    b_placed, b_kept_pos = b_placed[keep], b_pos[keep]
+    if len(b_placed) < 8:
+        raise ValueError(f"{b.file}: not enough beats after the blend")
+
+    audio_a = render(a, root, samplerate, grid=(a_keep, a_pos[:len(a_keep)]))
+    audio_b = render(b, root, samplerate, seed=9, grid=(b_placed, b_kept_pos))
+
+    total = int(max(len(audio_a), b_shift * samplerate + len(audio_b)))
+    mix = np.zeros(total + samplerate, dtype=np.float32)
+
+    # Equal-power, which is what a mixer does; a linear blend dips in the
+    # middle and the analyser would read that dip as a breakdown.
+    fade = np.ones(len(audio_a), dtype=np.float32)
+    i0 = int(blend_start * samplerate)
+    i1 = min(len(audio_a), int((blend_start + overlap) * samplerate))
+    if i1 > i0:
+        t = np.linspace(0.0, 1.0, i1 - i0, dtype=np.float32)
+        fade[i0:i1] = np.cos(t * np.pi / 2)
+        fade[i1:] = 0.0
+    mix[:len(audio_a)] += audio_a * fade
+
+    start_b = int(b_shift * samplerate)
+    up = np.ones(len(audio_b), dtype=np.float32)
+    j1 = min(len(audio_b), int(overlap * samplerate))
+    if j1 > 0:
+        t = np.linspace(0.0, 1.0, j1, dtype=np.float32)
+        up[:j1] = np.sin(t * np.pi / 2)
+    end_b = min(len(mix), start_b + len(audio_b))
+    mix[start_b:end_b] += audio_b[:end_b - start_b] * up[:end_b - start_b]
+
+    peak = float(np.abs(mix).max())
+    if peak > 0:
+        mix = (mix / (peak * 1.05)).astype(np.float32)
+    return Transition(
+        audio=mix, before=a_keep, after=b_placed,
+        after_downbeats=b_placed[b_kept_pos == 1],
+        blend_start=blend_start, blend_end=blend_start + overlap,
+        tempo_a=60.0 / a_period, tempo_b=60.0 / (b_period * scale), label=label,
+    )
