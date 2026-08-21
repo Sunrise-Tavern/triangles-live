@@ -293,19 +293,53 @@ evening as a *bench comparison*: run LedFx on the sim feed and confirm our
 output is meaningfully tighter — if it isn't, that's important to know early.
 
 **BeatNet** (github.com/mjhydri/BeatNet) — CRNN + particle-filter **online beat,
-downbeat and meter tracking**. **Verdict: attractive but risky; optional second
-backend, timeboxed spike, not on the critical path.** The draw is real:
-downbeats (bar phase) live, which aubio does not give — bar-level moves
-currently need phase inference. The risks: depends on **madmom**, which is
-unmaintained and fights modern numpy/Python (we already hit this in the offline
-tooling); PyTorch inference per hop is heavy for a Pi (fine on the Mac —
-"plausible, measure" on a Pi 5); **CC BY-NC-SA license** (fine for this art
-project, worth knowing); and particle filters add latency jitter that must be
-measured against the ≤1-frame budget. Spike plan: pinned separate venv, run its
-streaming mode over our test tracks, compare beat/downbeat accuracy and CPU vs
-aubio on the same audio; adopt only if downbeat accuracy is high and Pi CPU
-allows. If madmom won't install cleanly in under an hour, stop — aubio +
-inferred downbeats is acceptable.
+downbeat and meter tracking**. **Spike run 2026-08-20, ~50 minutes. Verdict: do
+not adopt.** The draw was downbeats, and it did not deliver them.
+
+*Installation — better than this plan assumed.* madmom's **git master**
+(0.17.dev0) builds and imports cleanly on Python 3.12 with numpy 2.5.2. The
+compatibility wall is real only for the released 0.16.1, and the README's
+`sitecustomize.py` workaround (which monkey-patches numpy process-wide) is not
+needed on that path. What *does* still block: BeatNet's own particle filter
+calls `np.in1d`, removed in numpy 2.0, so adoption means a fork or a numpy<2
+pin; `pyaudio` and `matplotlib` are imported at module scope on the inference
+path (pyaudio needs system portaudio, and can be stubbed for file input); and
+its metadata pins `numba==0.54.1`, from 2021. Licence is **CC-BY-4.0** per the
+repo, not CC BY-NC-SA as previously recorded here — permissive, so licensing
+was never the obstacle.
+
+*Downbeats — the whole reason to consider it — do not work.* On the synthetic
+128 BPM 4/4 track and on a 4/4 house track it emits beat-in-bar values of only
+{1, 2} — a 2/4 meter — with "downbeat" spacings of 2, 3, 4, 5, 6 and 7 events.
+Its downbeats scatter across all four true bar positions (47 % within 30 ms of
+a real downbeat, which is barely above chance). This is not misconfiguration:
+all three pretrained models behave identically, `BeatNet.py:67` constructs the
+online filter with `beats_per_bar=[]`, and the downbeat state space is built
+from hardcoded `min/max_beats_per_bar = 2/4` that ignore the argument —
+forcing `[4]` crashes it. Nor is it the numpy shim: all four `in1d` calls are
+on 1-D arrays, where `isin` is exactly equivalent.
+
+*Beats are decent but not better than what we have.* On the synthetic track:
+median 8.7 ms, 89.3 % within 30 ms, and only 262 of 320 beats detected. Our
+aubio + PLL on the same file: median 2.3 ms, **100 %** within 30 ms, and every
+beat, because it predicts from a model rather than reporting detections. On
+Eric Prydz *Opus* — the track our clock is worst on — BeatNet's phase is
+genuinely better: kick alignment 4.61 against our 3.91 and librosa's 4.49.
+That is the one real win, and it would still have to feed our clock, which is
+exactly what `BeatBackend` is for.
+
+*Cost.* 5.3 s to process 97.6 s of audio: **18× real time on the Mac**, against
+150× for the whole aubio chain. Roughly 8× the CPU, before the 40 fps renderer,
+on a machine far faster than a Pi — and that is on top of torch, librosa,
+madmom-from-git and a fork.
+
+**Consequence for M5**: build bar phase ourselves. Correlate band energy at a
+4-beat period to find which position carries the pattern change, and anchor
+`clock.set_downbeat()` on the first strong kick after a break — the same trick
+that resolved half-beat polarity, one level up. No dependency risk, negligible
+CPU, and BeatNet's failure here means no shortcut is being passed up. Revisit
+it as a *beat* backend only if real-track phase stays a problem; the numbers to
+beat are above.
 
 ## Later, optional
 - **XR16 OSC meters** (UDP 10024) as an energy side-channel — free VU per input,
