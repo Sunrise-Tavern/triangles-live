@@ -92,12 +92,20 @@ class BeatClock:
     #: How hard to pull the model toward each observed beat.  Low when
     #: confident (the model is better than any single observation), high when
     #: not (the observation is all we have).
-    lock_gain: float = 0.12
+    #: Together with ``freq_gain`` this is a second-order loop, and the two
+    #: have to be chosen as a pair: the natural frequency is sqrt(freq_gain)
+    #: per beat and the damping ratio lock_gain / (2 sqrt(freq_gain)).  The
+    #: original 0.12 / 0.04 gave a damping of 0.3 -- a 31-beat ringing period
+    #: -- and on a recorded 127 BPM track a single disturbance in the
+    #: tracker's beats rang 126.8 -> 129.5 -> 127.3 -> 129.7 -> 127.0 over
+    #: fourteen seconds at a time, putting every prediction 150-190 ms out.
+    #: 0.3 / 0.03 is a damping of 0.87: the same settling speed, no ringing.
+    lock_gain: float = 0.3
     loose_gain: float = 0.5
     #: How fast the period follows the *residuals* -- the frequency half of the
     #: loop.  Much smaller than the phase gain: a loop that chases tempo as
     #: eagerly as phase oscillates instead of settling.
-    freq_gain: float = 0.04
+    freq_gain: float = 0.03
     #: Beyond this fraction of a period, an observation is not this beat.
     tolerance: float = 0.3
     #: Consecutive mismatches before giving up and snapping to the tracker.
@@ -129,6 +137,32 @@ class BeatClock:
     polarity_tau: float = 4.0
     #: How long the offbeat must stay ahead before shifting.
     polarity_hold: float = 1.5
+    #: Consecutive tracker beats landing on our offbeat before the grid is
+    #: flipped on that evidence alone.  The offbeat branch below pins the grid
+    #: half a period from each such detection, which is right for a few stray
+    #: hat hits in a breakdown and exactly wrong when the *tracker* is on the
+    #: beat and we are not: the grid then sits half a beat out indefinitely,
+    #: the tempo right, confidence frozen, nothing counted as a miss.
+    #: Measured on a recorded session, 27 consecutive rejections over 27 s.
+    #: The kick polarity check did not rescue it because the low end favoured
+    #: the tracker's half by only 1.2x, under ``polarity_ratio``.  So a long
+    #: run of agreeing detections is taken as evidence too, with the low end
+    #: only required not to contradict it.
+    offbeat_relock: int = 6
+    #: Without kick energy to consult, hold out this many times longer.
+    offbeat_relock_blind: int = 3
+    #: aubio keeps emitting beats through material with no pulse at all, its
+    #: own confidence pinned near 0.1; measured, a minute of pads took the
+    #: clock to confidence 0.87 and "locked" 52% of the time.  Its readout is
+    #: not a clean gate -- it is 0.0 through the first seconds of real tracks
+    #: and of a click -- but pulseless material is the only thing that keeps
+    #: it there, so a *run* of low readings is the tell.  After that many in a
+    #: row, beats still pin the phase but cannot raise confidence.
+    hint_floor: float = 0.12
+    hint_floor_run: int = 8
+    _low_hint_run: int = 0
+    flips: int = 0
+    _offbeat_run: int = 0
     #: Evidence multiplier while confidence is low.
     polarity_unsure: float = 2.0
     #: Relative tempo disagreement that counts as a real change rather than
@@ -286,6 +320,7 @@ class BeatClock:
                 # Which half is the beat is a separate question, settled by
                 # observe() on the low end where the kick is.
                 self.offbeat_events += 1
+                self._offbeat_run += 1
                 target = 0.5 if fraction > 0 else -0.5
                 offset = (fraction - target) * self.period
                 gain = self.lock_gain if self.confidence > 0.5 else self.loose_gain
@@ -293,7 +328,9 @@ class BeatClock:
                 period = self.period + self.freq_gain * offset / max(1, steps)
                 self.tempo = min(max(60.0 / period, self.tempo_range[0]),
                                  self.tempo_range[1])
+                self._maybe_flip()
                 return False
+            self._offbeat_run = 0
             self._misses += 1
             self.confidence *= 0.6
             if self._misses >= self.relock_after:
@@ -302,6 +339,7 @@ class BeatClock:
             return False
 
         self._misses = 0
+        self._offbeat_run = 0
         period = self.period
         gain = self.lock_gain if self.confidence > 0.5 else self.loose_gain
         self.anchor += steps * period + gain * error
@@ -363,7 +401,15 @@ class BeatClock:
 
         self.tempo = min(max(tempo, self.tempo_range[0]), self.tempo_range[1])
         agreement = 1.0 - abs(relative) / self.tolerance
-        self.confidence += (1.0 - self.confidence) * 0.25 * max(agreement, 0.1)
+        self._low_hint_run = (self._low_hint_run + 1
+                              if event.confidence < self.hint_floor else 0)
+        if self._low_hint_run < self.hint_floor_run:
+            self.confidence += (1.0 - self.confidence) * 0.25 * max(agreement, 0.1)
+        else:
+            # The tracker has not believed its own beats for a while.  Keep
+            # the phase (still the best reference there is) but let
+            # confidence drain, so unpulsed material cannot read as locked.
+            self.confidence *= 0.93
 
         self._tempo_log.append(self.tempo)
         if len(self._tempo_log) > self.stability_beats:
@@ -374,6 +420,28 @@ class BeatClock:
             steady = 1.0 - min(spread / max(self.stability_spread, 1e-6), 1.0)
             self.confidence = min(self.confidence, 0.15 + 0.85 * steady)
         return True
+
+    def _maybe_flip(self) -> None:
+        """Move to the tracker's half of the beat after a long run there."""
+        on, off = self._on_energy, self._off_energy
+        loud_enough = on + off > 0.2
+        needed = (self.offbeat_relock if loud_enough
+                  else self.offbeat_relock * self.offbeat_relock_blind)
+        if self._offbeat_run < needed:
+            return
+        if loud_enough and on > off * 1.1:
+            # The low end says we are right and the tracker is on the hats.
+            # Keep waiting; the run counter stays up so a later tie decides.
+            return
+        self.anchor += self.period / 2.0
+        self._on_energy, self._off_energy = off, on
+        self._slip_for = 0.0
+        self._offbeat_run = 0
+        self._misses = 0
+        self.flips += 1
+        # Phase is now unproven; let the next few accepted beats rebuild it
+        # rather than carrying a confidence earned on the wrong half.
+        self.confidence = min(self.confidence, 0.4)
 
     def _baseline_tempo(self) -> float | None:
         """Least-squares tempo over the whole beat history.
