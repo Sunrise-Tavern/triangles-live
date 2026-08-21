@@ -449,9 +449,15 @@ falls to 54 %, and the failures are three specific limits rather than noise:
 - **non-4/4 is unusable** (16–29 %) — `bar_length` is hardcoded to 4;
 - **sub-80 BPM material is octave-doubled** by the 70–180 folding range
   (66→133, 78→156, 82→164, 87→173);
-- **tempo wanders mid-track** on a minority of tracks even when the final value
-  is right — "Give It Up" ends at 139.9 against 140 but spends part of the
-  track near 92, which is 140 x 2/3.
+- ~~**tempo wanders mid-track**~~ — **fixed.** aubio's readout alternates
+  between 142 and 94 on a 140 BPM track (142 x 2/3 = 95): it changes its mind
+  about which pulse to count, and the coarse term followed it every time. The
+  clock now rejects a disagreement that sits at a simple metrical ratio (1/2,
+  2/3, 3/4, 4/3, 3/2, 2, 3) while it is confident, because that is the same
+  music counted differently and our own estimate is anchored to observed beat
+  times. A real tempo change does not land on those ratios. On dance material
+  this took beat precision 89 -> 95 %, downbeats 70 -> 95 %, and removed every
+  track scoring below 50 %.
 
 Precision and recall are reported separately because a single "within 30 ms"
 number hides every octave error: recall stays high at double tempo.

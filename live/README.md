@@ -507,16 +507,35 @@ one visible table in `harmonix.py` rather than scattered through the scoring.
 
 ### What it measured
 
-**On dance/electronic at 115–145 BPM — what this rig actually plays** (14 tracks):
+**On dance/electronic at 115–145 BPM — what this rig actually plays** (14 tracks),
+before and after fixing the metrical-flip bug below:
 
-| | median | best |
+| | before | **after** |
 |---|---|---|
-| beat precision | **89 %** | 99 % |
-| beat recall | **91 %** | 99 % |
-| downbeats within 50 ms | **70 %** | 99 % |
-| tempo error | **0.1 %** | — |
-| tempo wander across the track | 1.6 BPM | — |
-| clock locked | 96 % | — |
+| beat precision | 89 % | **95 %** (worst 67 %) |
+| beat recall | 91 % | **97 %** |
+| downbeats within 50 ms | 70 % | **95 %** |
+| tempo error | 0.1 % | 0.1 % (1 track over 5 %) |
+| tempo wander across the track | 1.6 BPM | 1.1 BPM |
+| clock locked | 96 % | **98 %** |
+| tracks below 50 % beats | 3 | **0** |
+
+### The metrical-flip bug
+
+The corpus kept reporting tempo wandering mid-track even where the final value
+was right.  Instrumenting one case made it obvious: on a 140 BPM track,
+**aubio's own readout alternates between 142 and 94** — and 142 × ⅔ = 95.  It
+is changing its mind about which pulse to count, not hearing a tempo change.
+M4's coarse term followed it every time, so the clock ping-ponged.
+
+The fix is to ask *what kind* of disagreement it is.  A readout at a simple
+metrical ratio of our current tempo — ½, ⅔, ¾, 4/3, 3/2, 2, 3 — is the same
+music counted differently, and our own estimate is anchored to observed beat
+times, so it wins.  A real tempo change does not land on those ratios: a DJ
+nudging pitch moves a few percent, and 128 → 140 is a ratio of 1.09.
+
+It only applies while the clock is confident, or a bad initial lock could never
+be talked out of it.
 
 **On a spread of 30 across every genre**, beat precision drops to 54 % median.
 The failures are not random — they are three specific, now-measured limits:

@@ -39,6 +39,26 @@ from .beats import BeatEvent
 TEMPO_MIN = 70.0
 TEMPO_MAX = 180.0
 
+#: Ratios at which a tracker's tempo readout is describing the *same* music at
+#: a different metrical level -- counting half-bars, or triplets -- rather than
+#: reporting that the music changed speed.  Measured on a 140 BPM track,
+#: aubio's readout alternates between 142 and 94, and 142 x 2/3 = 95: it is
+#: changing its mind about the pulse, not hearing a tempo change.  Following
+#: that is how a clock ends up wandering 13 BPM across a track that never
+#: varied.
+#:
+#: A real tempo change does not land here.  A DJ nudging pitch moves a few
+#: percent, and 128 -> 140 is a ratio of 1.09, nowhere near any of these.
+METRICAL_RATIOS = (1 / 3, 1 / 2, 2 / 3, 3 / 4, 4 / 3, 3 / 2, 2.0, 3.0)
+
+
+def _metrical(hint: float, tempo: float, tolerance: float) -> bool:
+    """Is ``hint`` the same pulse counted differently, rather than a new tempo?"""
+    if tempo <= 1e-6 or hint <= 1e-6:
+        return False
+    ratio = hint / tempo
+    return any(abs(ratio - r) <= tolerance * r for r in METRICAL_RATIOS)
+
 
 @dataclass
 class ClockState:
@@ -117,6 +137,13 @@ class BeatClock:
     #: How hard to jump once convinced.  The gate above is what makes this
     #: safe to make decisive: bias never trips it, a real change always does.
     tempo_jump_gain: float = 0.5
+    #: How close to a metrical ratio counts as one, relative.
+    metrical_tolerance: float = 0.06
+    #: Below this confidence, a metrical disagreement is followed anyway --
+    #: otherwise a clock that locked onto the wrong pulse to begin with could
+    #: never be talked out of it.
+    metrical_trust: float = 0.6
+    metrical_rejects: int = 0
     #: Accepted beats of history before the long-baseline estimate is trusted.
     baseline_beats: int = 24
     baseline_gain: float = 0.12
@@ -276,7 +303,17 @@ class BeatClock:
         # crawls.  Measured on a 128 -> 140 step it reached 130.9 and stalled,
         # which tracks each beat while predicting the next one 116 ms wrong.
         if abs(hint - tempo) > self.tempo_jump * tempo:
-            self._disagree += 1
+            if self.confidence > self.metrical_trust and _metrical(hint, tempo,
+                                                                   self.metrical_tolerance):
+                # The tracker is counting a different pulse, not hearing a
+                # different tempo.  Our own estimate comes from observed beat
+                # times and is anchored to the grid that is currently working,
+                # so it wins -- but only while we are confident in it, or a
+                # bad initial lock could never be corrected.
+                self.metrical_rejects += 1
+                self._disagree = 0
+            else:
+                self._disagree += 1
             if self._disagree >= self.tempo_jump_beats:
                 tempo += (hint - tempo) * self.tempo_jump_gain
                 # Those beats were played at the old tempo.  Keeping them
@@ -353,8 +390,16 @@ class BeatClock:
     def _check_polarity(self, dt: float) -> None:
         on, off = self._on_energy, self._off_energy
         loud_enough = on + off > 0.2
-        if (loud_enough and self.confidence > 0.4 and not self.free_running
-                and off > on * self.polarity_ratio):
+        # Confidence scales how much evidence is demanded, rather than
+        # switching the check off.  A hard gate at 0.4 deadlocks: sitting on
+        # the offbeat is exactly what keeps confidence low, so the one
+        # mechanism that could fix the phase was disabled precisely when it
+        # was needed.  Measured on a 128 BPM track, that left the clock half a
+        # beat out for its entire five minutes at confidence 0.19.
+        needed = (self.polarity_ratio if self.confidence > 0.4
+                  else self.polarity_ratio * 1.6)
+        if (loud_enough and self.confidence > 0.1 and not self.free_running
+                and off > on * needed):
             self._slip_for += dt
             if self._slip_for >= self.polarity_hold:
                 self.anchor += self.period / 2.0
