@@ -56,6 +56,13 @@ class Treatment:
     pattern_bars: float
     #: Never strobe the corridor here, however the numbers fall out.
     quiet: bool = False
+    #: Light the corridor keeps under the pattern, 0..1.  A sparse pattern
+    #: leaves most arches dark most of the time, which is right for a drop and
+    #: wrong for a quiet passage: measured on a real session, a track's 45
+    #: second intro rendered the arches at 2.8/255 against 2.9 for dead air
+    #: between tracks -- a track everyone in the room could hear building
+    #: looked exactly like no music at all.
+    floor: float = 0.0
 
 
 #: Net gestures each state may draw, rotated one per phrase by the same
@@ -75,11 +82,11 @@ NET_GESTURES: dict[str, tuple[str, ...]] = {
 
 
 TREATMENTS: dict[str, Treatment] = {
-    SILENT:   Treatment(SILENT,   "analogous",     0.45, 0.40, "comet",    16.0, 16.0, True),
-    QUIET:    Treatment(QUIET,    "analogous",     0.55, 0.55, "sparkle",   4.0,  8.0, True),
-    CRUISING: Treatment(CRUISING, "split",         0.85, 0.80, "comet",     4.0,  4.0),
-    BUILDING: Treatment(BUILDING, "complementary", 0.95, 0.90, "pairs",     2.0,  4.0),
-    HOT:      Treatment(HOT,      "triadic",       1.00, 1.00, "alternate", 1.0,  4.0),
+    SILENT:   Treatment(SILENT,   "analogous",     0.45, 0.40, "comet",    16.0, 16.0, True, 0.00),
+    QUIET:    Treatment(QUIET,    "analogous",     0.60, 0.60, "sparkle",   4.0,  8.0, True, 0.30),
+    CRUISING: Treatment(CRUISING, "split",         0.85, 0.80, "comet",     4.0,  4.0, False, 0.12),
+    BUILDING: Treatment(BUILDING, "complementary", 0.95, 0.90, "pairs",     2.0,  4.0, False, 0.06),
+    HOT:      Treatment(HOT,      "triadic",       1.00, 1.00, "alternate", 1.0,  4.0, False, 0.00),
 }
 
 
@@ -293,6 +300,10 @@ class Arranger:
         levels = fx.PATTERNS[name](
             len(canvas.arch_names), phrase,
             **({"seed": self.seed} if name == "sparkle" else {}))
+        if treat.floor > 0.0:
+            # Blended, not clamped: the pattern still reads on top of the
+            # floor rather than being flattened by it.
+            levels = treat.floor + (1.0 - treat.floor) * levels
         fx.corridor(canvas, levels, palette, far,
                     brightness=min(1.0, treat.brightness + self.escalation(treat)),
                     height=0.35)
