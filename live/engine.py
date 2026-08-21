@@ -147,13 +147,21 @@ class Engine:
             # timeline, because that is the timeline the beat clock's anchor
             # lives on.  Starting the frame clock from the moment audio began
             # keeps the two within a block of each other.
-            self.listener.on_beat = None
+            self.listener.on_beat = self._on_beat
             self._audio_thread = threading.Thread(
                 target=self._pump_audio, name="listen", daemon=True)
             self._audio_thread.start()
         self._thread = threading.Thread(target=self._run, name="render",
                                         daemon=True)
         self._thread.start()
+
+    def _on_beat(self, event) -> None:
+        # Accepted beats only -- the listener calls this after the clock has
+        # fitted the event -- so the recording shows what the grid was built
+        # from, not everything the tracker said.
+        if self.session is not None:
+            clock = self.listener.clock
+            self.session.beat(event.t, clock.tempo, clock.confidence)
 
     def _pump_audio(self) -> None:
         """Analysis on its own thread; the render loop only ever reads."""
