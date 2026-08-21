@@ -82,6 +82,9 @@ class ShowConfig:
     latency_ms: float = 0.0
     #: Preset to load at startup, by name.
     preset: str = ""
+    #: How bright the resting group of triangles glows while the other leads
+    #: a gesture.  0 = hold the bed wash (frozen), as the offline show does.
+    rest_level: float = 0.4
     #: Start blacked out, so a restart mid-set does not throw light until
     #: someone is watching.
     blackout_on_start: bool = False

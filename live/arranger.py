@@ -342,6 +342,22 @@ class Arranger:
         breath = 0.5 + 0.5 * float(np.sin(2 * np.pi * t / (self.IDLE_SWEEP_S / 2)))
         fx.par(canvas, palette.color(0), 0.10 + 0.08 * breath)
 
+    def _rest(self, targets: slice, t: float, palette) -> None:
+        """Give the group that is not leading something to do.
+
+        Three gestures lead with the big or the small triangles and leave the
+        other group on the bed wash alone.  The offline show does the same,
+        and there it reads as call-and-response; live, with the corridor
+        moving underneath, the resting group reads as frozen -- a bar at a
+        time in ``trade``, a whole phrase in ``wheel_up``.  So by default it
+        breathes: a slow, dim plasma, clearly subordinate to the lead.
+        ``rest_level`` 0 restores the hold.
+        """
+        level = self.settings.rest_level if self.settings else 0.4
+        if level > 0.0:
+            fx.plasma(self.canvas, palette, t, scale=2.0, speed=2.2,
+                      level=level, targets=targets)
+
     def _gesture(self, name: str, frame: int, t: float, phrase: float,
                  palette, beat: float, kick: float, tension: float = 0.0) -> None:
         """Paint one net gesture.  The bed and the par stay with the state."""
@@ -365,12 +381,15 @@ class Arranger:
             # Big and small nets take turns, as in the offline show.  This is
             # the gesture that needs a *correct* bar line rather than merely a
             # consistent one -- counted from the wrong beat it trades offbeat.
-            lead = self.big if int(self._bars_elapsed(t)) % 2 == 0 else self.small
+            even = int(self._bars_elapsed(t)) % 2 == 0
+            lead, rest = (self.big, self.small) if even else (self.small, self.big)
+            self._rest(rest, t, palette)
             fx.bars(canvas, palette, phrase * 4.0, count=3, angle=0.15,
                     width=0.3, level=0.95, targets=lead)
         elif name == "slow_wheel":
             fx.pinwheel(canvas, palette, t * 0.12, arms=3, level=0.75)
         elif name == "wheel_up":
+            self._rest(self.small, t, palette)
             fx.pinwheel(canvas, palette, t * (1.0 + 5.0 * tension) * 0.35,
                         arms=3, level=0.8, targets=self.big)
         elif name == "fast_wheel":
@@ -386,6 +405,9 @@ class Arranger:
             flash = _kick((t / max(1e-6, 60.0 / self.bpm) * rate) % 1.0, sharp=3.0)
             fx.pinwheel(canvas, palette, t * 0.4, arms=3, level=0.6,
                         targets=self.big)
+            # The small nets only flash here, faintly until the build has
+            # some tension; between flashes they would otherwise hold.
+            self._rest(self.small, t, palette)
             fx.wash(canvas, pal.WHITE, 0.55 * flash * max(tension, 0.3),
                     targets=self.small)
 

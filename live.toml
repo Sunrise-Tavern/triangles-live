@@ -61,6 +61,10 @@ latency_ms = 0.0
 preset = ""
 # Start dark, so a restart mid-set doesn't throw light unannounced.
 blackout_on_start = false
+# Gestures that lead with one group of triangles rest the other.  How bright
+# the resting group's slow plasma is; 0 holds the bed wash instead (frozen
+# for a bar or a phrase while the corridor keeps moving, as the offline show).
+rest_level = 0.4
 
 [log]
 file = "logs/live.log"

@@ -297,6 +297,7 @@ def cmd_serve(args) -> int:
         "gamma": config.show.gamma,
         "latency_ms": config.show.latency_ms,
         "blackout": config.show.blackout_on_start,
+        "rest_level": config.show.rest_level,
     })
     if config.show.preset:
         from . import settings as knobs

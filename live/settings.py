@@ -53,6 +53,11 @@ class Settings:
     bpm: float = 128.0
     #: Freeze on one scene instead of following the music.
     scene: str = "auto"
+    #: Some net gestures lead with one group of triangles (big or small) and
+    #: rest the other.  This is how bright the resting group's slow plasma
+    #: is: 0 restores the original behaviour, where it holds the bed wash and
+    #: reads as frozen for a bar or a phrase while the corridor moves.
+    rest_level: float = 0.4
 
     # -- state machine (only meaningful when driven by audio) -------------- #
     #: Loudness, relative to a 45 s baseline, below which a passage is quiet.
@@ -107,6 +112,7 @@ SCHEMA: dict[str, tuple] = {
     "hue_lock": ("bool", None, None, None, "Lock hue"),
     "bpm": ("float", 60.0, 200.0, 0.5, "Tempo"),
     "scene": ("choice", None, None, None, "Scene"),
+    "rest_level": ("float", 0.0, 1.0, 0.01, "Resting nets"),
     "quiet_enter": ("float", 0.2, 1.2, 0.01, "Quiet threshold"),
     "build_high_share": ("float", 0.2, 0.8, 0.01, "Build sensitivity"),
     "drop_kick": ("float", 1.5, 8.0, 0.1, "Drop sensitivity"),
