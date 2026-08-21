@@ -54,20 +54,28 @@ class AudioSource(Protocol):
 
 
 class AutoGain:
-    """Track a slow peak and scale toward a target level.
+    """Track a very slow peak and scale toward a target level.
 
-    The DJ's output level drifts across a set, and every threshold downstream
-    is relative to *something*.  Making that something a slowly-tracked peak
-    rather than an absolute number is the difference between the show reacting
-    to the music and reacting to the mixer's gain knob.
+    Its job is the DJ's gain knob, which drifts over **minutes** -- not musical
+    dynamics, which move over seconds.  Getting that wrong is not a small
+    mis-tuning: a compressor-like 0.25 s attack actively inverts the thing the
+    state machine reads, because a loud passage pulls the gain down and the
+    measured level *falls*.  Measured on a track with a real drop, that took
+    the drop-to-breakdown contrast from 4.6 to 2.7 and dropped the show out of
+    `hot` twenty-three seconds early; on a live input it reached `quiet` while
+    the music was still loud.
 
-    Attack is fast and release is slow: a sudden loud passage must not be
-    squashed for the next minute, but a quiet one should be brought up
-    gradually rather than pumping.
+    At 60 s attack / 180 s release the contrast is 4.6, indistinguishable from
+    no auto-gain at all, while a 12 dB drift across a track is still corrected.
+
+    Worth knowing: the analysis does not actually *need* this. `energy` is
+    already relative to a 45-second baseline, so it handles drift on its own --
+    measured, 4.4 with auto-gain off on the same drifted signal. This exists to
+    keep a very quiet feed clear of the noise floor, not to help the analysis.
     """
 
-    def __init__(self, target: float = 0.25, attack: float = 0.25,
-                 release: float = 20.0, ceiling: float = 12.0,
+    def __init__(self, target: float = 0.25, attack: float = 60.0,
+                 release: float = 180.0, ceiling: float = 12.0,
                  block_s: float = BLOCKSIZE / SAMPLERATE) -> None:
         self.target = target
         self.gain = 1.0

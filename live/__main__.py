@@ -281,10 +281,16 @@ def cmd_serve(args) -> int:
 
     config: Config = args.config_obj
     audio = _audio_source(args)
+    session = None
+    if args.record_session:
+        from .session import Recorder
+        session = Recorder(args.record_session, config=config, fps=args.fps,
+                           blocksize=config.audio.blocksize)
+        print(f"session : recording to {args.record_session}")
     engine = Engine(load_layout(), fps=args.fps, host=args.ddp or None,
                     port=args.ddp_port, controller=args.controller or None,
                     audio=audio, backend=args.backend, window=config.audio.window,
-                    silence_dbfs=config.audio.silence_dbfs,
+                    silence_dbfs=config.audio.silence_dbfs, session=session,
                     record=Path(args.record) if args.record else None)
     engine.settings.apply({
         "brightness": config.show.brightness,
@@ -597,6 +603,12 @@ def cmd_doctor(args) -> int:
     return run_checks(args.config_obj, deep=not args.quick)
 
 
+def cmd_analyze(args) -> int:
+    """Read back a recorded session and say what went wrong."""
+    from .session import analyze
+    return analyze(Path(args.directory), replay=args.replay)
+
+
 def cmd_inspect(args) -> int:
     for path in args.files:
         h = read_header(path)
@@ -707,6 +719,9 @@ def build_parser(config: Config | None = None) -> argparse.ArgumentParser:
                    help="clip output to one controller's channels")
     p.add_argument("--fps", type=float, default=config.output.fps)
     p.add_argument("--record", help="also write every frame to this fseq")
+    p.add_argument("--record-session", metavar="DIR",
+                   help="record the audio and every analysis decision, for "
+                        "diagnosing what actually happened")
     p.add_argument("--preview-fps", type=float,
                    default=config.web.preview_fps or None,
                    help="cap the browser feed (default: the engine's rate)")
@@ -792,6 +807,13 @@ def build_parser(config: Config | None = None) -> argparse.ArgumentParser:
     p.add_argument("--quick", action="store_true",
                    help="skip the render and beat-tracking benchmarks")
     p.set_defaults(func=cmd_doctor)
+
+    p = sub.add_parser("analyze", help="diagnose a recorded session",
+                       parents=[common])
+    p.add_argument("directory")
+    p.add_argument("--replay", action="store_true",
+                   help="rerun the whole chain on the recorded audio")
+    p.set_defaults(func=cmd_analyze)
 
     p = sub.add_parser("inspect", help="print an fseq header", parents=[common])
     p.add_argument("files", nargs="+")

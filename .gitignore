@@ -23,3 +23,6 @@ datasets/
 
 # Runtime logs
 logs/
+
+# Recorded diagnostic sessions (audio + traces; large)
+sessions/

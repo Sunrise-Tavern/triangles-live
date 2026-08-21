@@ -145,6 +145,23 @@ class Layout:
         """A full, all-off channel array for one frame."""
         return np.zeros(self.channel_count, dtype=np.uint8)
 
+    def _family_slice(self, kind: str) -> slice | None:
+        members = [m for m in self.models.values() if m.kind == kind]
+        if not members:
+            return None
+        lo = min(m.start for m in members) - 1
+        hi = max(m.end for m in members)
+        return slice(lo, hi)
+
+    @property
+    def nets_slice(self) -> slice | None:
+        """Channel span covering every net.  Diagnostics only."""
+        return self._family_slice("net")
+
+    @property
+    def arches_slice(self) -> slice | None:
+        return self._family_slice("arch")
+
     def output(self, name: str) -> Controller:
         """A controller by name; raises with the available names if unknown."""
         if name not in self.controllers:

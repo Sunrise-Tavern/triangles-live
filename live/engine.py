@@ -86,7 +86,8 @@ class Engine:
                  seed: int = 7, audio: AudioSource | None = None,
                  backend: str = "aubio",
                  thresholds: StateThresholds | None = None,
-                 window: int = 2048, silence_dbfs: float = -70.0) -> None:
+                 window: int = 2048, silence_dbfs: float = -70.0,
+                 session=None) -> None:
         self.layout = layout or load_layout()
         self.settings = settings or Settings()
         self.fps = float(fps)
@@ -107,6 +108,7 @@ class Engine:
                                    seed=seed)
         else:
             self.script = Script(self.canvas, settings=self.settings, seed=seed)
+        self.session = session
         self.status = EngineStatus(audio=audio is not None)
 
         self.span = slice(0, self.layout.channel_count)
@@ -161,7 +163,11 @@ class Engine:
             for block in self.listener.source.blocks():
                 if self._stop.is_set():
                     break
-                self.machine.push(self.listener.step(block))
+                features = self.listener.step(block)
+                self.machine.push(features)
+                if self.session is not None:
+                    self.session.observe(block, features, self.listener.clock,
+                                         self.machine)
         finally:
             self.listener.source.close()
             self.listener.stats.running = False
@@ -180,6 +186,8 @@ class Engine:
         if self._writer is not None:
             self._writer.close()
             self._writer = None
+        if self.session is not None:
+            self.session.close()
         self.status.running = False
 
     def __enter__(self) -> "Engine":
@@ -226,6 +234,8 @@ class Engine:
             if self._writer is not None:
                 self._writer.add_frame(out)
 
+            if self.session is not None:
+                self.session.frame(index, t, out, self.layout)
             self.frame = out
             self._which ^= 1
             render_ms += (time.perf_counter() - started) * 1000

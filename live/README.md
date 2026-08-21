@@ -535,6 +535,31 @@ interface has its static address and never find the Falcon.
 
 `[show] blackout_on_start` decides whether a mid-set restart comes back dark.
 
+## Recording a session, when something is wrong
+
+Three rounds of guessing at a detection problem is three rounds too many.  The
+fix for that is a recording, not a better guess:
+
+```bash
+./live.sh serve --audio-device 2 --record-session sessions/friday
+./live.sh analyze sessions/friday            # what happened, and what looks wrong
+./live.sh analyze sessions/friday --replay   # rerun the chain on that exact audio
+```
+
+It writes the **audio itself** (16-bit WAV, 5 MB a minute), every per-block
+number the analysis derived, the clock's state, every transition *with the
+reason it gave*, and a brightness curve per fixture family — all on one
+timeline.  A four-hour set is under 1.5 GB.
+
+The audio is the important part: with it the whole pipeline can be replayed
+offline, deterministically, as many times as it takes.  The traces matter
+because a replay only proves what the code does *now*, and the question is
+usually what it did *then* — with that config, that device, that gain.
+
+`analyze` is deliberately opinionated rather than a dump of numbers.  It flags
+things like *"quiet while the level was in its top 30 %, first at 84.2 s"* —
+which is the sentence that would have saved those three rounds.
+
 ## Validating against real music
 
 Every threshold in this project was chosen by looking at one or two files —
