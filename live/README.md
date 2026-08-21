@@ -798,6 +798,33 @@ against 0.13–0.18 on the synthetic one.
 Both are held open rather than tuned away: fixing them against four excerpts
 would repeat exactly the mistake this harness exists to catch.
 
+### What changes, and when
+
+Three timescales, which is the offline show's structure kept intact:
+
+| timescale | what moves | why |
+|---|---|---|
+| **per phrase** (4 bars) | corridor pattern, net gesture, a 9° hue step | one gesture held for a section reads as one idea |
+| **per state change** | palette jumps a golden angle, treatment changes | the show travels through colour rather than sitting in a corner of it |
+| **per beat / bar** | accents, the big/small net trade, par flashes | the grid itself |
+
+The nets rotate through a gesture vocabulary the same way the corridor rotates
+patterns — `bars`, `trade`, `slow_wheel`, `rings`, `wheel_up`, `strobe_small`,
+`flare`, `plasma`, `twinkle`, `breathe` — each state drawing only from gestures
+that make sense at that energy: a drop can strobe, a breakdown cannot.  This
+matches what the offline show does for a drop ("butterfly/spirals/fan, rotating
+every 4 bars").
+
+The hue steps 9° per phrase on a 4-phrase cycle *inside* a section, so a
+ninety-second drop is not one flat colour, while the golden-angle jump between
+sections stays the real journey.
+
+Both walks are deterministic and never land twice in a row.  The obvious
+`(phrase * step) % count` does **not** give that — the step is derived per
+phrase, so consecutive phrases can collide, and measured, a drop drew
+`bars_fast` twice running.  Accumulating a step that is never a multiple of the
+count does.
+
 ### The corridor on `auto`
 
 `vocabulary()` returns the **three** patterns nearest the energy the state

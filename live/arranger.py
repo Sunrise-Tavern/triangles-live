@@ -58,6 +58,22 @@ class Treatment:
     quiet: bool = False
 
 
+#: Net gestures each state may draw, rotated one per phrase by the same
+#: deterministic walk the corridor uses.  The offline show does this too --
+#: "butterfly/spirals/fan, rotating every 4 bars" for a drop -- and for the
+#: same reason the corridor does: one gesture held for a whole section reads
+#: as one idea, however well it tracks the music.
+#:
+#: Each state's list is ordered loosely from calm to busy, and every gesture in
+#: it has to make sense at that energy: a drop can strobe, a breakdown cannot.
+NET_GESTURES: dict[str, tuple[str, ...]] = {
+    QUIET:    ("plasma", "twinkle", "breathe"),
+    CRUISING: ("bars", "trade", "slow_wheel", "rings"),
+    BUILDING: ("wheel_up", "strobe_small", "bars_fast"),
+    HOT:      ("rings", "fast_wheel", "bars_fast", "flare"),
+}
+
+
 TREATMENTS: dict[str, Treatment] = {
     SILENT:   Treatment(SILENT,   "analogous",     0.45, 0.40, "comet",    16.0, 16.0, True),
     QUIET:    Treatment(QUIET,    "analogous",     0.55, 0.55, "sparkle",   4.0,  8.0, True),
@@ -85,6 +101,8 @@ class Arranger:
         self._palettes: dict[tuple, pal.Palette] = {}
         #: Advances once per state change -- the hue journey's step counter.
         self.journey = 0
+        self.gesture = "bars"
+        self._walks: dict[str, tuple[int | None, int]] = {}
         self._last_state = self.machine.state
 
     # -- knobs and derived values ------------------------------------------ #
@@ -140,11 +158,19 @@ class Arranger:
         index = self.clock.beat_index_at(t)
         return (index - self.clock.downbeat) // self.clock.bar_length
 
-    def palette_for(self, treat: Treatment) -> pal.Palette:
+    #: Degrees the hue steps per phrase inside a section, and how many steps
+    #: before it comes back.  Small and bounded on purpose: the golden-angle
+    #: jump between sections is the journey, and this is only so a ninety
+    #: second drop is not one flat colour the whole way through.
+    PHRASE_HUE_STEP = 9.0
+    PHRASE_HUE_CYCLE = 4
+
+    def palette_for(self, treat: Treatment, phrase: int = 0) -> pal.Palette:
         offset = self.settings.hue_offset if self.settings else 0.0
         lock = self.settings.hue_lock if self.settings else False
+        drift = (phrase % self.PHRASE_HUE_CYCLE) * self.PHRASE_HUE_STEP
         hue = self.base_hue + offset + (0.0 if lock
-                                        else self.journey * pal.GOLDEN_ANGLE)
+                                        else self.journey * pal.GOLDEN_ANGLE + drift)
         key = (round(hue, 2), treat.scheme, treat.value, treat.kind)
         cached = self._palettes.get(key)
         if cached is None:
@@ -154,6 +180,33 @@ class Arranger:
                                   white=treat.kind == HOT).floored()
             self._palettes[key] = cached
         return cached
+
+    def _walk(self, key: str, phrase: int, count: int) -> int:
+        """A deterministic walk that never lands twice in a row.
+
+        The obvious ``(phrase * step) % count`` does not do this: the step is
+        derived per phrase, so two consecutive phrases can land on the same
+        index -- measured, a drop drew `bars_fast` for two phrases running.
+        Accumulating a step that is never a multiple of ``count`` does
+        guarantee it, and stays reproducible because it only ever moves
+        forward from a fresh start.
+        """
+        if count < 2:
+            return 0
+        last, index = self._walks.get(key, (None, 0))
+        if last == phrase:
+            return index
+        first = phrase if last is None else last + 1
+        for step_phrase in range(first, phrase + 1):
+            seed = f"{self.seed}:{key}:{step_phrase}".encode()
+            index = (index + 1 + zlib.crc32(seed) % (count - 1)) % count
+        self._walks[key] = (phrase, index)
+        return index
+
+    def gesture_for(self, treat: Treatment, phrase: int) -> str:
+        """Which net gesture this phrase draws."""
+        options = NET_GESTURES.get(treat.kind, ("bars",))
+        return options[self._walk(f"nets:{treat.kind}", phrase, len(options))]
 
     def pattern_for(self, treat: Treatment, phrase: int = 0) -> str:
         """Which corridor pattern this phrase draws.
@@ -180,11 +233,8 @@ class Arranger:
         trust = self.clock.confidence
         target = (fx.DENSITY[treat.pattern] + (articulation - 0.5)) * (0.5 + 0.5 * trust)
         candidates = fx.vocabulary(min(max(target, 0.0), 1.0), quiet=treat.quiet)
-        if len(candidates) < 2:
-            return candidates[0]
-        key = f"{self.seed}:{treat.kind}:{phrase}".encode()
-        step = 1 + zlib.crc32(key) % (len(candidates) - 1)
-        return candidates[(phrase * step) % len(candidates)]
+        return candidates[self._walk(f"corridor:{treat.kind}", phrase,
+                                     len(candidates))]
 
     # -- render ------------------------------------------------------------ #
 
@@ -204,14 +254,16 @@ class Arranger:
             # of wall time, slow enough that you have to watch to see it move.
             self._silent(t)
             return
-        palette = self.palette_for(treat)
-        far = palette.rotated(70.0)
         beat = self.clock.phase(t)
         bar = self.clock.bar_phase(t)
         kick = _kick(beat)
         features = self.features
 
-        name = self.pattern_for(treat, self.phrase_index(t, treat))
+        index = self.phrase_index(t, treat)
+        self.gesture = self.gesture_for(treat, index)
+        name = self.pattern_for(treat, index)
+        palette = self.palette_for(treat, index)
+        far = palette.rotated(70.0)
         levels = fx.PATTERNS[name](
             len(canvas.arch_names), phrase,
             **({"seed": self.seed} if name == "sparkle" else {}))
@@ -252,20 +304,60 @@ class Arranger:
         breath = 0.5 + 0.5 * float(np.sin(2 * np.pi * t / (self.IDLE_SWEEP_S / 2)))
         fx.par(canvas, palette.color(0), 0.10 + 0.08 * breath)
 
+    def _gesture(self, name: str, frame: int, t: float, phrase: float,
+                 palette, beat: float, kick: float, tension: float = 0.0) -> None:
+        """Paint one net gesture.  The bed and the par stay with the state."""
+        canvas = self.canvas
+        if name == "plasma":
+            fx.plasma(canvas, palette, t, scale=2.5, speed=0.35, level=0.7)
+        elif name == "twinkle":
+            fx.plasma(canvas, palette, t, scale=3.0, speed=0.2, level=0.45)
+            fx.net_sparkle(canvas, pal.WHITE, frame, density=0.008, level=0.6,
+                           seed=self.seed)
+        elif name == "breathe":
+            swell = 0.35 + 0.35 * float(np.sin(2 * np.pi * phrase))
+            fx.wash(canvas, palette, swell, gradient=0.9)
+        elif name == "bars":
+            fx.bars(canvas, palette, phrase * 4.0, count=3, angle=0.15,
+                    width=0.3, level=0.9)
+        elif name == "bars_fast":
+            fx.bars(canvas, palette, phrase * 8.0, count=4, angle=0.35,
+                    width=0.22, level=0.95)
+        elif name == "trade":
+            # Big and small nets take turns, as in the offline show.  This is
+            # the gesture that needs a *correct* bar line rather than merely a
+            # consistent one -- counted from the wrong beat it trades offbeat.
+            lead = self.big if int(self._bars_elapsed(t)) % 2 == 0 else self.small
+            fx.bars(canvas, palette, phrase * 4.0, count=3, angle=0.15,
+                    width=0.3, level=0.95, targets=lead)
+        elif name == "slow_wheel":
+            fx.pinwheel(canvas, palette, t * 0.12, arms=3, level=0.75)
+        elif name == "wheel_up":
+            fx.pinwheel(canvas, palette, t * (1.0 + 5.0 * tension) * 0.35,
+                        arms=3, level=0.8, targets=self.big)
+        elif name == "fast_wheel":
+            fx.pinwheel(canvas, palette, -t * 0.8, arms=5, level=0.7)
+        elif name == "rings":
+            fx.radial(canvas, palette, (t * 2.0) % 1.0, width=0.3, level=0.9)
+        elif name == "flare":
+            fx.radial(canvas, palette, kick, width=0.45, level=0.95)
+            fx.net_sparkle(canvas, pal.WHITE, frame, density=0.02, level=0.9,
+                           seed=self.seed)
+        elif name == "strobe_small":
+            rate = 2 + int(tension * 6)
+            flash = _kick((t / max(1e-6, 60.0 / self.bpm) * rate) % 1.0, sharp=3.0)
+            fx.pinwheel(canvas, palette, t * 0.4, arms=3, level=0.6,
+                        targets=self.big)
+            fx.wash(canvas, pal.WHITE, 0.55 * flash * max(tension, 0.3),
+                    targets=self.small)
+
     def _quiet(self, frame, t, phrase, palette, beat, bar, kick, features) -> None:
-        fx.plasma(self.canvas, palette, t, scale=2.5, speed=0.35, level=0.7)
-        fx.net_sparkle(self.canvas, pal.WHITE, frame, density=0.006, level=0.5,
-                       seed=self.seed)
+        self._gesture(self.gesture, frame, t, phrase, palette, beat, kick)
         fx.par(self.canvas, palette.color(0), 0.25 + 0.15 * phrase)
 
     def _cruising(self, frame, t, phrase, palette, beat, bar, kick, features) -> None:
         fx.wash(self.canvas, palette.dimmed(0.35), 1.0, gradient=0.8)
-        # Big and small nets trade bars, as in the offline show.  This is the
-        # first thing that needs a *correct* bar line rather than a consistent
-        # one -- counted from the wrong beat it trades on the offbeat.
-        lead = self.big if int(self._bars_elapsed(t)) % 2 == 0 else self.small
-        fx.bars(self.canvas, palette, phrase * 4.0, count=3, angle=0.15,
-                width=0.3, level=0.9, targets=lead)
+        self._gesture(self.gesture, frame, t, phrase, palette, beat, kick)
         fx.par(self.canvas, palette.color(1), 0.35 + 0.45 * kick)
 
     def _building(self, frame, t, phrase, palette, beat, bar, kick, features) -> None:
@@ -274,21 +366,17 @@ class Arranger:
         # pre-fire the resolution.
         tension = min(1.0, self.machine.report.since_s / 8.0)
         fx.wash(self.canvas, palette.dimmed(0.25), 1.0, gradient=1.0)
-        fx.pinwheel(self.canvas, palette, t * (1.0 + 5.0 * tension) * 0.35,
-                    arms=3, level=0.8, targets=self.big)
-        rate = 2 + int(tension * 6)
-        flash = _kick((t / max(1e-6, 60.0 / self.bpm) * rate) % 1.0, sharp=3.0)
-        fx.wash(self.canvas, pal.WHITE, 0.55 * flash * tension, targets=self.small)
+        self._gesture(self.gesture, frame, t, phrase, palette, beat, kick,
+                      tension=tension)
+        flash = _kick((t / max(1e-6, 60.0 / self.bpm)
+                       * (2 + int(tension * 6))) % 1.0, sharp=3.0)
         fx.par(self.canvas, palette.color(0), 0.4 + 0.6 * tension * flash,
                white=0.3 * tension)
 
     def _hot(self, frame, t, phrase, palette, beat, bar, kick, features) -> None:
-        fx.radial(self.canvas, palette, (t * 2.0) % 1.0, width=0.3, level=0.9)
-        fx.wash(self.canvas, palette.dimmed(0.3), kick, targets=self.big)
-        fx.pinwheel(self.canvas, palette, -t * 0.8, arms=5, level=0.6,
-                    targets=self.small)
-        fx.net_sparkle(self.canvas, pal.WHITE, frame, density=0.02, level=0.9,
-                       seed=self.seed)
+        fx.wash(self.canvas, palette.dimmed(0.3), kick * 0.8)
+        self._gesture(self.gesture, frame, t, phrase, palette, beat, kick,
+                      tension=1.0)
         fx.par(self.canvas, pal.WHITE.color(0), kick, white=kick)
 
 
