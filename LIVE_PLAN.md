@@ -293,53 +293,79 @@ evening as a *bench comparison*: run LedFx on the sim feed and confirm our
 output is meaningfully tighter — if it isn't, that's important to know early.
 
 **BeatNet** (github.com/mjhydri/BeatNet) — CRNN + particle-filter **online beat,
-downbeat and meter tracking**. **Spike run 2026-08-20, ~50 minutes. Verdict: do
-not adopt.** The draw was downbeats, and it did not deliver them.
+downbeat and meter tracking**. **Spike run 2026-08-20, all four modes. Verdict:
+do not adopt live; useful offline.**
 
-*Installation — better than this plan assumed.* madmom's **git master**
+*Installation — better than this plan assumed.* madmom **git master**
 (0.17.dev0) builds and imports cleanly on Python 3.12 with numpy 2.5.2. The
 compatibility wall is real only for the released 0.16.1, and the README's
 `sitecustomize.py` workaround (which monkey-patches numpy process-wide) is not
-needed on that path. What *does* still block: BeatNet's own particle filter
-calls `np.in1d`, removed in numpy 2.0, so adoption means a fork or a numpy<2
-pin; `pyaudio` and `matplotlib` are imported at module scope on the inference
-path (pyaudio needs system portaudio, and can be stubbed for file input); and
-its metadata pins `numba==0.54.1`, from 2021. Licence is **CC-BY-4.0** per the
-repo, not CC BY-NC-SA as previously recorded here — permissive, so licensing
-was never the obstacle.
+needed on that path. Still blocking: BeatNet's own particle filter calls
+`np.in1d`, removed in numpy 2.0, so adoption means a fork or a numpy<2 pin;
+`pyaudio` and `matplotlib` are imported at module scope on the inference path
+(pyaudio needs system portaudio, and can be stubbed for file input); metadata
+pins `numba==0.54.1`, from 2021. Licence is **CC-BY-4.0** per the repo, not
+CC BY-NC-SA as previously recorded here — permissive, so licensing was never
+the obstacle.
 
-*Downbeats — the whole reason to consider it — do not work.* On the synthetic
-128 BPM 4/4 track and on a 4/4 house track it emits beat-in-bar values of only
-{1, 2} — a 2/4 meter — with "downbeat" spacings of 2, 3, 4, 5, 6 and 7 events.
-Its downbeats scatter across all four true bar positions (47 % within 30 ms of
-a real downbeat, which is barely above chance). This is not misconfiguration:
-all three pretrained models behave identically, `BeatNet.py:67` constructs the
-online filter with `beats_per_bar=[]`, and the downbeat state space is built
-from hardcoded `min/max_beats_per_bar = 2/4` that ignore the argument —
-forcing `[4]` crashes it. Nor is it the numpy shim: all four `in1d` calls are
-on 1-D arrays, where `isin` is exactly equivalent.
+*The four modes are not variations on one algorithm.* `stream` is microphone;
+`realtime` reads a file chunk by chunk; `online` reads the **whole** file into
+the CRNN and only the *decoding* is causal; `offline` is the whole file plus
+madmom's Viterbi DBN. Only `stream` and `realtime` are the deployment shape.
 
-*Beats are decent but not better than what we have.* On the synthetic track:
-median 8.7 ms, 89.3 % within 30 ms, and only 262 of 320 beats detected. Our
-aubio + PLL on the same file: median 2.3 ms, **100 %** within 30 ms, and every
-beat, because it predicts from a model rather than reporting detections. On
-Eric Prydz *Opus* — the track our clock is worst on — BeatNet's phase is
-genuinely better: kick alignment 4.61 against our 3.91 and librosa's 4.49.
-That is the one real win, and it would still have to feed our clock, which is
-exactly what `BeatBackend` is for.
+Measured against the synthesised 128 BPM 4/4 track (exact ground truth), and
+Eric Prydz *Opus*:
 
-*Cost.* 5.3 s to process 97.6 s of audio: **18× real time on the Mac**, against
-150× for the whole aubio chain. Roughly 8× the CPU, before the 40 fps renderer,
-on a machine far faster than a Pi — and that is on top of torch, librosa,
-madmom-from-git and a fork.
+| mode | beats | within 30 ms | meter | downbeats on the true bar line |
+|---|---|---|---|---|
+| `online` / PF | 262/320 | 89.3 % | 2/4 | 63.5 % |
+| `realtime` / PF | 264/320 | **55.3 %** | 2/4 | 64.0 % |
+| `offline` / DBN | 323/320 | 90.4 % | 4/4 | 67.9 % |
+| `offline` / DBN forced `[4]` | 323/320 | 90.4 % | 4/4 | 67.9 % |
+| **ours (aubio + PLL)** | 322/320 | **100 %** | — | no downbeat yet |
+
+On *Opus*, downbeat spacing in events — a clean tracker gives all 4s:
+`online` `{2:15, 3:10, 4:12, 5:2, 6:1, 7:1}`, `realtime` `{2:14, 3:7, 4:17, …}`,
+`offline` with `[2,3,4]` `{2:99}` (consistent but wrong meter), `offline` forced
+to `[4]` **`{4:51}`** — perfectly clean 4/4 at exactly 125.0 BPM, with the best
+kick alignment of anything measured (4.57 against our 3.91 and librosa's 4.49).
+
+*So the conclusion is narrower than "downbeats don't work".* BeatNet's working
+downbeats live in the mode we cannot use, and the modes we can use do not
+produce them:
+
+- The causal PF path's **meter is broken**, not merely untuned: `BeatNet.py:67`
+  builds it with `beats_per_bar=[]`, the downbeat state space is constructed
+  from hardcoded `min/max_beats_per_bar = 2/4` that ignore the argument, and
+  forcing `[4]` crashes. All three pretrained models behave identically. Not
+  the numpy shim either — all four `in1d` calls are on 1-D arrays where `isin`
+  is exactly equivalent.
+- `realtime`, the mode that matches deployment, is the **worst** on beats
+  (55.3 %), well below our aubio + PLL.
+- Even at its best, downbeat *phase* is ~68 % right on the synthetic track, with
+  most of the remainder landing on the half-bar. (That track may have genuinely
+  weak bar cues, so treat this as a floor rather than a verdict on the model.)
+
+*Cost.* 18× real time on the Mac against 150× for our whole aubio chain —
+roughly 8× the CPU before the 40 fps renderer, on a machine far faster than a
+Pi, plus torch, librosa, madmom-from-git and a fork.
+
+**The one genuinely open door**: the CRNN activations are shared across modes —
+it is the *decoder* that differs. Taking BeatNet's CRNN chunk by chunk and
+decoding it with our own causal logic (the existing PLL for beats, a bar
+tracker for downbeats) is the only configuration that could beat what we have.
+It still costs torch on the Pi. Park it behind M5.
+
+**Concretely useful now**: `offline` / DBN with `beats_per_bar=[4]` is an
+excellent *precomputation* tool — exact tempo, clean bars. That is precisely
+what the "semi-live cueing" idea below needs, so if we ever fingerprint tracks
+and load precomputed structure, this is the tool to build it with.
 
 **Consequence for M5**: build bar phase ourselves. Correlate band energy at a
 4-beat period to find which position carries the pattern change, and anchor
 `clock.set_downbeat()` on the first strong kick after a break — the same trick
 that resolved half-beat polarity, one level up. No dependency risk, negligible
-CPU, and BeatNet's failure here means no shortcut is being passed up. Revisit
-it as a *beat* backend only if real-track phase stays a problem; the numbers to
-beat are above.
+CPU, and nothing causal in BeatNet beats it.
 
 ## Later, optional
 - **XR16 OSC meters** (UDP 10024) as an energy side-channel — free VU per input,
