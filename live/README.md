@@ -798,6 +798,43 @@ against 0.13–0.18 on the synthetic one.
 Both are held open rather than tuned away: fixing them against four excerpts
 would repeat exactly the mistake this harness exists to catch.
 
+### Song structure, and what is actually knowable live
+
+Nothing causal can name a section.  "This is the second chorus" needs either
+the whole file or a model trained to say so, and the BeatNet spike showed the
+live-capable options do not deliver even downbeats reliably.  What the state
+machine gives is the coarse energy shape — quiet, cruising, building, hot —
+which is an *energy* taxonomy, not a structural one: an intro and a breakdown
+look identical from inside the moment, and so do a verse and a post-chorus.
+
+But song structure is repetition with variation, and **the repetition is
+detectable by counting**.  The show does not need to know a section is a chorus
+to know it is *the second time we have been here*.
+
+Measured before this existed: the test track's two drops drew identical
+corridor patterns and identical net gestures, differing only in colour, and
+that colour difference was incidental — the golden-angle journey happened to
+have moved.  The second drop of a track is almost always bigger than the first,
+and the show had no way to say so.
+
+Each return now escalates: the density target rises, so a busier pattern comes
+into range; brightness lifts; and the walk is re-keyed on the visit number so a
+return does not replay the same sequence in the same order.
+
+| | visit | brightness |
+|---|---|---|
+| drop 1 | 1 | 33.7 |
+| **drop 2** | 2 | **43.5** |
+| build 1 | 1 | 28.6 |
+| **build 2** | 2 | **41.4** |
+
+It is capped after three returns — a fourth chorus should not be blinding.
+
+**Real section names remain an offline problem**, and the plan already has the
+shape of the answer under "semi-live cueing": fingerprint the track, look up a
+precomputed structure, and get lookahead for known material.  The Harmonix Set
+gives 912 annotated tracks to build that against.
+
 ### What changes, and when
 
 Three timescales, which is the offline show's structure kept intact:

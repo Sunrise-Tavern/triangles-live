@@ -101,6 +101,13 @@ class Arranger:
         self._palettes: dict[tuple, pal.Palette] = {}
         #: Advances once per state change -- the hue journey's step counter.
         self.journey = 0
+        #: How many times each state has been entered.  Song structure is
+        #: repetition with variation -- a second chorus is the first one, more
+        #: so -- and while nothing causal can name a section "chorus", the
+        #: *return* is detectable by simply counting.  Measured before this
+        #: existed, the track's two drops drew identical patterns and identical
+        #: gestures and differed only in colour, which had moved by accident.
+        self.visits: dict[str, int] = {}
         self.gesture = "bars"
         self._walks: dict[str, tuple[int | None, int]] = {}
         self._last_state = self.machine.state
@@ -206,7 +213,20 @@ class Arranger:
     def gesture_for(self, treat: Treatment, phrase: int) -> str:
         """Which net gesture this phrase draws."""
         options = NET_GESTURES.get(treat.kind, ("bars",))
-        return options[self._walk(f"nets:{treat.kind}", phrase, len(options))]
+        visit = self.visits.get(treat.kind, 1)
+        return options[self._walk(f"nets:{treat.kind}:{visit}", phrase,
+                                  len(options))]
+
+    #: How much busier each return of a state is than the one before, and how
+    #: many returns it keeps escalating for.  Small steps: a second drop should
+    #: read as more, not as a different show.
+    RETURN_STEP = 0.07
+    RETURN_CAP = 3
+
+    def escalation(self, treat: Treatment) -> float:
+        """0 the first time in a state, rising a little on each return."""
+        return self.RETURN_STEP * min(
+            max(self.visits.get(treat.kind, 1) - 1, 0), self.RETURN_CAP)
 
     def pattern_for(self, treat: Treatment, phrase: int = 0) -> str:
         """Which corridor pattern this phrase draws.
@@ -231,9 +251,13 @@ class Arranger:
         # A grid we do not trust should not drive busy, tightly-placed
         # patterns; fall back toward the sparse end instead.
         trust = self.clock.confidence
-        target = (fx.DENSITY[treat.pattern] + (articulation - 0.5)) * (0.5 + 0.5 * trust)
+        target = ((fx.DENSITY[treat.pattern] + (articulation - 0.5))
+                  * (0.5 + 0.5 * trust) + self.escalation(treat))
         candidates = fx.vocabulary(min(max(target, 0.0), 1.0), quiet=treat.quiet)
-        return candidates[self._walk(f"corridor:{treat.kind}", phrase,
+        # The walk is keyed on the visit as well, so a return does not replay
+        # the same sequence of patterns in the same order.
+        visit = self.visits.get(treat.kind, 1)
+        return candidates[self._walk(f"corridor:{treat.kind}:{visit}", phrase,
                                      len(candidates))]
 
     # -- render ------------------------------------------------------------ #
@@ -244,6 +268,8 @@ class Arranger:
 
         if self.machine.state != self._last_state:
             self.journey += 1
+            self.visits[self.machine.state] = self.visits.get(
+                self.machine.state, 0) + 1
             self._last_state = self.machine.state
 
         _, treat, phrase = self.locate(t)
@@ -268,7 +294,8 @@ class Arranger:
             len(canvas.arch_names), phrase,
             **({"seed": self.seed} if name == "sparkle" else {}))
         fx.corridor(canvas, levels, palette, far,
-                    brightness=treat.brightness, height=0.35)
+                    brightness=min(1.0, treat.brightness + self.escalation(treat)),
+                    height=0.35)
 
         getattr(self, f"_{treat.kind}")(frame, t, phrase, palette, beat, bar,
                                         kick, features)
