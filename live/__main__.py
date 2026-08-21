@@ -447,6 +447,46 @@ def cmd_harmonix(args) -> int:
                   f"{e.title[:38]:<40}{e.artist[:26]}")
         return 0
 
+    if args.crossfade:
+        from .harmonix import crossfade, score_transition
+
+        pool = [e for e in entries if "Dance" in e.genre and 118 <= e.bpm <= 142]
+        pool = harmonix.sample(pool, 8, seed=3)
+        pairs = [(pool[i], pool[i + 1]) for i in range(0, len(pool) - 1, 2)]
+        scenarios = [
+            ("beatmatched", dict(match_tempo=True, overlap=16.0)),
+            ("bar-misaligned", dict(match_tempo=True, overlap=16.0, beat_offset=2)),
+            ("tempo jump", dict(match_tempo=False, overlap=16.0)),
+            ("hard cut", dict(match_tempo=False, overlap=0.5)),
+        ]
+        print(f"{'scenario':<26}{'tempo':>13}{'before':>7}{'after':>8}"
+              f"{'downbt':>8}{'settle':>8}{'excurs':>8}{'conf':>7}{'rlk':>5}")
+        print("-" * 98)
+        rows = []
+        for name, kwargs in scenarios:
+            for a, b in pairs:
+                try:
+                    tr = crossfade(a, b, label=f"{name}: {a.bpm:.0f}->{b.bpm:.0f}",
+                                   **kwargs)
+                except ValueError:
+                    continue
+                score = score_transition(tr, fps=args.fps, backend=args.backend)
+                rows.append((name, score))
+                print(score.line(), flush=True)
+        import numpy as _np
+        print()
+        for name, _ in scenarios:
+            group = [s for n, s in rows if n == name]
+            if not group:
+                continue
+            settled = [s.settle_s for s in group if s.settle_s is not None]
+            print(f"  {name:<16} after {100 * _np.median([s.precision_after for s in group]):3.0f}%"
+                  f"  downbeats {100 * _np.median([s.downbeats_after for s in group]):3.0f}%"
+                  f"  settled {len(settled)}/{len(group)}"
+                  + (f" in {_np.median(settled):.1f}s median" if settled else "")
+                  + f"  confidence trough {_np.median([s.confidence_trough for s in group]):.2f}")
+        return 0
+
     if args.synth:
         pool = entries
         if args.genre:
@@ -695,6 +735,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--synth", type=int, metavar="N",
                    help="render N annotations as audio and score against them")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--crossfade", action="store_true",
+                   help="mix pairs of tracks and score the transition")
     p.add_argument("--score", action="store_true",
                    help="run the live chain on matched files and grade it")
     p.add_argument("--fps", type=float, default=40.0)

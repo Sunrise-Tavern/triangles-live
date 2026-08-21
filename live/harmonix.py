@@ -624,30 +624,32 @@ def crossfade(a: Entry, b: Entry, *, lead: float = 40.0, overlap: float = 16.0,
         raise ValueError(f"{b.file}: not enough beats after the blend")
 
     audio_a = render(a, root, samplerate, grid=(a_keep, a_pos[:len(a_keep)]))
+    # b_placed already holds absolute mix times, so this renders with its
+    # silence at the front and is mixed at offset zero.  Shifting it again by
+    # b_shift -- which is what an earlier version did -- put B's audio thirty
+    # seconds after B's grid, with silence in between, and scored the clock
+    # against a track that was not playing.
     audio_b = render(b, root, samplerate, seed=9, grid=(b_placed, b_kept_pos))
 
-    total = int(max(len(audio_a), b_shift * samplerate + len(audio_b)))
-    mix = np.zeros(total + samplerate, dtype=np.float32)
-
-    # Equal-power, which is what a mixer does; a linear blend dips in the
-    # middle and the analyser would read that dip as a breakdown.
-    fade = np.ones(len(audio_a), dtype=np.float32)
+    length = max(len(audio_a), len(audio_b)) + samplerate
+    mix = np.zeros(length, dtype=np.float32)
     i0 = int(blend_start * samplerate)
-    i1 = min(len(audio_a), int((blend_start + overlap) * samplerate))
-    if i1 > i0:
-        t = np.linspace(0.0, 1.0, i1 - i0, dtype=np.float32)
-        fade[i0:i1] = np.cos(t * np.pi / 2)
-        fade[i1:] = 0.0
-    mix[:len(audio_a)] += audio_a * fade
+    i1 = int((blend_start + overlap) * samplerate)
+    ramp = np.linspace(0.0, 1.0, max(i1 - i0, 1), dtype=np.float32)
 
-    start_b = int(b_shift * samplerate)
-    up = np.ones(len(audio_b), dtype=np.float32)
-    j1 = min(len(audio_b), int(overlap * samplerate))
-    if j1 > 0:
-        t = np.linspace(0.0, 1.0, j1, dtype=np.float32)
-        up[:j1] = np.sin(t * np.pi / 2)
-    end_b = min(len(mix), start_b + len(audio_b))
-    mix[start_b:end_b] += audio_b[:end_b - start_b] * up[:end_b - start_b]
+    # Equal power, which is what a mixer does.  A linear blend dips in the
+    # middle, and the analyser would read that dip as a breakdown.
+    fade_a = np.ones(len(audio_a), dtype=np.float32)
+    lo, hi = min(i0, len(audio_a)), min(i1, len(audio_a))
+    fade_a[lo:hi] = np.cos(ramp[:hi - lo] * np.pi / 2)
+    fade_a[hi:] = 0.0
+    mix[:len(audio_a)] += audio_a * fade_a
+
+    fade_b = np.ones(len(audio_b), dtype=np.float32)
+    lo, hi = min(i0, len(audio_b)), min(i1, len(audio_b))
+    fade_b[:lo] = 0.0
+    fade_b[lo:hi] = np.sin(ramp[:hi - lo] * np.pi / 2)
+    mix[:len(audio_b)] += audio_b * fade_b
 
     peak = float(np.abs(mix).max())
     if peak > 0:
@@ -658,3 +660,92 @@ def crossfade(a: Entry, b: Entry, *, lead: float = 40.0, overlap: float = 16.0,
         blend_start=blend_start, blend_end=blend_start + overlap,
         tempo_a=60.0 / a_period, tempo_b=60.0 / (b_period * scale), label=label,
     )
+
+
+@dataclass
+class TransitionScore:
+    transition: Transition
+    settle_s: float | None = None       # after the blend ends
+    tempo_excursion: float = 0.0        # worst BPM outside the two tempos
+    confidence_trough: float = 1.0
+    precision_after: float = 0.0
+    precision_before: float = 0.0
+    downbeats_after: float = 0.0
+    bar_shifts_after: int = 0
+    relocks: int = 0
+
+    def line(self) -> str:
+        settle = ("never" if self.settle_s is None
+                  else f"{self.settle_s:5.1f}s")
+        return (f"{self.transition.label:<26}"
+                f"{self.transition.tempo_a:>6.1f}->{self.transition.tempo_b:<6.1f}"
+                f"{100 * self.precision_before:>7.0f}%{100 * self.precision_after:>8.0f}%"
+                f"{100 * self.downbeats_after:>8.0f}%{settle:>8}"
+                f"{self.tempo_excursion:>8.1f}{self.confidence_trough:>7.2f}"
+                f"{self.relocks:>5}")
+
+
+def score_transition(tr: Transition, *, fps: float = 40.0,
+                     backend: str = "aubio") -> TransitionScore:
+    """How does the clock cope when one track becomes another?
+
+    The honest measure is not only "does it re-lock" but "does it *know* it
+    has lost the plot": the arranger leans on the grid in proportion to
+    confidence, so a clock that stays wrongly confident through a blend is
+    worse than one that admits it and falls back to energy.
+    """
+    from .audio import ArraySource
+    from .clock import BeatClock
+    from .listener import Listener
+    from .verify import run
+
+    result = TransitionScore(transition=tr)
+    clock = BeatClock()
+    trace: list[tuple[float, float, float]] = []
+    fired, listener = run(
+        ArraySource(tr.audio), fps=fps, backend=backend, clock=clock,
+        watch=lambda now, l: trace.append(
+            (now, l.clock.tempo, l.clock.confidence)))
+    result.relocks = clock.relocks
+
+    ours = np.array([f.predicted for f in fired])
+    if not len(ours):
+        return result
+
+    def precision(mask: np.ndarray, truth: np.ndarray) -> float:
+        picked = ours[mask]
+        if not len(picked) or not len(truth):
+            return 0.0
+        delta = np.abs(picked[:, None] - truth[None, :]).min(axis=1) * 1000
+        return float(np.mean(delta < 30))
+
+    result.precision_before = precision(
+        (ours > 5.0) & (ours < tr.blend_start), tr.before)
+    result.precision_after = precision(ours > tr.blend_end + 8.0, tr.after)
+
+    # Settle: the first moment after the blend from which eight consecutive
+    # beats all land on B's grid.
+    later = ours[ours > tr.blend_end]
+    if len(later) >= 8 and len(tr.after):
+        delta = np.abs(later[:, None] - tr.after[None, :]).min(axis=1) * 1000
+        for i in range(len(later) - 8):
+            if (delta[i:i + 8] < 40).all():
+                result.settle_s = float(later[i] - tr.blend_end)
+                break
+
+    mine = np.array([f.predicted for f in fired
+                     if f.downbeat and f.predicted > tr.blend_end + 8.0])
+    if len(mine) and len(tr.after_downbeats):
+        delta = np.abs(mine[:, None] - tr.after_downbeats[None, :]).min(axis=1) * 1000
+        result.downbeats_after = float(np.mean(delta < 50))
+    result.bar_shifts_after = listener.bars.shifts
+
+    window = [(t, tempo, conf) for t, tempo, conf in trace
+              if tr.blend_start - 2 <= t <= tr.blend_end + 20]
+    if window:
+        low, high = sorted((tr.tempo_a, tr.tempo_b))
+        result.tempo_excursion = max(
+            max(0.0, low - min(w[1] for w in window)),
+            max(0.0, max(w[1] for w in window) - high))
+        result.confidence_trough = min(w[2] for w in window)
+    return result
