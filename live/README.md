@@ -535,7 +535,84 @@ times, so it wins.  A real tempo change does not land on those ratios: a DJ
 nudging pitch moves a few percent, and 128 → 140 is a ratio of 1.09.
 
 It only applies while the clock is confident, or a bad initial lock could never
-be talked out of it.
+be talked out of it — and it has a **patience limit** for the same reason.  The
+guard cuts both ways: if the clock ever settles on the wrong pulse, every
+correction back *also* looks metrical.  One track sat at 149 BPM while the
+tracker said 117, a ¾ ratio, and the guard would have kept it there
+indefinitely.  Twenty beats of sustained disagreement and the tracker wins.
+
+### The polarity deadlock
+
+The other fix the corpus forced.  One track scored **0 %** with a *correct*
+tempo (128.8 against an annotated 128) and a perfectly uniform annotated beat
+spacing — a median error of 227 ms, which is half of its 469 ms beat.  It sat
+on the offbeat for its entire five minutes.
+
+The kick-based polarity check exists precisely to catch that, and it was
+disabled: it required `confidence > 0.4`, and *being on the offbeat is what
+keeps confidence low*.  Confidence sat at 0.19, so the one mechanism that could
+have fixed the phase was switched off exactly when it was needed.
+
+Confidence now scales how much evidence is **demanded** rather than whether the
+check runs at all.  That track went from **0 % to 98 %** of beats within 30 ms,
+confidence 0.19 → 0.93, with a single half-beat correction.
+
+Corpus-wide across all genres, the two fixes together moved tempo wander from a
+median of 13.3 BPM to 5.3, tempo error from 3.7 % to 2.2 %, and poorly-tracked
+tracks from 12 of 24 to 9 — the rest being the non-4/4 and sub-80 BPM cases.
+
+### A flaw in the measurement, not the engine
+
+Worth recording because it nearly sent me the wrong way: `corpus.py` originally
+rebuilt the beat grid from the clock's **final** tempo and anchor.  On a track
+whose tempo wandered 43 BPM that is a grid which never existed, and it reported
+Opus as sitting on the offbeat when it was not.  It now uses the beats actually
+fired.  The synthetic tracks' phase margin went from 3.7× to 7×, so the metric
+is sharper as well as correct.
+
+### Still open: tempo wander on real audio
+
+The fixes above are validated on rendered annotations, where aubio's readout
+flips cleanly between metrical levels.  On real mixes it does something else —
+it wanders *continuously*, which the ratio guard cannot catch.  Measured
+against each track's true tempo:
+
+| track | within 2 % | within 5 % | worst excursion |
+|---|---|---|---|
+| Opus | **42 %** | 56 % | 21 % |
+| Midnight Vampires | 75 % | 81 % | 32 % |
+| Children | 85 % | 85 % | 7 % |
+
+Be precise about what this breaks: **phase is still right** — Opus scores 3.81
+kick on our beats against 3.53 on our offbeats, so lights still land on beats,
+because the PLL re-locks on every one.  A wrong tempo hurts *prediction
+between* beats and phrase counting, not the downbeat itself.  The likely fix is
+to weight the long-baseline estimate over the tracker's readout, and it needs
+real audio to validate rather than renders.
+
+### Crossfades: the case nothing had ever tested
+
+`./live.sh harmonix --crossfade` mixes two annotated tracks the way a DJ does —
+beatmatched, bar-misaligned, tempo-jumped, or hard cut — and keeps both grids,
+so the clock is scored either side of the blend.  Scaling the annotation times
+*is* the tempo change, since the audio is rendered from those times, so the
+ground truth stays exact and no resampling is involved.
+
+First results are not good: beat precision runs 49–91 % before a transition and
+**4–16 % eight seconds after it**.  Beatmatched and bar-misaligned mixes
+re-settle within about 0.2 s in three cases of four; tempo jumps and hard cuts
+never re-settle inside the window measured.
+
+Two caveats before treating that as the number.  One pair measured by hand
+gives **100 %** after the blend, so the harness can report success and most
+sampled pairs really do fail.  And `settle` and `after` look at different
+windows — just after the blend, versus eight seconds later — so "settles
+quickly then drifts off" is a coherent reading rather than a contradiction.
+
+The confidence trough of **0.11** in every scenario is the encouraging part:
+the clock *knows* it has lost the plot, and the arranger already falls back to
+energy rather than the grid when confidence is low.  The failure mode is
+degraded, not wrong.  Not acted on yet — this needs one more pass.
 
 **On a spread of 30 across every genre**, beat precision drops to 54 % median.
 The failures are not random — they are three specific, now-measured limits:
@@ -547,10 +624,9 @@ The failures are not random — they are three specific, now-measured limits:
   70–180 folding range resolves sub-80 BPM material at double time.  Precision
   and recall together are what reveal this — recall stays high because every
   annotated beat still has one of ours on it.
-* **Tempo wanders mid-track on a minority of tracks**, even when the final
-  value is right: "Give It Up" ends at 139.9 against an annotated 140 but
-  spends part of the track near 92 (140 × 2/3, a triplet relationship).  This
-  is the same defect the four real excerpts showed on Opus, now reproducible.
+* ~~Tempo wanders mid-track~~ — **fixed**, see above; that was the
+  metrical-flip bug, and on real mixes a different form of it remains open
+  (below).
 
 Precision and recall are reported separately for exactly this reason — a single
 "beats within 30 ms" number would have hidden every octave error.
