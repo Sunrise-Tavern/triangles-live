@@ -447,8 +447,9 @@ to a state chooses its own colour scheme (a second drop may be tetradic where
 the first was triadic), saturation and corridor depth rotation.  And a change
 of look — a new phrase, a new state — arrives by a transition chosen per
 change: a cut, a one-to-four-beat crossfade, a wipe down the tunnel in either
-direction, or a dip through a dimmer middle.  Entering *hot* always cuts; the
-drop is the one moment the room is watching for.
+direction, or a dip through a dimmer middle.  A change of *state* always
+cuts — the music changed, and a dissolve there reads as the lights lagging
+it; the drop is only the loudest case.
 
 The phrase counter is the arranger's own, rate-limited and ended on a bar
 line, rather than read off the clock's beat index: that index moves whenever

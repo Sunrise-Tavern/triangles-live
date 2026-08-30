@@ -409,15 +409,16 @@ class Arranger:
         self._pattern_held[treat.kind] = (key, name)
         return name
 
-    def transition_for(self, change: int, *, into_hot: bool,
-                       from_silent: bool) -> tuple[str, float]:
+    def transition_for(self, change: int, *, state_change: bool) -> tuple[str, float]:
         """(style, beats) for the ``change``-th change of look.
 
-        A drop is the one moment the room is watching for, so entering hot
-        is always a cut, on the beat, as before.  Leaving silence cuts too:
-        there is nothing worth dissolving from.  Everything else rolls.
+        A change of *state* always cuts: the music changed, and a four-beat
+        dissolve out of quiet read as the lights lagging a track that had
+        plainly started (reported).  A drop is only the loudest case of
+        that.  Within a state -- a new phrase, a new colour -- the change is
+        ours rather than the music's, and it may roll.
         """
-        if into_hot or from_silent:
+        if state_change:
             return ("cut", 0.0)
         share = self.settings.transitions if self.settings else 0.75
         seed = f"{self.seed}:transition:{change}".encode()
@@ -464,9 +465,7 @@ class Arranger:
             # look, which is what a cut would have shown anyway.
             self._changes += 1
             style, beats = self.transition_for(
-                self._changes,
-                into_hot=treat.kind == HOT and self._look[0] != HOT,
-                from_silent=self._look[0] == SILENT)
+                self._changes, state_change=treat.kind != self._look[0])
             if style == "cut":
                 self._outgoing, self._transition = None, None
             else:
