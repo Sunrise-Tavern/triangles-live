@@ -25,14 +25,20 @@ from .layout import Layout, load_layout
 
 
 def _rotation(rx: float, ry: float, rz: float) -> np.ndarray:
-    """Rotation matrix for xLights' Z-then-Y-then-X convention, in degrees."""
+    """Rotation matrix for xLights' convention: X first, then Y, then Z.
+
+    Verified on the layout rather than assumed: of the twelve orderings and
+    signs, only this one puts Net 6 -- rotated 141/20/113 -- in the same
+    plane as the other three big nets (dot of normals 1.000; the previous
+    Z-first order gave 0.771 and a net that ran sideways on the rig).
+    """
     x, y, z = np.radians([rx, ry, rz])
     cx, sx, cy, sy, cz, sz = (np.cos(x), np.sin(x), np.cos(y),
                               np.sin(y), np.cos(z), np.sin(z))
     mx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
     my = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
     mz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
-    return (mx @ my @ mz).astype(np.float32)
+    return (mz @ my @ mx).astype(np.float32)
 
 
 def segment_counts(attrs: dict, nodes: int, points: np.ndarray) -> list[int]:
