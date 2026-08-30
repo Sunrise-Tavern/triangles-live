@@ -44,13 +44,18 @@ window = 2048
 # Level below which nothing is playing, dBFS.  This is the one absolute number
 # in the analysis, because "silence" depends entirely on the input: a line feed
 # with nothing on it sits near -90 dBFS, a room microphone near -51.
-#   -70  a line feed from the XR16 (the rig)
+#   -85  the Onyx Artist line feed: music measured down to -45 dBFS per
+#        block and -40 on the 3 s smoothed level (sessions/tonight2), so
+#        there is 40 dB of room under the quietest music.  Check with
+#        `./live.sh doctor` with nothing playing that the feed's own floor
+#        is below this, or silence will never be detected.
+#   -70  a line feed from the XR16
 #   -45  a room mic, or Spotify captured through a loopback with room noise
 #   -100 switches the idle state off entirely -- the right answer for a room
 #        mic, where the noise floor is only a few dB below quiet music and no
 #        threshold can separate them
 # Run `./live.sh doctor` with nothing playing and it will tell you what to set.
-silence_dbfs = -70.0
+silence_dbfs = -85.0
 
 [web]
 bind = "0.0.0.0"
