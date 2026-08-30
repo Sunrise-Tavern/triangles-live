@@ -121,7 +121,7 @@ TRANSITIONS: tuple[tuple[str, float], ...] = (
 TREATMENTS: dict[str, Treatment] = {
     SILENT:   Treatment(SILENT,   "analogous",     0.45, 0.40, "comet",    16.0, 16.0, True, 0.00),
     QUIET:    Treatment(QUIET,    "analogous",     0.60, 0.60, "sparkle",   4.0,  8.0, True, 0.30),
-    CRUISING: Treatment(CRUISING, "split",         0.85, 0.80, "comet",     4.0,  4.0, False, 0.12),
+    CRUISING: Treatment(CRUISING, "split",         0.85, 0.80, "comet",     2.0,  4.0, False, 0.12),
     BUILDING: Treatment(BUILDING, "complementary", 0.95, 0.90, "pairs",     2.0,  4.0, False, 0.06),
     HOT:      Treatment(HOT,      "triadic",       1.00, 1.00, "alternate", 1.0,  4.0, False, 0.00),
 }
@@ -245,6 +245,16 @@ class Arranger:
             self._phrase = (t, count + 1)
             return count + 1
         return count
+
+    def _beats(self, t: float) -> float:
+        """Beats elapsed, continuous -- the clock for every gesture.
+
+        Gestures used to spin on wall time (``t * 0.12``), which has no
+        relation to the music: measured at 128.8 BPM the cruising wheel took
+        17.9 beats a turn and the orbit 26.8, and none of it moved with the
+        tempo.  Everything periodic now counts in beats off the clock.
+        """
+        return float(self.clock.beat_index_at(t) + self.clock.phase(t))
 
     def _bars_elapsed(self, t: float) -> float:
         index = self.clock.beat_index_at(t)
@@ -555,6 +565,7 @@ class Arranger:
                  tension: float = 0.0) -> None:
         """Paint one net gesture.  The bed and the par stay with the state."""
         beat_s = max(1e-6, 60.0 / self.bpm)
+        beats = self._beats(t)
         if name == "plasma":
             fx.plasma(canvas, palette, t, scale=2.5, speed=0.35, level=0.7)
         elif name == "twinkle":
@@ -580,23 +591,27 @@ class Arranger:
             fx.bars(canvas, palette, phrase * 4.0, count=3, angle=0.15,
                     width=0.3, level=0.95, targets=lead)
         elif name == "slow_wheel":
-            fx.pinwheel(canvas, palette, t * 0.12, arms=3, level=0.75)
+            # One turn per two bars.
+            fx.pinwheel(canvas, palette, beats / 8.0, arms=3, level=0.75)
         elif name == "wheel_up":
+            # One turn per bar, tightening to one per beat as the build rises.
             self._rest(canvas, self.small, t, palette)
-            fx.pinwheel(canvas, palette, t * (1.0 + 5.0 * tension) * 0.35,
+            fx.pinwheel(canvas, palette, beats * (0.25 + 0.75 * tension),
                         arms=3, level=0.8, targets=self.big)
         elif name == "fast_wheel":
-            fx.pinwheel(canvas, palette, -t * 0.8, arms=5, level=0.7)
+            # One turn per two beats, the other way.
+            fx.pinwheel(canvas, palette, -beats / 2.0, arms=5, level=0.7)
         elif name == "rings":
-            fx.radial(canvas, palette, (t * 2.0) % 1.0, width=0.3, level=0.9)
+            # One ring out per beat, launched on the beat.
+            fx.radial(canvas, palette, beat, width=0.3, level=0.9)
         elif name == "flare":
             fx.radial(canvas, palette, kick, width=0.45, level=0.95)
             fx.net_sparkle(canvas, pal.WHITE, frame, density=0.02, level=0.9,
                            seed=self.seed)
         elif name == "strobe_small":
             rate = 2 + int(tension * 6)
-            flash = _kick((t / max(1e-6, 60.0 / self.bpm) * rate) % 1.0, sharp=3.0)
-            fx.pinwheel(canvas, palette, t * 0.4, arms=3, level=0.6,
+            flash = _kick((t / beat_s * rate) % 1.0, sharp=3.0)
+            fx.pinwheel(canvas, palette, beats / 4.0, arms=3, level=0.6,
                         targets=self.big)
             # The small nets only flash here, faintly until the build has
             # some tension; between flashes they would otherwise hold.
@@ -605,42 +620,47 @@ class Arranger:
                     targets=self.small)
         # -- the second generation ------------------------------------------ #
         elif name == "orbit":
-            # One blob circling slowly; the big nets lead, the small ones
-            # orbit the other way so the two groups are not in step.
-            fx.orbit(canvas, palette, t * 0.08, level=0.85, targets=self.big)
-            fx.orbit(canvas, palette, -t * 0.11, width=0.22, level=0.7,
+            # One orbit per two bars; the small nets go the other way at a
+            # different rate so the two groups are not in step.
+            fx.orbit(canvas, palette, beats / 8.0, level=0.85, targets=self.big)
+            fx.orbit(canvas, palette, -beats / 6.0, width=0.22, level=0.7,
                      targets=self.small)
         elif name == "ripples_slow":
-            fx.ripples(canvas, palette, t * 0.18, rings=2.0, level=0.7)
+            # One ring per bar.
+            fx.ripples(canvas, palette, beats / 4.0, rings=2.0, level=0.7)
         elif name == "ripples":
-            fx.ripples(canvas, palette, phrase * 2.0, rings=3.0, level=0.85)
+            # One ring per two beats.
+            fx.ripples(canvas, palette, beats / 2.0, rings=3.0, level=0.85)
         elif name == "ripples_fast":
             # One ring per beat, so the rings fire with the room.
             fx.ripples(canvas, palette, beat, rings=2.0, level=0.95)
         elif name == "spiral":
-            fx.spiral(canvas, palette, t * 0.15, arms=2, twist=1.5, level=0.8)
+            # One turn per two bars.
+            fx.spiral(canvas, palette, beats / 8.0, arms=2, twist=1.5, level=0.8)
         elif name == "spiral_fast":
-            fx.spiral(canvas, palette, -t * (0.5 + 0.6 * tension), arms=3,
+            # One turn per two beats, one per beat at full tension.
+            fx.spiral(canvas, palette, -beats * (0.5 + 0.5 * tension), arms=3,
                       twist=2.5, level=0.85)
         elif name == "rain":
-            # Bands falling apex to base; the nets are triangles, so this
-            # reads as something pouring into the wide end.
-            fx.bars(canvas, palette, -phrase * 2.0, count=3, angle=1.0,
+            # One band per two beats, falling apex to base; the nets are
+            # triangles, so this reads as something pouring into the wide end.
+            fx.bars(canvas, palette, -beats / 2.0, count=3, angle=1.0,
                     width=0.3, level=0.85)
         elif name == "rain_fast":
-            fx.bars(canvas, palette, -t / beat_s * 0.5, count=4, angle=1.0,
+            # One band per beat.
+            fx.bars(canvas, palette, -beats, count=4, angle=1.0,
                     width=0.22, level=0.9)
         elif name == "checker":
             # Flips on every beat; on a build, twice as often as it tightens.
-            step = int(t / beat_s * (1 + int(tension > 0.6)))
+            step = int(beats * (1 + int(tension > 0.6)))
             fx.checker(canvas, palette, step, cells=4,
                        level=0.85 * _kick(beat, sharp=1.2) + 0.15)
         elif name == "halves":
             # Left and right trade on the beat, with the kick's decay.
-            left = int(t / beat_s) % 2 == 0
+            left = int(beats) % 2 == 0
             fx.halves(canvas, palette, left, 0.35 + 0.65 * kick, level=0.95)
         elif name == "apex_flash":
-            fx.pinwheel(canvas, palette, t * 0.3, arms=3, level=0.45)
+            fx.pinwheel(canvas, palette, beats / 4.0, arms=3, level=0.45)
             fx.apex(canvas, pal.WHITE, kick, level=0.9)
 
     def _quiet(self, canvas, gesture, frame, t, phrase, palette, beat, bar,
