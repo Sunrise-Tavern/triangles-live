@@ -282,6 +282,17 @@ def test_effects(layout: Layout) -> str:
     # comparable with a re-render.
     check(np.array_equal(fx.sparkle(n, 0.3, seed=5), fx.sparkle(n, 0.3, seed=5)),
           "corridor sparkle is not reproducible")
+    for name in fx.SEEDED:
+        check(name in fx.PATTERNS, f"SEEDED names {name}, which is not a pattern")
+        check(not np.array_equal(fx.PATTERNS[name](n, 0.3, seed=1),
+                                 fx.PATTERNS[name](n, 0.3, seed=2)),
+              f"{name}: the seed changes nothing")
+    # Every gesture the arranger may name must be one it can paint.
+    from .arranger import NET_GESTURES, SCHEME_OPTIONS
+    for kind, options in SCHEME_OPTIONS.items():
+        for scheme in options:
+            check(scheme in pal.SCHEMES, f"{kind} names unknown scheme {scheme!r}")
+    gestures = sorted({g for names in NET_GESTURES.values() for g in names})
 
     paints = {
         "corridor": lambda: fx.corridor(canvas, fx.comet(n, 0.5), palette,
@@ -292,6 +303,12 @@ def test_effects(layout: Layout) -> str:
         "pinwheel": lambda: fx.pinwheel(canvas, palette, 0.2),
         "plasma": lambda: fx.plasma(canvas, palette, 1.0),
         "net_sparkle": lambda: fx.net_sparkle(canvas, pal.WHITE, 3, density=0.05),
+        "spiral": lambda: fx.spiral(canvas, palette, 0.3),
+        "ripples": lambda: fx.ripples(canvas, palette, 0.3),
+        "checker": lambda: fx.checker(canvas, palette, 1),
+        "orbit": lambda: fx.orbit(canvas, palette, 0.6),
+        "halves": lambda: fx.halves(canvas, palette, True, 0.8),
+        "apex": lambda: fx.apex(canvas, palette, 0.8),
         "par": lambda: fx.par(canvas, palette.color(0), 0.9, white=0.2),
     }
     for name, paint in paints.items():
@@ -306,7 +323,8 @@ def test_effects(layout: Layout) -> str:
     fx.wash(canvas, palette, 1.0, targets=canvas.net_slice("Small Triangle Nets"))
     check(not canvas.nets[0:4].any(), "a small-net wash leaked onto the big nets")
     check(canvas.nets[4:8].any(), "a small-net wash painted nothing")
-    return f"{len(fx.PATTERNS)} corridor patterns, {len(paints)} effects, all sane"
+    return (f"{len(fx.PATTERNS)} corridor patterns, {len(paints)} effects, "
+            f"{len(gestures)} gestures, {len(pal.SCHEMES)} schemes, all sane")
 
 
 def test_script(layout: Layout, fps: float = 40.0) -> str:
@@ -870,6 +888,23 @@ def test_arranger(layout: Layout) -> str:
           f"{int((~lit).sum())} channels never lit across the whole arc")
     check(arranger.journey >= 1,
           "the palette never advanced -- the hue journey is not moving")
+    check(arranger._changes >= 3,
+          f"only {arranger._changes} changes of look across four sections")
+    check(arranger._scratch is not None,
+          "no transition was ever painted -- every change of look was a cut")
+
+    # Every gesture the tables name must paint the nets, at every energy it
+    # is offered at; a misspelt name would otherwise fall through silently.
+    from .arranger import NET_GESTURES
+    probe = Canvas(layout)
+    for kind, names in NET_GESTURES.items():
+        for name in names:
+            probe.clear()
+            arranger._gesture(probe, name, 10, 3.3, 0.4,
+                              pal.generate(200.0, "triadic", white=True),
+                              0.2, 0.6, tension=0.7)
+            check(float(probe.nets.max()) > 0.2,
+                  f"gesture {name!r} ({kind}) paints nothing")
 
     # The same audio must give the same show, or a capture cannot be compared
     # with a re-render and the fseq oracle stops working.
@@ -878,7 +913,8 @@ def test_arranger(layout: Layout) -> str:
     for i, (a, b) in enumerate(zip(sample_a, sample_b)):
         check(np.array_equal(a, b), f"sampled frame {i} differs between runs")
     return (f"{frames_a} frames from {len(audio) / 44100:.0f}s of audio, "
-            f"every channel used, {arranger.journey} palette steps, deterministic")
+            f"every channel used, {arranger.journey} palette steps, "
+            f"{arranger._changes} look changes with transitions, deterministic")
 
 
 def test_config(layout: Layout) -> str:

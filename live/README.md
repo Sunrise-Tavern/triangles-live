@@ -174,8 +174,15 @@ otherwise build 130 000 of them a second.
 
 Output enable · blackout · master brightness · gamma · corridor rate ·
 articulation · corridor pattern override · hue offset · hue lock · tempo ·
-scene hold.  Presets are named JSON files under `live/presets/`, saved and
-loaded from the panel.
+scene hold · colour scheme override · shuffle seed · transitions · resting
+nets.  Presets are named JSON files under `live/presets/`, saved and loaded
+from the panel.
+
+*Shuffle seed* reseeds every deterministic choice the show makes — which
+pattern, gesture, scheme and transition each phrase gets — so two rigs, or two
+nights, need not draw the same show from the same music; the same seed always
+does.  *Transitions* is how much of the material arrives with a fade, wipe or
+dip rather than a cut (0 is always a cut).
 
 Adding a knob is one line in `settings.py` — the schema drives validation *and*
 the widget, so there is no parallel list to forget.  Preset loading ignores
@@ -427,6 +434,16 @@ a *wrong* grid looks far worse than a wash that merely breathes.
 Anticipation is **abortable** by construction: a build ramps tension with time
 elapsed, and if the sweep ends without a drop it simply relaxes.  Nothing
 pre-fires the resolution.
+
+Variety comes from three places, all seeded so the same audio still renders
+the same show.  The corridor has fourteen patterns and the nets twenty-odd
+gestures, walked per phrase without repeating the previous one.  Each *visit*
+to a state chooses its own colour scheme (a second drop may be tetradic where
+the first was triadic), saturation and corridor depth rotation.  And a change
+of look — a new phrase, a new state — arrives by a transition chosen per
+change: a cut, a one-to-four-beat crossfade, a wipe down the tunnel in either
+direction, or a dip through a dimmer middle.  Entering *hot* always cuts; the
+drop is the one moment the room is watching for.
 
 ## What M6 adds — the loop closes
 

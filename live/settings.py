@@ -53,6 +53,15 @@ class Settings:
     bpm: float = 128.0
     #: Freeze on one scene instead of following the music.
     scene: str = "auto"
+    #: Force one colour scheme instead of letting each visit to a state
+    #: choose its own.
+    scheme: str = "auto"
+    #: Reshuffles every deterministic choice the show makes -- which pattern,
+    #: gesture, scheme and transition a phrase gets.  Same seed, same show.
+    seed: float = 7.0
+    #: How much of the show's material changes with a transition rather than
+    #: a cut: 0 is always a cut, 1 lets every phrase fade, wipe or dip.
+    transitions: float = 0.75
     #: Some net gestures lead with one group of triangles (big or small) and
     #: rest the other.  This is how bright the resting group's slow plasma
     #: is: 0 restores the original behaviour, where it holds the bed wash and
@@ -112,6 +121,9 @@ SCHEMA: dict[str, tuple] = {
     "hue_lock": ("bool", None, None, None, "Lock hue"),
     "bpm": ("float", 60.0, 200.0, 0.5, "Tempo"),
     "scene": ("choice", None, None, None, "Scene"),
+    "scheme": ("choice", None, None, None, "Colour scheme"),
+    "seed": ("float", 0.0, 999.0, 1.0, "Shuffle seed"),
+    "transitions": ("float", 0.0, 1.0, 0.05, "Transitions"),
     "rest_level": ("float", 0.0, 1.0, 0.01, "Resting nets"),
     "quiet_enter": ("float", 0.2, 1.2, 0.01, "Quiet threshold"),
     "build_high_share": ("float", 0.2, 0.8, 0.01, "Build sensitivity"),
@@ -120,7 +132,8 @@ SCHEMA: dict[str, tuple] = {
 }
 
 #: Filled in by :mod:`live.engine`, which owns the vocabularies.
-CHOICES: dict[str, list[str]] = {"pattern": ["auto"], "scene": ["auto"]}
+CHOICES: dict[str, list[str]] = {"pattern": ["auto"], "scene": ["auto"],
+                                 "scheme": ["auto"]}
 
 
 def _coerce(key: str, raw: Any) -> Any:

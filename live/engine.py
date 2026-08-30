@@ -27,6 +27,7 @@ from pathlib import Path
 import numpy as np
 
 from . import effects as fx
+from . import palette as pal
 from .arranger import Arranger
 from .audio import AudioSource
 from .ddp import DDP_PORT, DDPSender
@@ -42,6 +43,7 @@ from .timing import FrameClock
 # The vocabularies the UI offers.  Registered here rather than in settings.py
 # because this is where the effect and scene tables actually live.
 CHOICES["pattern"] = ["auto", *fx.PATTERNS]
+CHOICES["scheme"] = ["auto", *pal.SCHEMES]
 # With audio the "scene" knob holds a *state*; without it, a script scene.
 CHOICES["scene"] = ["auto", *STATES, *(scene.kind for scene in SCENES)]
 

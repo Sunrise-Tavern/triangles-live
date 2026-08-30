@@ -20,6 +20,19 @@ worth of latency behind it.
 When the clock is not confident, the arranger leans on energy instead of the
 grid -- beat-locked strobing off a wrong grid looks far worse than a wash that
 merely breathes.
+
+Two later additions, both about not repeating ourselves:
+
+* **variety per visit**: each time a state is entered it picks a colour
+  scheme, a corridor depth rotation and a saturation of its own, so a second
+  drop is not the first one again in a different hue;
+* **transitions**: when the material changes -- a new phrase, a new state --
+  the outgoing look is painted alongside the incoming one for a moment and
+  the two are mixed by a style chosen per change: a cut, a crossfade, a wipe
+  down the tunnel, or a dip.  A drop always cuts; nothing else has to.
+
+Both are driven by the same seeded, deterministic walks as everything else,
+so "random" here still means "the same show for the same audio".
 """
 
 from __future__ import annotations
@@ -74,11 +87,35 @@ class Treatment:
 #: Each state's list is ordered loosely from calm to busy, and every gesture in
 #: it has to make sense at that energy: a drop can strobe, a breakdown cannot.
 NET_GESTURES: dict[str, tuple[str, ...]] = {
-    QUIET:    ("plasma", "twinkle", "breathe"),
-    CRUISING: ("bars", "trade", "slow_wheel", "rings"),
-    BUILDING: ("wheel_up", "strobe_small", "bars_fast"),
-    HOT:      ("rings", "fast_wheel", "bars_fast", "flare"),
+    QUIET:    ("plasma", "twinkle", "breathe", "orbit", "ripples_slow"),
+    CRUISING: ("bars", "trade", "slow_wheel", "rings", "spiral", "ripples",
+               "rain", "orbit"),
+    BUILDING: ("wheel_up", "strobe_small", "bars_fast", "rain_fast",
+               "checker", "spiral_fast"),
+    HOT:      ("rings", "fast_wheel", "bars_fast", "flare", "checker",
+               "halves", "apex_flash", "spiral_fast", "ripples_fast"),
 }
+
+#: Colour schemes each state may draw, one chosen per visit.  Every scheme in
+#: a list has to suit the energy: a drop can take four corners of the wheel,
+#: a breakdown wants one hue in three depths.
+SCHEME_OPTIONS: dict[str, tuple[str, ...]] = {
+    SILENT:   ("analogous",),
+    QUIET:    ("analogous", "mono", "sweep", "neighbours"),
+    CRUISING: ("split", "analogous", "accent", "sweep", "neighbours"),
+    BUILDING: ("complementary", "accent", "split"),
+    HOT:      ("triadic", "tetradic", "complementary", "split", "accent"),
+}
+
+#: How the outgoing look gives way to the incoming one, and over how many
+#: beats.  Weighted by repetition: a cut is still the commonest move, because
+#: a show that always dissolves reads as soft.
+TRANSITIONS: tuple[tuple[str, float], ...] = (
+    ("cut", 0.0), ("cut", 0.0),
+    ("fade", 1.0), ("fade", 2.0), ("fade", 4.0),
+    ("wipe_back", 1.0), ("wipe_back", 2.0), ("wipe_front", 2.0),
+    ("dip", 2.0),
+)
 
 
 TREATMENTS: dict[str, Treatment] = {
@@ -102,7 +139,7 @@ class Arranger:
         self.settings = settings
         self.machine = state or StateMachine()
         self.base_hue = base_hue
-        self.seed = seed
+        self._seed = seed
         self.big = canvas.net_slice("Big Triangle")
         self.small = canvas.net_slice("Small Triangle Nets")
         self._palettes: dict[tuple, pal.Palette] = {}
@@ -118,12 +155,27 @@ class Arranger:
         self.gesture = "bars"
         self._walks: dict[str, tuple[int | None, int]] = {}
         self._last_state = self.machine.state
+        #: The look being painted, and the one it is replacing.
+        self._look: tuple | None = None
+        self._outgoing: tuple | None = None
+        self._transition: tuple[str, float, float] | None = None
+        self._changes = 0
+        self._scratch: Canvas | None = None
+
 
     # -- knobs and derived values ------------------------------------------ #
 
     @property
     def clock(self):
         return self.listener.clock
+
+    @property
+    def seed(self) -> int:
+        return int(self.settings.seed) if self.settings else self._seed
+
+    @seed.setter
+    def seed(self, value: int) -> None:
+        self._seed = int(value)
 
     @property
     def features(self) -> Features | None:
@@ -179,18 +231,54 @@ class Arranger:
     PHRASE_HUE_STEP = 9.0
     PHRASE_HUE_CYCLE = 4
 
+    def _visit_roll(self, key: str, treat: Treatment) -> float:
+        """A stable 0..1 for this visit to this state, per ``key``."""
+        visit = self.visits.get(treat.kind, 1)
+        seed = f"{self.seed}:{key}:{treat.kind}:{visit}".encode()
+        return (zlib.crc32(seed) % 1000) / 999.0
+
+    def scheme_for(self, treat: Treatment) -> str:
+        """Which colour scheme this visit to the state draws.
+
+        The treatment's own scheme is the first option and the walk starts
+        from it, so the first visit looks as it always did and returns vary.
+        """
+        held = self.settings.scheme if self.settings else "auto"
+        if held != "auto" and held in pal.SCHEMES:
+            return held
+        options = SCHEME_OPTIONS.get(treat.kind, (treat.scheme,))
+        visit = self.visits.get(treat.kind, 1)
+        if visit <= 1:
+            return options[0]
+        return options[self._walk(f"scheme:{treat.kind}", visit - 2, len(options))]
+
+    def saturation_for(self, treat: Treatment) -> float:
+        """Full colour for a drop; elsewhere each visit sits a little off it,
+        so two verses do not read as the same wash."""
+        if treat.kind == HOT:
+            return 1.0
+        return 1.0 - 0.18 * self._visit_roll("sat", treat)
+
+    def far_rotation_for(self, treat: Treatment) -> float:
+        """Degrees the corridor's far end is turned from its mouth.  Was a
+        fixed 70; now 45-110 per visit, so the tunnel's depth reads
+        differently each time round."""
+        return 45.0 + 65.0 * self._visit_roll("far", treat)
+
     def palette_for(self, treat: Treatment, phrase: int = 0) -> pal.Palette:
         offset = self.settings.hue_offset if self.settings else 0.0
         lock = self.settings.hue_lock if self.settings else False
         drift = (phrase % self.PHRASE_HUE_CYCLE) * self.PHRASE_HUE_STEP
         hue = self.base_hue + offset + (0.0 if lock
                                         else self.journey * pal.GOLDEN_ANGLE + drift)
-        key = (round(hue, 2), treat.scheme, treat.value, treat.kind)
+        scheme = self.scheme_for(treat)
+        sat = round(self.saturation_for(treat), 3)
+        key = (round(hue, 2), scheme, sat, treat.value, treat.kind)
         cached = self._palettes.get(key)
         if cached is None:
             if len(self._palettes) > 256:
                 self._palettes.clear()
-            cached = pal.generate(hue, treat.scheme, value=treat.value,
+            cached = pal.generate(hue, scheme, value=treat.value, sat=sat,
                                   white=treat.kind == HOT).floored()
             self._palettes[key] = cached
         return cached
@@ -267,6 +355,23 @@ class Arranger:
         return candidates[self._walk(f"corridor:{treat.kind}:{visit}", phrase,
                                      len(candidates))]
 
+    def transition_for(self, change: int, *, into_hot: bool,
+                       from_silent: bool) -> tuple[str, float]:
+        """(style, beats) for the ``change``-th change of look.
+
+        A drop is the one moment the room is watching for, so entering hot
+        is always a cut, on the beat, as before.  Leaving silence cuts too:
+        there is nothing worth dissolving from.  Everything else rolls.
+        """
+        if into_hot or from_silent:
+            return ("cut", 0.0)
+        share = self.settings.transitions if self.settings else 0.75
+        seed = f"{self.seed}:transition:{change}".encode()
+        roll = zlib.crc32(seed)
+        if (roll % 1000) / 1000.0 >= share:
+            return ("cut", 0.0)
+        return TRANSITIONS[(roll // 1000) % len(TRANSITIONS)]
+
     # -- render ------------------------------------------------------------ #
 
     def render(self, frame: int, t: float) -> None:
@@ -285,21 +390,62 @@ class Arranger:
             # it is free-running on no evidence and following it would make the
             # rig twitch at an imaginary tempo.  Everything below is a function
             # of wall time, slow enough that you have to watch to see it move.
+            self._look = (SILENT, "", "", None, 0.0, treat)
+            self._outgoing = None
             self._silent(t)
             return
-        beat = self.clock.phase(t)
-        bar = self.clock.bar_phase(t)
-        kick = _kick(beat)
-        features = self.features
 
         index = self.phrase_index(t, treat)
         self.gesture = self.gesture_for(treat, index)
         name = self.pattern_for(treat, index)
         palette = self.palette_for(treat, index)
-        far = palette.rotated(70.0)
+        look = (treat.kind, name, self.gesture, palette,
+                self.far_rotation_for(treat), treat)
+
+        if self._look is not None and look[:3] != self._look[:3]:
+            # The material changed.  Decide how the old gives way to the new;
+            # a change arriving mid-transition simply replaces the outgoing
+            # look, which is what a cut would have shown anyway.
+            self._changes += 1
+            style, beats = self.transition_for(
+                self._changes,
+                into_hot=treat.kind == HOT and self._look[0] != HOT,
+                from_silent=self._look[0] == SILENT)
+            if style == "cut":
+                self._outgoing, self._transition = None, None
+            else:
+                seconds = beats * 60.0 / max(self.bpm, 1e-3)
+                self._outgoing = self._look
+                self._transition = (style, t, max(seconds, 1e-3))
+        self._look = look
+
+        self._paint(canvas, look, frame, t, phrase)
+
+        if self._outgoing is not None and self._transition is not None:
+            style, started, seconds = self._transition
+            mix = (t - started) / seconds
+            if mix >= 1.0:
+                self._outgoing, self._transition = None, None
+                return
+            if self._scratch is None:
+                self._scratch = Canvas(canvas.layout)
+            self._scratch.clear()
+            self._paint(self._scratch, self._outgoing, frame, t, phrase)
+            _mix_canvases(canvas, self._scratch, style, max(mix, 0.0))
+
+    def _paint(self, canvas: Canvas, look: tuple, frame: int, t: float,
+               phrase: float) -> None:
+        """One look, fully painted: corridor, nets, par."""
+        kind, name, gesture, palette, far_degrees, treat = look
+        beat = self.clock.phase(t)
+        bar = self.clock.bar_phase(t)
+        kick = _kick(beat)
+        features = self.features
+
+        far = palette.rotated(far_degrees)
         levels = fx.PATTERNS[name](
             len(canvas.arch_names), phrase,
-            **({"seed": self.seed} if name == "sparkle" else {}))
+            **({"seed": self.seed} if name in fx.SEEDED else {}))
         if treat.floor > 0.0:
             # Blended, not clamped: the pattern still reads on top of the
             # floor rather than being flattened by it.
@@ -308,8 +454,8 @@ class Arranger:
                     brightness=min(1.0, treat.brightness + self.escalation(treat)),
                     height=0.35)
 
-        getattr(self, f"_{treat.kind}")(frame, t, phrase, palette, beat, bar,
-                                        kick, features)
+        getattr(self, f"_{kind}")(canvas, gesture, frame, t, phrase, palette,
+                                  beat, bar, kick, features)
 
     # Each treatment is the offline show's recipe for that kind of section.
 
@@ -342,7 +488,7 @@ class Arranger:
         breath = 0.5 + 0.5 * float(np.sin(2 * np.pi * t / (self.IDLE_SWEEP_S / 2)))
         fx.par(canvas, palette.color(0), 0.10 + 0.08 * breath)
 
-    def _rest(self, targets: slice, t: float, palette) -> None:
+    def _rest(self, canvas: Canvas, targets: slice, t: float, palette) -> None:
         """Give the group that is not leading something to do.
 
         Three gestures lead with the big or the small triangles and leave the
@@ -355,13 +501,14 @@ class Arranger:
         """
         level = self.settings.rest_level if self.settings else 0.4
         if level > 0.0:
-            fx.plasma(self.canvas, palette, t, scale=2.0, speed=2.2,
+            fx.plasma(canvas, palette, t, scale=2.0, speed=2.2,
                       level=level, targets=targets)
 
-    def _gesture(self, name: str, frame: int, t: float, phrase: float,
-                 palette, beat: float, kick: float, tension: float = 0.0) -> None:
+    def _gesture(self, canvas: Canvas, name: str, frame: int, t: float,
+                 phrase: float, palette, beat: float, kick: float,
+                 tension: float = 0.0) -> None:
         """Paint one net gesture.  The bed and the par stay with the state."""
-        canvas = self.canvas
+        beat_s = max(1e-6, 60.0 / self.bpm)
         if name == "plasma":
             fx.plasma(canvas, palette, t, scale=2.5, speed=0.35, level=0.7)
         elif name == "twinkle":
@@ -383,13 +530,13 @@ class Arranger:
             # consistent one -- counted from the wrong beat it trades offbeat.
             even = int(self._bars_elapsed(t)) % 2 == 0
             lead, rest = (self.big, self.small) if even else (self.small, self.big)
-            self._rest(rest, t, palette)
+            self._rest(canvas, rest, t, palette)
             fx.bars(canvas, palette, phrase * 4.0, count=3, angle=0.15,
                     width=0.3, level=0.95, targets=lead)
         elif name == "slow_wheel":
             fx.pinwheel(canvas, palette, t * 0.12, arms=3, level=0.75)
         elif name == "wheel_up":
-            self._rest(self.small, t, palette)
+            self._rest(canvas, self.small, t, palette)
             fx.pinwheel(canvas, palette, t * (1.0 + 5.0 * tension) * 0.35,
                         arms=3, level=0.8, targets=self.big)
         elif name == "fast_wheel":
@@ -407,38 +554,121 @@ class Arranger:
                         targets=self.big)
             # The small nets only flash here, faintly until the build has
             # some tension; between flashes they would otherwise hold.
-            self._rest(self.small, t, palette)
+            self._rest(canvas, self.small, t, palette)
             fx.wash(canvas, pal.WHITE, 0.55 * flash * max(tension, 0.3),
                     targets=self.small)
+        # -- the second generation ------------------------------------------ #
+        elif name == "orbit":
+            # One blob circling slowly; the big nets lead, the small ones
+            # orbit the other way so the two groups are not in step.
+            fx.orbit(canvas, palette, t * 0.08, level=0.85, targets=self.big)
+            fx.orbit(canvas, palette, -t * 0.11, width=0.22, level=0.7,
+                     targets=self.small)
+        elif name == "ripples_slow":
+            fx.ripples(canvas, palette, t * 0.18, rings=2.0, level=0.7)
+        elif name == "ripples":
+            fx.ripples(canvas, palette, phrase * 2.0, rings=3.0, level=0.85)
+        elif name == "ripples_fast":
+            # One ring per beat, so the rings fire with the room.
+            fx.ripples(canvas, palette, beat, rings=2.0, level=0.95)
+        elif name == "spiral":
+            fx.spiral(canvas, palette, t * 0.15, arms=2, twist=1.5, level=0.8)
+        elif name == "spiral_fast":
+            fx.spiral(canvas, palette, -t * (0.5 + 0.6 * tension), arms=3,
+                      twist=2.5, level=0.85)
+        elif name == "rain":
+            # Bands falling apex to base; the nets are triangles, so this
+            # reads as something pouring into the wide end.
+            fx.bars(canvas, palette, -phrase * 2.0, count=3, angle=1.0,
+                    width=0.3, level=0.85)
+        elif name == "rain_fast":
+            fx.bars(canvas, palette, -t / beat_s * 0.5, count=4, angle=1.0,
+                    width=0.22, level=0.9)
+        elif name == "checker":
+            # Flips on every beat; on a build, twice as often as it tightens.
+            step = int(t / beat_s * (1 + int(tension > 0.6)))
+            fx.checker(canvas, palette, step, cells=4,
+                       level=0.85 * _kick(beat, sharp=1.2) + 0.15)
+        elif name == "halves":
+            # Left and right trade on the beat, with the kick's decay.
+            left = int(t / beat_s) % 2 == 0
+            fx.halves(canvas, palette, left, 0.35 + 0.65 * kick, level=0.95)
+        elif name == "apex_flash":
+            fx.pinwheel(canvas, palette, t * 0.3, arms=3, level=0.45)
+            fx.apex(canvas, pal.WHITE, kick, level=0.9)
 
-    def _quiet(self, frame, t, phrase, palette, beat, bar, kick, features) -> None:
-        self._gesture(self.gesture, frame, t, phrase, palette, beat, kick)
-        fx.par(self.canvas, palette.color(0), 0.25 + 0.15 * phrase)
+    def _quiet(self, canvas, gesture, frame, t, phrase, palette, beat, bar,
+               kick, features) -> None:
+        self._gesture(canvas, gesture, frame, t, phrase, palette, beat, kick)
+        fx.par(canvas, palette.color(0), 0.25 + 0.15 * phrase)
 
-    def _cruising(self, frame, t, phrase, palette, beat, bar, kick, features) -> None:
-        fx.wash(self.canvas, palette.dimmed(0.35), 1.0, gradient=0.8)
-        self._gesture(self.gesture, frame, t, phrase, palette, beat, kick)
-        fx.par(self.canvas, palette.color(1), 0.35 + 0.45 * kick)
+    def _cruising(self, canvas, gesture, frame, t, phrase, palette, beat, bar,
+                  kick, features) -> None:
+        fx.wash(canvas, palette.dimmed(0.35), 1.0, gradient=0.8)
+        self._gesture(canvas, gesture, frame, t, phrase, palette, beat, kick)
+        fx.par(canvas, palette.color(1), 0.35 + 0.45 * kick)
 
-    def _building(self, frame, t, phrase, palette, beat, bar, kick, features) -> None:
+    def _building(self, canvas, gesture, frame, t, phrase, palette, beat, bar,
+                  kick, features) -> None:
         # Tension tracks how far into the build we are, but it is *abortable*:
         # if the sweep stops without a drop, this simply relaxes.  Never
         # pre-fire the resolution.
         tension = min(1.0, self.machine.report.since_s / 8.0)
-        fx.wash(self.canvas, palette.dimmed(0.25), 1.0, gradient=1.0)
-        self._gesture(self.gesture, frame, t, phrase, palette, beat, kick,
+        fx.wash(canvas, palette.dimmed(0.25), 1.0, gradient=1.0)
+        self._gesture(canvas, gesture, frame, t, phrase, palette, beat, kick,
                       tension=tension)
         flash = _kick((t / max(1e-6, 60.0 / self.bpm)
                        * (2 + int(tension * 6))) % 1.0, sharp=3.0)
-        fx.par(self.canvas, palette.color(0), 0.4 + 0.6 * tension * flash,
+        fx.par(canvas, palette.color(0), 0.4 + 0.6 * tension * flash,
                white=0.3 * tension)
 
-    def _hot(self, frame, t, phrase, palette, beat, bar, kick, features) -> None:
-        fx.wash(self.canvas, palette.dimmed(0.3), kick * 0.8)
-        self._gesture(self.gesture, frame, t, phrase, palette, beat, kick,
+    def _hot(self, canvas, gesture, frame, t, phrase, palette, beat, bar,
+             kick, features) -> None:
+        fx.wash(canvas, palette.dimmed(0.3), kick * 0.8)
+        self._gesture(canvas, gesture, frame, t, phrase, palette, beat, kick,
                       tension=1.0)
-        fx.par(self.canvas, pal.WHITE.color(0), kick, white=kick)
+        fx.par(canvas, pal.WHITE.color(0), kick, white=kick)
 
 
 def _kick(phase: float, sharp: float = 2.0) -> float:
     return float(max(0.0, 1.0 - phase) ** sharp)
+
+
+def _smooth(x: float) -> float:
+    x = min(max(x, 0.0), 1.0)
+    return x * x * (3.0 - 2.0 * x)
+
+
+def _mix_canvases(canvas: Canvas, old: Canvas, style: str, mix: float) -> None:
+    """Blend the outgoing look (``old``) into ``canvas`` by ``style``.
+
+    ``mix`` runs 0 (all old) to 1 (all new).  The corridor wipes along its
+    depth and the nets along their height, so a wipe reads as one motion
+    across the whole rig rather than two unrelated ones.
+    """
+    m = _smooth(mix)
+    if style == "fade":
+        canvas.arches *= m
+        canvas.arches += old.arches * (1.0 - m)
+        canvas.nets *= m
+        canvas.nets += old.nets * (1.0 - m)
+    elif style in ("wipe_back", "wipe_front"):
+        soft = 0.25
+        depth = canvas.depth if style == "wipe_back" else 1.0 - canvas.depth
+        edge = m * (1.0 + soft)
+        arch_w = np.clip((edge - depth) / soft, 0.0, 1.0)[:, None, None]
+        net_w = np.clip((edge - canvas.net_y) / soft, 0.0, 1.0)[None, :, None]
+        canvas.arches *= arch_w
+        canvas.arches += old.arches * (1.0 - arch_w)
+        canvas.nets *= net_w
+        canvas.nets += old.nets * (1.0 - net_w)
+    elif style == "dip":
+        # A crossfade through a dimmer middle: the rig drops to 40% at the
+        # halfway point, which reads as a breath between two ideas.
+        dip = 1.0 - 0.6 * float(np.sin(np.pi * m))
+        canvas.arches *= m * dip
+        canvas.arches += old.arches * ((1.0 - m) * dip)
+        canvas.nets *= m * dip
+        canvas.nets += old.nets * ((1.0 - m) * dip)
+    canvas.par *= m
+    canvas.par += old.par * (1.0 - m)

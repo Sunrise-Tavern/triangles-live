@@ -109,6 +109,78 @@ def sparkle(n: int, phase: float, steps: int = 16, fraction: float = 0.15,
     return level * _decay(phase * steps - step)
 
 
+def chase(n: int, phase: float, heads: int = 3, tail: float = 3.0,
+          reverse: bool = False) -> np.ndarray:
+    """Several evenly spaced heads circulating the corridor -- a comet's busier
+    sibling.  Wraps, so the tunnel never empties between heads."""
+    index = np.arange(n, dtype=np.float32)
+    if reverse:
+        index = index[::-1]
+    level = np.zeros(n, dtype=np.float32)
+    for k in range(heads):
+        position = ((phase + k / heads) % 1.0) * n
+        distance = (position - index) % n
+        level = np.maximum(level, np.clip(1.0 - distance / tail, 0.0, 1.0))
+    return level
+
+
+def wave(n: int, phase: float, cycles: float = 2.0, reverse: bool = False) -> np.ndarray:
+    """A smooth sine travelling the tunnel: no head, no tail, just swell."""
+    depth = np.arange(n, dtype=np.float32) / max(1, n - 1)
+    if reverse:
+        depth = depth[::-1]
+    level = 0.5 + 0.5 * np.sin(2 * np.pi * (cycles * depth - phase))
+    return (level ** 1.5).astype(np.float32)
+
+
+def swell(n: int, phase: float, reverse: bool = False) -> np.ndarray:
+    """The whole corridor breathes once per phrase -- the calm cousin of
+    ``strobe``."""
+    level = 0.5 + 0.5 * np.sin(2 * np.pi * phase - np.pi / 2)
+    return np.full(n, float(level) ** 1.2, dtype=np.float32)
+
+
+def fill(n: int, phase: float, soft: float = 1.5, reverse: bool = False) -> np.ndarray:
+    """Fills from the mouth to the back, then drains the same way."""
+    index = np.arange(n, dtype=np.float32)
+    if reverse:
+        index = index[::-1]
+    if phase < 0.5:
+        edge = phase * 2.0 * (n + soft)
+        return np.clip((edge - index) / soft, 0.0, 1.0).astype(np.float32)
+    edge = (phase - 0.5) * 2.0 * (n + soft) - soft
+    return np.clip((index - edge) / soft, 0.0, 1.0).astype(np.float32)
+
+
+def shower(n: int, phase: float, heads: int = 4, tail: float = 2.5,
+           seed: int = 0, reverse: bool = False) -> np.ndarray:
+    """Comets at different speeds and offsets, so they overtake each other.
+
+    Seeded, so a re-render matches; unlike ``sparkle`` the seed is the only
+    randomness, and the motion inside the phrase is continuous."""
+    rng = np.random.default_rng(seed)
+    speeds = rng.integers(1, 4, size=heads)
+    offsets = rng.uniform(0.0, 1.0, size=heads)
+    index = np.arange(n, dtype=np.float32)
+    if reverse:
+        index = index[::-1]
+    level = np.zeros(n, dtype=np.float32)
+    for speed, offset in zip(speeds, offsets):
+        position = ((phase * speed + offset) % 1.0) * (n + tail)
+        distance = position - index
+        level = np.maximum(level, np.clip(1.0 - distance / tail, 0.0, 1.0)
+                           * (distance >= 0.0))
+    return level
+
+
+def heartbeat(n: int, phase: float, steps: int = 4, reverse: bool = False) -> np.ndarray:
+    """Two quick pulses then a rest, ``steps`` times a phrase -- da-dum."""
+    within = phase * steps - int(phase * steps)
+    first = float(np.exp(-within * 9.0))
+    second = float(np.exp(-(within - 0.28) * 9.0)) * 0.75 if within >= 0.28 else 0.0
+    return np.full(n, max(first, second), dtype=np.float32)
+
+
 def _decay(within: float, hold: float = 0.35) -> float:
     """A flash's envelope inside one step: full, then a soft tail."""
     if within <= hold:
@@ -119,7 +191,12 @@ def _decay(within: float, hold: float = 0.35) -> float:
 PATTERNS = {
     "sparkle": sparkle, "comet": comet, "converge": converge, "diverge": diverge,
     "bounce": bounce, "pairs": pairs, "alternate": alternate, "strobe": strobe,
+    "chase": chase, "wave": wave, "swell": swell, "fill": fill,
+    "shower": shower, "heartbeat": heartbeat,
 }
+
+#: Patterns that take a ``seed`` keyword.
+SEEDED = frozenset({"sparkle", "shower"})
 
 #: Roughly how much light each pattern puts in the corridor per unit time, 0-1.
 #: Selection is weighted by this so the corridor's business tracks the music:
@@ -129,7 +206,16 @@ PATTERNS = {
 DENSITY = {
     "sparkle": 0.20, "comet": 0.30, "converge": 0.42, "diverge": 0.42,
     "bounce": 0.55, "pairs": 0.72, "alternate": 0.90, "strobe": 1.00,
+    # The second generation, placed by the same eye: how much of the
+    # corridor is lit, how much of the time.
+    "shower": 0.38, "chase": 0.45, "wave": 0.50, "swell": 0.52,
+    "fill": 0.60, "heartbeat": 0.78,
 }
+
+#: How many of the nearest patterns a phrase may choose from.  Three when the
+#: vocabulary was eight; with fourteen there are enough near neighbours at
+#: every energy to widen it without reaching for something wrong.
+VOCABULARY = 4
 
 
 def vocabulary(target: float, quiet: bool = False) -> list[str]:
@@ -140,7 +226,7 @@ def vocabulary(target: float, quiet: bool = False) -> list[str]:
         # happen to fall out.
         names = [n for n in names if DENSITY[n] <= 0.45]
     names.sort(key=lambda n: abs(DENSITY[n] - target))
-    return names[:3]
+    return names[:VOCABULARY]
 
 
 # --------------------------------------------------------------------------- #
@@ -206,6 +292,66 @@ def pinwheel(canvas: Canvas, palette: Palette, phase: float, *, arms: int = 3,
     spin = (canvas.net_angle * arms + phase) % 1.0
     profile = np.clip(1.0 - np.abs(spin - 0.5) * 2.0, 0.0, 1.0) ** 2
     colors = palette.ramp(canvas.net_r) * profile[:, None] * level
+    _blend_nets(canvas, colors, targets, mode)
+
+
+def spiral(canvas: Canvas, palette: Palette, phase: float, *, arms: int = 2,
+           twist: float = 1.5, level: float = 1.0, targets: slice | None = None,
+           mode: str = "add") -> None:
+    """A pinwheel whose arms curl: the angle advances with radius."""
+    spin = (canvas.net_angle * arms + canvas.net_r * twist + phase) % 1.0
+    profile = np.clip(1.0 - np.abs(spin - 0.5) * 2.0, 0.0, 1.0) ** 2
+    colors = palette.ramp(canvas.net_r) * profile[:, None] * level
+    _blend_nets(canvas, colors, targets, mode)
+
+
+def ripples(canvas: Canvas, palette: Palette, phase: float, *, rings: float = 3.0,
+            level: float = 1.0, targets: slice | None = None,
+            mode: str = "add") -> None:
+    """Concentric rings flowing outward -- ``radial`` repeated, and smooth."""
+    field = 0.5 + 0.5 * np.sin(2 * np.pi * (canvas.net_r * rings - phase))
+    profile = field ** 2
+    colors = palette.ramp(canvas.net_r) * profile[:, None] * level
+    _blend_nets(canvas, colors, targets, mode)
+
+
+def checker(canvas: Canvas, palette: Palette, step: int, *, cells: int = 4,
+            level: float = 1.0, targets: slice | None = None,
+            mode: str = "add") -> None:
+    """A checkerboard that flips parity on every ``step``."""
+    cx = np.floor(canvas.net_x * cells).astype(np.int32)
+    cy = np.floor(canvas.net_y * cells).astype(np.int32)
+    on = ((cx + cy + step) % 2 == 0).astype(np.float32)
+    colors = palette.ramp((cx / cells).astype(np.float32)) * on[:, None] * level
+    _blend_nets(canvas, colors, targets, mode)
+
+
+def orbit(canvas: Canvas, palette: Palette, phase: float, *, radius: float = 0.55,
+          width: float = 0.18, level: float = 1.0, targets: slice | None = None,
+          mode: str = "add") -> None:
+    """One soft blob circling each net's centre."""
+    gap = np.abs(((canvas.net_angle - phase) + 0.5) % 1.0 - 0.5)
+    profile = np.exp(-(gap / width) ** 2) * np.exp(-((canvas.net_r - radius) / 0.35) ** 2)
+    colors = palette.ramp(canvas.net_angle) * profile[:, None] * level
+    _blend_nets(canvas, colors, targets, mode)
+
+
+def halves(canvas: Canvas, palette: Palette, left: bool, strength: float = 1.0, *,
+           level: float = 1.0, targets: slice | None = None,
+           mode: str = "add") -> None:
+    """Light one half of each net -- left or right -- with a soft seam."""
+    edge = canvas.net_x - 0.5
+    side = np.clip((-edge if left else edge) / 0.08 + 0.5, 0.0, 1.0)
+    colors = palette.ramp(canvas.net_y) * (side * strength)[:, None] * level
+    _blend_nets(canvas, colors, targets, mode)
+
+
+def apex(canvas: Canvas, palette: Palette, strength: float, *, level: float = 1.0,
+         targets: slice | None = None, mode: str = "add") -> None:
+    """A flash that starts at the apex and dies toward the base -- the kick's
+    shape on a triangle."""
+    profile = ((1.0 - canvas.net_y) ** 2) * strength
+    colors = palette.ramp(canvas.net_y) * profile[:, None] * level
     _blend_nets(canvas, colors, targets, mode)
 
 

@@ -30,6 +30,10 @@ SCHEMES: dict[str, tuple[float, ...]] = {
     "complementary": (0.0, 180.0, 195.0),   # straight opposites -- builds
     "triadic": (0.0, 120.0, 240.0),         # vivid and busy -- drops
     "sweep": (0.0, 40.0, 80.0),             # cool-to-warm, for depth gradients
+    "tetradic": (0.0, 90.0, 180.0, 270.0),  # four corners of the wheel -- loudest
+    "mono": (0.0, 0.0, 0.0),                # one hue in three depths -- calmest
+    "accent": (0.0, 15.0, 180.0),           # a close pair with one opposite pop
+    "neighbours": (0.0, -30.0, 30.0),       # analogous, spread both ways
 }
 
 #: Rotating by the golden angle between sections gives the longest run before
