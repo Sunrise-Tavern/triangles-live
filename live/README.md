@@ -445,6 +445,14 @@ change: a cut, a one-to-four-beat crossfade, a wipe down the tunnel in either
 direction, or a dip through a dimmer middle.  Entering *hot* always cuts; the
 drop is the one moment the room is watching for.
 
+The phrase counter is the arranger's own, rate-limited and ended on a bar
+line, rather than read off the clock's beat index: that index moves whenever
+the clock relocks, and following it changed the pattern every half second
+through a drop where the tracker sat at 0.03 confidence.  The pattern chosen
+for a phrase is also held for the phrase, since the density target moves with
+clock confidence and re-deciding every frame reshuffled the candidates under
+the walk.
+
 ## What M6 adds — the loop closes
 
 ```bash

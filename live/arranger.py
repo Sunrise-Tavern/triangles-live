@@ -161,7 +161,11 @@ class Arranger:
         self._transition: tuple[str, float, float] | None = None
         self._changes = 0
         self._scratch: Canvas | None = None
-
+        #: (when the current phrase started, its index).
+        self._phrase: tuple[float | None, int] = (None, 0)
+        #: Per state, the (kind, visit, phrase) a pattern was chosen for and
+        #: the pattern -- so the choice holds for the phrase.
+        self._pattern_held: dict[str, tuple[tuple, str]] = {}
 
     # -- knobs and derived values ------------------------------------------ #
 
@@ -215,10 +219,32 @@ class Arranger:
         Counted in ``pattern_bars``, not ``phrase_bars``: the gesture rate and
         the redraw rate are different questions.  Sharing one number gave a
         drop a new pattern every 1.9 s, which reads as thrashing.
+
+        Counted *here*, not read off the clock's beat index: that index moves
+        whenever the clock relocks or changes its mind about the tempo, and
+        measured on a real session it moved often enough during a drop (the
+        tracker at 0.03 confidence) that the pattern changed every half second
+        against a nominal four bars.  So a phrase is a span of wall time,
+        ended at the first bar line after ``pattern_bars`` have passed -- or
+        outright once half again as long has gone by with no bar line found.
         """
         rate = self.settings.corridor_rate if self.settings else 1.0
-        bars = self.clock.bar_phase(t) + self._bars_elapsed(t)
-        return int(bars // max(0.5, treat.pattern_bars / max(rate, 1e-3)))
+        span = (max(0.5, treat.pattern_bars / max(rate, 1e-3))
+                * self.clock.bar_length * 60.0 / max(self.bpm, 1e-3))
+        started, count = self._phrase
+        if started is None:
+            self._phrase = (t, 0)
+            return 0
+        elapsed = t - started
+        if elapsed < 0.0:
+            # Time moved backwards (a replay restarted): start over.
+            self._phrase = (t, count + 1)
+            return count + 1
+        if elapsed >= span * 1.5 or (
+                elapsed >= span * 0.85 and self.clock.bar_phase(t) < 0.12):
+            self._phrase = (t, count + 1)
+            return count + 1
+        return count
 
     def _bars_elapsed(self, t: float) -> float:
         index = self.clock.beat_index_at(t)
@@ -342,6 +368,16 @@ class Arranger:
         """
         if self.settings is not None and self.settings.pattern != "auto":
             return self.settings.pattern
+        # Decided once per phrase.  The density target below moves with the
+        # clock's confidence, and re-deciding every frame let a wobbling
+        # tracker (0.03 confidence through a drop, measured) reshuffle the
+        # candidates under the walk's index: the pattern changed every half
+        # second against a nominal four bars.
+        visit = self.visits.get(treat.kind, 1)
+        key = (treat.kind, visit, phrase)
+        held = self._pattern_held.get(treat.kind)
+        if held is not None and held[0] == key:
+            return held[1]
         articulation = self.settings.articulation if self.settings else 0.5
         # A grid we do not trust should not drive busy, tightly-placed
         # patterns; fall back toward the sparse end instead.
@@ -351,9 +387,10 @@ class Arranger:
         candidates = fx.vocabulary(min(max(target, 0.0), 1.0), quiet=treat.quiet)
         # The walk is keyed on the visit as well, so a return does not replay
         # the same sequence of patterns in the same order.
-        visit = self.visits.get(treat.kind, 1)
-        return candidates[self._walk(f"corridor:{treat.kind}:{visit}", phrase,
+        name = candidates[self._walk(f"corridor:{treat.kind}:{visit}", phrase,
                                      len(candidates))]
+        self._pattern_held[treat.kind] = (key, name)
+        return name
 
     def transition_for(self, change: int, *, into_hot: bool,
                        from_silent: bool) -> tuple[str, float]:
@@ -383,6 +420,8 @@ class Arranger:
             self.visits[self.machine.state] = self.visits.get(
                 self.machine.state, 0) + 1
             self._last_state = self.machine.state
+            # A new state is a new phrase, whatever the old one had left.
+            self._phrase = (t, self._phrase[1] + 1)
 
         _, treat, phrase = self.locate(t)
         if treat.kind == SILENT:
