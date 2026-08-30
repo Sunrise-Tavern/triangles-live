@@ -581,6 +581,13 @@ interface has its static address and never find the Falcon.
 
 ## Checking the orientation, after a remap
 
+Net geometry is taken from each model's world position in the xLights
+layout — world X across, world Y up, normalised per net — which is what
+xLights' *Per Preview* render style does.  It matters because the nets are
+rotated in the layout (two by −90° about Z, the big ones flipped about X, one
+inverted): counted in the custom model's grid rows, "up" was sideways on some
+nets and downward on others.
+
 `./live.sh orient` sends three looping stages to both Falcons (stop the
 service first — `sudo systemctl stop triangles-live` — or the two will fight
 over the rig): a white band rising from base to apex on every net at once;

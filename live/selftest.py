@@ -129,7 +129,21 @@ def test_orient(layout: Layout) -> str:
 
     early, late = lit_net_y(orient.hold("nets up", 0.6), False), lit_net_y(orient.hold("nets up", 4.4), False)
     check(early > 0.8 and late < 0.2,
-          f"nets band runs {early:.2f} -> {late:.2f}; want base (1) -> apex (0)")
+          f"nets band runs {early:.2f} -> {late:.2f}; want bottom (1) -> top (0)")
+
+    # ...and "up" must be world up on *every* net, whatever its rotation in
+    # xLights.  Counted in grid rows it was sideways on the nets rotated
+    # -90 about Z and downward on the ones flipped 180 about X.
+    from .geometry import world_positions
+    positions = world_positions(layout)
+    for i, name in enumerate(canvas.net_names):
+        heights = []
+        for t in (0.6, 2.5, 4.4):
+            orient.paint(canvas, orient.hold("nets up", t))
+            bright = (canvas.nets[i].max(axis=-1) > 0.5) & mask[i]
+            heights.append(float(positions[name][bright[:canvas.net_nodes[i]], 1].mean()))
+        check(heights[0] < heights[1] < heights[2],
+              f"{name}: the band does not climb in world Y ({[round(h) for h in heights]})")
     early, late = lit_net_y(orient.hold("big up", 0.6), True), lit_net_y(orient.hold("big up", 4.4), True)
     check(early > 0.8 and late < 0.2,
           f"big band runs {early:.2f} -> {late:.2f}; want base (1) -> apex (0)")

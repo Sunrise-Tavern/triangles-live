@@ -76,11 +76,26 @@ class Canvas:
                                  f"not {arch.nodes}")
 
     def _geometry(self, nets, width: int, arch) -> None:
+        """Per-net geometry, in the xLights preview's frame -- up is up.
+
+        This is what xLights' "Per Preview" render style does: an effect
+        sees each model where it sits on screen, not in its own grid.  The
+        difference matters here because the nets are *rotated* in the
+        layout (Net 1 and 3 by -90 about Z, the big nets flipped 180 about X,
+        Net 6 inverted): counted in grid rows, "up" ran sideways on some
+        nets and downward on others, measured on the rig with ``orient``.
+        So x and y come from each net's world position -- world X across,
+        world Y up -- normalised per net.
+        """
+        from .geometry import world_positions
+
+        positions = world_positions(self.layout)
         count = len(nets)
-        #: 0 at the left edge, 1 at the right.  ``(nets, nodes)``, per net.
+        #: 0 at the left edge, 1 at the right, in the preview.  ``(nets, nodes)``.
         self.net_x = np.zeros((count, width), dtype=np.float32)
-        #: 0 at the **apex** (grid row 0), 1 along the base.  The nets are
-        #: triangles: row 0 holds a single node, the bottom row holds thirty.
+        #: 0 at the **top** of the net in the preview, 1 at the bottom.  For a
+        #: net hung apex-up that is apex to base; the inverted one is the
+        #: other way round, which is what "up" means on it.
         self.net_y = np.zeros((count, width), dtype=np.float32)
         #: Distance from the net's centre, normalised so the far corner is ~1.
         self.net_r = np.zeros((count, width), dtype=np.float32)
@@ -89,12 +104,11 @@ class Canvas:
         #: True where a slot holds a real pixel.
         self.net_mask = np.zeros((count, width), dtype=bool)
         for i, net in enumerate(nets):
-            height, grid_w = net.grid
             n = net.nodes
-            rows = net.coords[:, 0].astype(np.float32)
-            cols = net.coords[:, 1].astype(np.float32)
-            x = cols / max(1.0, grid_w - 1)
-            y = rows / max(1.0, height - 1)
+            p = positions[net.name]
+            wx, wy = p[:, 0], p[:, 1]
+            x = (wx - wx.min()) / max(1e-6, float(wx.max() - wx.min()))
+            y = 1.0 - (wy - wy.min()) / max(1e-6, float(wy.max() - wy.min()))
             cx = float(x.mean())
             dx, dy = x - cx, y - 0.5
             r = np.hypot(dx, dy).astype(np.float32)
@@ -149,14 +163,10 @@ class Canvas:
         up /= max(np.linalg.norm(up), 1e-9)
         right = np.cross(up, normal)
         right /= max(np.linalg.norm(right), 1e-9)
+        if right[0] < 0.0:
+            right = -right              # x grows with world X, as in the preview
         u = (points - centre) @ right
         v = (points - centre) @ up
-        base = [i for i, n in enumerate(names)
-                if positions[n][:, 1].mean() < points[:, 1].mean()]
-        if len(base) >= 2:
-            lo, hi = sorted(base, key=lambda i: positions[names[i]].mean(axis=0) @ right)[::len(base) - 1]
-            if positions[names[hi]].mean(axis=0) @ right < positions[names[lo]].mean(axis=0) @ right:
-                right, u = -right, -u
 
         count = len(names)
         x = np.zeros((count, width), dtype=np.float32)
