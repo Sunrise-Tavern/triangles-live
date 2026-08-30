@@ -801,18 +801,23 @@ def test_state_machine(layout: Layout) -> str:
           f"flapping: {[(round(t, 1), s) for t, s in history]}")
 
     wanted = {kind: start for kind, start, _ in sections}
-    for kind, tolerance in ((BUILDING, 4.0), (HOT, 2.5)):
-        hit = next((t for t, s in history if s == kind), None)
-        check(hit is not None, f"never entered {kind}")
-        late = hit - wanted[kind]
-        check(-0.5 <= late <= tolerance,
-              f"entered {kind} {late:+.1f}s from the real boundary "
-              f"(allowed -0.5 to +{tolerance})")
-
-    order = [s for _, s in history]
-    check(order.index(BUILDING) < order.index(HOT),
-          "reached the drop without going through the build first")
-    drop = next(t for t, s in history if s == HOT)
+    build = next((t for t, s in history if s == BUILDING), None)
+    check(build is not None, "never entered building")
+    late = build - wanted[BUILDING]
+    check(-0.5 <= late <= 4.0,
+          f"entered building {late:+.1f}s from the real boundary "
+          f"(allowed -0.5 to +4.0)")
+    # The drop is the hot *after* the build.  An earlier hot is allowed: the
+    # engine starts cold in this arc, and its cruising section is a kick
+    # groove over a bassline, which the cold-start rule calls hot on band
+    # shape -- and must then still hand over to the build when the sweep
+    # arrives, or the drop's timing is lost.
+    drop = next((t for t, s in history if s == HOT and t > build), None)
+    check(drop is not None, "never entered hot after the build")
+    late = drop - wanted[HOT]
+    check(-0.5 <= late <= 2.5,
+          f"entered hot {late:+.1f}s from the real boundary "
+          f"(allowed -0.5 to +2.5)")
     return (f"{len(history)} transitions, build and drop in order, "
             f"drop {drop - wanted[HOT]:+.1f}s from the boundary")
 
@@ -821,7 +826,7 @@ def test_long_drop(layout: Layout) -> str:
     """A drop longer than the loudness baseline stays hot until the music falls."""
     from .audio import ArraySource
     from .listener import Listener
-    from .state import HOT, StateMachine
+    from .state import BUILDING, HOT, StateMachine
     from .verify import LONG_DROP_PLAN, arc_track
 
     audio, sections = arc_track(plan=LONG_DROP_PLAN)
@@ -833,8 +838,12 @@ def test_long_drop(layout: Layout) -> str:
     history = machine.history
     drop_start = next(start for kind, start, _ in sections if kind == "hot")
     breakdown = next(start for kind, start, _ in sections[3:] if kind == "quiet")
-    entered = [t for t, s in history if s == HOT]
-    check(entered, "never entered hot")
+    build = next((t for t, s in history if s == BUILDING), None)
+    check(build is not None, "never entered building")
+    # A cold-start hot before the build is allowed (see test_state_machine);
+    # the drop is the hot after it, and there must be exactly one.
+    entered = [t for t, s in history if s == HOT and t > build]
+    check(entered, "never entered hot after the build")
     check(len(entered) == 1,
           f"entered hot {len(entered)} times: {[(round(t, 1), s) for t, s in history]}")
     left = [t for t, s in history if t > entered[0] and s != HOT]

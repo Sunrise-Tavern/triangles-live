@@ -116,6 +116,19 @@ class StateThresholds:
     hot_floor_level: float = 0.35
     #: ...and the build actually lasted.
     min_build_s: float = 2.5
+    #: Cold start.  Until the loudness baseline has filled, "loud" means
+    #: nothing -- an engine started in the middle of a drop learns the drop
+    #: as normal, reads energy 1.0 and calls it cruising until the next
+    #: breakdown (measured: 26 s of a full-tilt section at 0.45 bass share
+    #: with a kick on every beat, rendered as cruising).  Band shape does not
+    #: need history: while the baseline is still filling, a passage that
+    #: keeps the energy in the bass *and* keeps landing kicks for this long
+    #: is hot.  The kick is required so a kickless sub-bass intro, which is
+    #: all low end too, does not qualify.
+    cold_hot_s: float = 3.0
+    #: ...a kick at least ``drop_kick`` strong within this long counts as
+    #: "landing kicks".  Just over a beat at 70 BPM.
+    kick_recent_s: float = 1.0
     #: How much of the loudness baseline must be filled before the energy
     #: fallback is allowed to declare a drop.  Early in a track everything is
     #: "average", so the ratio spikes on the first loud passage whether or not
@@ -176,6 +189,11 @@ class StateMachine:
         self._loud = 0.0
         self._hot_level = 0.0
         self._level = 1.0
+        self._bass_fast = 0.0
+        self._last_kick = -1e9
+        self._cold_for = 0.0
+        #: Hot was called by the cold-start rule, on band shape alone.
+        self._provisional = False
         self._now = 0.0
         self._alpha = 1.0 - math.exp(-block_s / self.t.energy_tau_s)
         self._slow_alpha = 1.0 - math.exp(-block_s / self.t.slope_tau_s)
@@ -203,6 +221,13 @@ class StateMachine:
 
         self._loud += (features.rms - self._loud) * self._alpha
         self._level = features.level
+        self._bass_fast += (features.bass_share - self._bass_fast) * self._alpha
+        if features.kick >= self.t.drop_kick and not features.silent:
+            self._last_kick = features.t
+        cold = (features.warm < self.t.min_warm and not features.silent
+                and self._bass_fast >= self.t.drop_bass_share
+                and features.t - self._last_kick <= self.t.kick_recent_s)
+        self._cold_for = self._cold_for + self.block_s if cold else 0.0
         if self.state == HOT:
             self._hot_level += (features.rms - self._hot_level) * self._hot_alpha
         self._high += (features.high_share - self._high) * self._alpha
@@ -284,11 +309,18 @@ class StateMachine:
         if held < self.t.dwell_s:
             return ""
 
-        if self.state == HOT and not self._fallen():
-            # Nothing has changed in the music, whatever the baseline says.
-            # Every exit from hot -- to cruising *or* straight to quiet --
-            # waits here for the level to actually step down.
-            return ""
+        if self.state == HOT:
+            # A *provisional* hot, called at cold start on band shape, may
+            # still hand over to a build: no sweep led into it, so nothing is
+            # decaying, and a sweep arriving now is the build the rule could
+            # not have seen.  A real hot never goes to building (below).
+            if self._provisional and self._rising_for >= self.t.build_hold_s:
+                return self._enter(BUILDING, "high band swept up")
+            if not self._fallen():
+                # Nothing has changed in the music, whatever the baseline
+                # says.  Every exit from hot -- to cruising *or* straight to
+                # quiet -- waits here for the level to actually step down.
+                return ""
 
         if self._energy < self.t.quiet_enter:
             return self._enter(QUIET, "energy below floor")
@@ -301,9 +333,15 @@ class StateMachine:
             # led into the drop, so allowing it re-entered building about a
             # second after every drop and flapped.  Musically a build follows
             # a lull, never a drop.
+            #
             if self._energy < self.t.hot_leave:
                 return self._enter(CRUISING, "energy fell")
             return ""
+
+        if self._cold_for >= self.t.cold_hot_s and self.state != BUILDING:
+            reason = self._enter(HOT, "bass and kicks at cold start")
+            self._provisional = True
+            return reason
 
         if self.state == BUILDING and held >= self.t.max_build_s:
             return self._enter(
@@ -342,6 +380,7 @@ class StateMachine:
             # The reference for leaving is what hot sounds like, starting
             # from the level it was entered at.
             self._hot_level = self._loud
+            self._provisional = False
         self.state = state
         self.entered_at = self._now
         return reason
