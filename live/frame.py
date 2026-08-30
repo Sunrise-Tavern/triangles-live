@@ -8,9 +8,11 @@ wrong fixture, because it cannot address fixtures at all.
 
 Two facts about this rig make the whole thing vectorise:
 
-* all eight nets share one 465-node map over a 59x51 triangular lattice, so
-  they are one ``(8, 465, 3)`` array and an effect over "the nets" is one
-  numpy expression;
+* the nets are all triangles on a lattice -- 465 nodes over 59x51 or 435
+  over 57x49 -- so they are one ``(n, 465, 3)`` array padded to the largest,
+  with per-net geometry vectors of the same shape, and an effect over "the
+  nets" is one numpy expression.  Padding slots are painted like any other
+  and simply never emitted;
 * all 24 arches share one 360-node base->apex->base run, so the corridor is
   one ``(24, 360, 3)`` array and a wave down the tunnel is an outer product.
 
@@ -33,56 +35,65 @@ class Canvas:
         self.net_names = list(self.layout.nets)
         self.arch_names = list(self.layout.arches)
 
-        net = self.layout[self.net_names[0]]
+        nets = [self.layout[n] for n in self.net_names]
         arch = self.layout[self.arch_names[0]]
-        self._require_uniform(net, arch)
+        self._require_uniform(arch)
 
         # One flat buffer with the three families as views into it, so a frame
-        # can be emitted without concatenating anything.
-        par_slots = self.layout[self.layout.par].channels_per_node
-        n_net = len(self.net_names) * net.nodes * 3
+        # can be emitted without concatenating anything.  Nets are padded to
+        # the largest node count; ``net_nodes`` says how many are real.
+        self.net_nodes = np.array([m.nodes for m in nets], dtype=np.int32)
+        width = int(self.net_nodes.max())
+        par_slots = (self.layout[self.layout.par].channels_per_node
+                     if self.layout.par else 0)
+        n_net = len(self.net_names) * width * 3
         n_arch = len(self.arch_names) * arch.nodes * 3
         self._source = np.zeros(n_net + n_arch + par_slots, dtype=np.float32)
-        self.nets = self._source[:n_net].reshape(len(self.net_names), net.nodes, 3)
+        self.nets = self._source[:n_net].reshape(len(self.net_names), width, 3)
         self.arches = self._source[n_net:n_net + n_arch].reshape(
             len(self.arch_names), arch.nodes, 3)
         self.par = self._source[n_net + n_arch:]
 
-        self._geometry(net, arch)
+        self._geometry(nets, width, arch)
         self._gather()
 
     # -- geometry ---------------------------------------------------------- #
 
-    def _require_uniform(self, net, arch) -> None:
-        for name in self.net_names:
-            other = self.layout[name]
-            if other.nodes != net.nodes or not np.array_equal(other.coords, net.coords):
-                raise ValueError(
-                    f"{name} has a different node map from {net.name}.  The "
-                    "renderer assumes all nets are the same model; give each "
-                    "net its own buffer here if that ever stops being true."
-                )
+    def _require_uniform(self, arch) -> None:
         for name in self.arch_names:
             if self.layout[name].nodes != arch.nodes:
                 raise ValueError(f"{name} has {self.layout[name].nodes} nodes, "
                                  f"not {arch.nodes}")
 
-    def _geometry(self, net, arch) -> None:
-        height, width = net.grid
-        rows = net.coords[:, 0].astype(np.float32)
-        cols = net.coords[:, 1].astype(np.float32)
-        #: 0 at the left edge, 1 at the right.
-        self.net_x = cols / max(1.0, width - 1)
+    def _geometry(self, nets, width: int, arch) -> None:
+        count = len(nets)
+        #: 0 at the left edge, 1 at the right.  ``(nets, nodes)``, per net.
+        self.net_x = np.zeros((count, width), dtype=np.float32)
         #: 0 at the **apex** (grid row 0), 1 along the base.  The nets are
         #: triangles: row 0 holds a single node, the bottom row holds thirty.
-        self.net_y = rows / max(1.0, height - 1)
-        cx = float(self.net_x.mean())
-        dx, dy = self.net_x - cx, self.net_y - 0.5
+        self.net_y = np.zeros((count, width), dtype=np.float32)
         #: Distance from the net's centre, normalised so the far corner is ~1.
-        self.net_r = np.hypot(dx, dy).astype(np.float32)
-        self.net_r /= max(1e-6, float(self.net_r.max()))
+        self.net_r = np.zeros((count, width), dtype=np.float32)
         #: Angle around the centre, 0..1 -- for pinwheels and spirals.
-        self.net_angle = ((np.arctan2(dy, dx) / (2 * np.pi)) % 1.0).astype(np.float32)
+        self.net_angle = np.zeros((count, width), dtype=np.float32)
+        #: True where a slot holds a real pixel.
+        self.net_mask = np.zeros((count, width), dtype=bool)
+        for i, net in enumerate(nets):
+            height, grid_w = net.grid
+            n = net.nodes
+            rows = net.coords[:, 0].astype(np.float32)
+            cols = net.coords[:, 1].astype(np.float32)
+            x = cols / max(1.0, grid_w - 1)
+            y = rows / max(1.0, height - 1)
+            cx = float(x.mean())
+            dx, dy = x - cx, y - 0.5
+            r = np.hypot(dx, dy).astype(np.float32)
+            r /= max(1e-6, float(r.max()))
+            self.net_x[i, :n] = x
+            self.net_y[i, :n] = y
+            self.net_r[i, :n] = r
+            self.net_angle[i, :n] = ((np.arctan2(dy, dx) / (2 * np.pi)) % 1.0)
+            self.net_mask[i, :n] = True
 
         t = arch.strip_t.astype(np.float32)
         #: 0..1 along the strip, base -> apex -> base.
@@ -107,7 +118,9 @@ class Canvas:
         src: list[np.ndarray] = []
         dst: list[np.ndarray] = []
         offset = 0
-        order = [*self.net_names, *self.arch_names, self.layout.par]
+        width = self.nets.shape[1]
+        order = [*self.net_names, *self.arch_names,
+                 *([self.layout.par] if self.layout.par else [])]
         for name in order:
             model = self.layout[name]
             stride = model.channels_per_node
@@ -115,7 +128,8 @@ class Canvas:
             for slot, channel in enumerate(model.order):
                 src.append(offset + index * stride + channel)
                 dst.append(model.start - 1 + index * stride + slot)
-            offset += model.nodes * stride
+            # A net's buffer row is padded to the widest net; skip the pad.
+            offset += (width if model.kind == "net" else model.nodes) * stride
         if offset != self._source.size:
             raise ValueError(
                 f"gather covers {offset} values, buffer holds {self._source.size}"
@@ -143,6 +157,25 @@ class Canvas:
         if index != list(range(index[0], index[-1] + 1)):
             raise ValueError(f"group {group!r} is not a contiguous run of nets")
         return slice(index[0], index[-1] + 1)
+
+    def net_pair(self) -> tuple[slice, slice]:
+        """(big nets, small nets): the two groups gestures lead and rest.
+
+        "Big Triangle" is the group xLights declares.  The small nets used to
+        be their own group ("Small Triangle Nets"); the 2026-08-30 layout
+        dropped it, so they are whatever is left -- provided that is also a
+        contiguous run, for the same reason :meth:`net_slice` insists on one.
+        """
+        big = self.net_slice("Big Triangle")
+        if "Small Triangle Nets" in self.layout.groups:
+            return big, self.net_slice("Small Triangle Nets")
+        rest = [i for i in range(len(self.net_names))
+                if not (big.start <= i < big.stop)]
+        if not rest:
+            raise ValueError("every net is in 'Big Triangle'; nothing is left to rest")
+        if rest != list(range(rest[0], rest[-1] + 1)):
+            raise ValueError("the nets outside 'Big Triangle' are not contiguous")
+        return big, slice(rest[0], rest[-1] + 1)
 
     def clear(self) -> None:
         self._source[:] = 0.0
@@ -177,7 +210,8 @@ if __name__ == "__main__":
           f"{canvas.layout.channel_count} channels")
     canvas.nets[:] = (1.0, 0.0, 0.0)
     canvas.arches[:] = (1.0, 0.0, 0.0)
-    canvas.par[:] = (1.0, 0.0, 0.0, 0.0)
+    if canvas.par.size:
+        canvas.par[:] = (1.0, 0.0, 0.0, 0.0)
     frame = canvas.to_channels()
     net0 = canvas.layout[canvas.net_names[0]]
     arch0 = canvas.layout[canvas.arch_names[0]]

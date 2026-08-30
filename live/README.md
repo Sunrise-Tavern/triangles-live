@@ -63,8 +63,10 @@ numbers or wire colour order — `Canvas.to_channels()` does that once per frame
 through a precomputed gather.  An effect cannot address the wrong fixture
 because it cannot address fixtures at all.
 
-Two facts about this rig make it vectorise: all eight nets share one 465-node
-map over a 59×51 triangular lattice, so they are one `(8, 465, 3)` array; all
+Two facts about this rig make it vectorise: the nets are all triangles on a
+lattice — 465 nodes over 59×51 or 435 over 57×49 — so they are one
+`(n, 465, 3)` array padded to the widest, with per-net geometry vectors of the
+same shape (padding slots are painted like any other and never emitted); all
 24 arches share one 360-node base→apex→base run, so the corridor is one
 `(24, 360, 3)` array and a wave down the tunnel is an outer product.
 

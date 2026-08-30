@@ -35,6 +35,26 @@ def _rotation(rx: float, ry: float, rz: float) -> np.ndarray:
     return (mx @ my @ mz).astype(np.float32)
 
 
+def segment_counts(attrs: dict, nodes: int, points: np.ndarray) -> list[int]:
+    """Nodes per poly-line segment.
+
+    xLights writes ``PolyNode1..n`` only when the split is uneven; the
+    2026-08-30 save omits them for the arches (two equal legs), so with
+    none declared the nodes are shared out in proportion to segment length,
+    which for a symmetric arch is the 180/180 the old file spelled out.
+    """
+    declared = [int(attrs.get(f"PolyNode{i + 1}", 0)) for i in range(len(points) - 1)]
+    if sum(declared) == nodes:
+        return declared
+    lengths = np.linalg.norm(np.diff(points, axis=0), axis=1)
+    total = float(lengths.sum())
+    if total <= 0.0 or len(lengths) == 0:
+        return [nodes]
+    counts = [int(round(nodes * float(l) / total)) for l in lengths]
+    counts[-1] += nodes - sum(counts)           # rounding remainder
+    return counts
+
+
 def world_positions(layout: Layout) -> dict[str, np.ndarray]:
     """Model name -> ``(nodes, 3)`` world coordinates, one row per pixel."""
     out: dict[str, np.ndarray] = {}
@@ -47,8 +67,7 @@ def world_positions(layout: Layout) -> dict[str, np.ndarray]:
             # PointData is a polyline in world-ish space, offset by WorldPos.
             raw = np.array([float(v) for v in attrs["PointData"].split(",")],
                            dtype=np.float32).reshape(-1, 3)
-            counts = [int(attrs.get(f"PolyNode{i + 1}", 0))
-                      for i in range(len(raw) - 1)]
+            counts = segment_counts(attrs, model.nodes, raw)
             points = []
             for i, count in enumerate(counts):
                 if count <= 0:
@@ -161,7 +180,7 @@ def build_preview(layout: Layout | None = None, *, net_stride: int = 2,
                             distance=distance, aspect=aspect)
 
     xy_parts, depth_parts, channel_parts, model_parts, size_parts = [], [], [], [], []
-    names = [*layout.nets, *layout.arches, layout.par]
+    names = [*layout.nets, *layout.arches, *([layout.par] if layout.par else [])]
     for index, name in enumerate(names):
         model = layout[name]
         stride = {"net": net_stride, "arch": arch_stride}.get(model.kind, 1)
@@ -193,7 +212,8 @@ def build_preview(layout: Layout | None = None, *, net_stride: int = 2,
 if __name__ == "__main__":
     layout = load_layout()
     positions = world_positions(layout)
-    for name in (layout.nets[0], layout.arches[0], layout.arches[-1], layout.par):
+    for name in (layout.nets[0], layout.arches[0], layout.arches[-1],
+                 *([layout.par] if layout.par else [])):
         p = positions[name]
         lo, hi = p.min(axis=0).round(0), p.max(axis=0).round(0)
         print(f"{name:<24} {len(p):>4} nodes  x {lo[0]:>8.0f}..{hi[0]:<8.0f} "

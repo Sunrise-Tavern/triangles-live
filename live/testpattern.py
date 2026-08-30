@@ -59,7 +59,8 @@ def frame(layout: Layout, t: float) -> np.ndarray:
     """One full channel array for show time ``t``."""
     out = layout.blank_channels()
     name, progress = stage_at(t)
-    ordered = [layout[n] for n in (*layout.nets, layout.par, *layout.arches)]
+    ordered = [layout[n] for n in (*layout.nets, *([layout.par] if layout.par else []),
+                                   *layout.arches)]
 
     if name == "identify":
         which = int(progress * len(ordered)) % len(ordered)
@@ -109,7 +110,7 @@ def frame(layout: Layout, t: float) -> np.ndarray:
             rgb[:, 2] = np.rint(level * 255).astype(np.uint8)
             model.pack(rgb, out)
 
-    elif name == "par":
+    elif name == "par" and layout.par:
         model = layout[layout.par]
         slot = int(progress * 4) % 4
         rgb = np.zeros((1, 4), dtype=np.uint8)

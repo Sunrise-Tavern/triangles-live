@@ -46,7 +46,7 @@ def cmd_layout(args) -> int:
     print()
     print(f"corridor : {' -> '.join(layout.arches[:3])} ... {layout.arches[-1]}")
     print(f"nets     : {', '.join(layout.nets)}")
-    print(f"par      : {layout.par}")
+    print(f"par      : {layout.par or 'none'}")
     return 0
 
 

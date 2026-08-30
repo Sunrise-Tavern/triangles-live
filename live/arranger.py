@@ -140,8 +140,7 @@ class Arranger:
         self.machine = state or StateMachine()
         self.base_hue = base_hue
         self._seed = seed
-        self.big = canvas.net_slice("Big Triangle")
-        self.small = canvas.net_slice("Small Triangle Nets")
+        self.big, self.small = canvas.net_pair()
         self._palettes: dict[tuple, pal.Palette] = {}
         #: Advances once per state change -- the hue journey's step counter.
         self.journey = 0
@@ -728,7 +727,7 @@ def _mix_canvases(canvas: Canvas, old: Canvas, style: str, mix: float) -> None:
         depth = canvas.depth if style == "wipe_back" else 1.0 - canvas.depth
         edge = m * (1.0 + soft)
         arch_w = np.clip((edge - depth) / soft, 0.0, 1.0)[:, None, None]
-        net_w = np.clip((edge - canvas.net_y) / soft, 0.0, 1.0)[None, :, None]
+        net_w = np.clip((edge - canvas.net_y) / soft, 0.0, 1.0)[:, :, None]
         canvas.arches *= arch_w
         canvas.arches += old.arches * (1.0 - arch_w)
         canvas.nets *= net_w

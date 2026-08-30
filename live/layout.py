@@ -13,12 +13,17 @@ Three things it resolves that are easy to get wrong by hand:
 * **String colour order.**  The nets are ``RGB Nodes``, the arches are
   ``GRB Nodes``.  A renderer produces RGB; the byte order on the wire is not
   the same for both, and getting it wrong looks *almost* right (red/green swap).
-* **Custom-model node maps.**  Each net is 465 nodes scattered over a 59x51
-  grid.  The mapping node -> (row, col) lives in ``CustomModelCompressed``.
+* **Custom-model node maps.**  A net is 465 nodes scattered over a 59x51
+  grid, or 435 over 57x49 -- the rig has both.  The mapping node -> (row,
+  col) lives in ``CustomModelCompressed``.
+
+The DJ par is optional: the 2026-08-30 layout dropped it, and a show with no
+DMX fixture is a show, not an error.
 """
 
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -130,7 +135,8 @@ class Layout:
     arches: list[str]
     #: Net model names, natural order.
     nets: list[str]
-    par: str
+    #: The DMX par's model name, or None when the layout has no DMX fixture.
+    par: str | None
     channel_count: int
     groups: dict[str, list[str]] = field(default_factory=dict)
     controllers: dict[str, Controller] = field(default_factory=dict)
@@ -348,6 +354,16 @@ def load_layout(rgb_effects: Path | None = None, networks: Path | None = None) -
             count = per_string * strings
             points = int(attrs.get("NumPoints", 2))
             segs = [int(attrs.get(f"PolyNode{i + 1}", 0)) for i in range(points - 1)]
+            if sum(segs) != count and attrs.get("PointData"):
+                # Not declared (xLights omits them for an even split): share
+                # the nodes out by segment length.  See geometry.segment_counts.
+                raw = np.array([float(v) for v in attrs["PointData"].split(",")],
+                               dtype=np.float32).reshape(-1, 3)
+                lengths = np.linalg.norm(np.diff(raw, axis=0), axis=1)
+                if lengths.sum() > 0:
+                    segs = [int(round(count * float(l) / float(lengths.sum())))
+                            for l in lengths]
+                    segs[-1] += count - sum(segs)
             models[name] = Model(
                 name=name, kind="arch", start=start, nodes=count,
                 channels_per_node=3, order=_order(string_type, name),
@@ -391,13 +407,12 @@ def load_layout(rgb_effects: Path | None = None, networks: Path | None = None) -
 
     nets = sorted((m.name for m in models.values() if m.kind == "net"), key=_natural_key)
     pars = [m.name for m in models.values() if m.kind == "par"]
-    if not pars:
-        raise LayoutError("No DMX fixture found -- expected the DJ par.")
 
     channel_count = max(m.end for m in models.values())
 
     return Layout(
-        models=models, arches=arches, nets=nets, par=sorted(pars)[0],
+        models=models, arches=arches, nets=nets,
+        par=sorted(pars)[0] if pars else None,
         channel_count=channel_count, groups=groups, controllers=controllers,
     )
 
@@ -412,9 +427,15 @@ def _order(string_type: str, name: str) -> tuple[int, ...]:
 
 
 def _natural_key(name: str):
-    head = name.rstrip("0123456789")
-    tail = name[len(head):]
-    return (head, int(tail) if tail else 0)
+    """Sort by the first number in the name, then the name.
+
+    Net names now carry a position after the number ("Net 5 top", "Net 8
+    Bottom left from front"), so a trailing-digit key would sort them as
+    text; the number is what orders them.
+    """
+    match = re.search(r"\d+", name)
+    return (name[:match.start()] if match else name,
+            int(match.group()) if match else 0, name)
 
 
 if __name__ == "__main__":
@@ -435,4 +456,4 @@ if __name__ == "__main__":
     print(f"corridor order : {layout.arches[0]} ... {layout.arches[-1]} "
           f"({len(layout.arches)} arches)")
     print(f"nets           : {', '.join(layout.nets)}")
-    print(f"par            : {layout.par}")
+    print(f"par            : {layout.par or 'none'}")

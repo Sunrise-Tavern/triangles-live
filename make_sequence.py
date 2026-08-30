@@ -101,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
     print(f"Show: {len(show.tunnel_arches)} arches, {len(show.nets)} nets, "
-          f"DJ = {show.dj}")
+          f"DJ = {show.dj or 'none'}")
 
     # 2. Audio --------------------------------------------------------------
     print(f"\nFetching {args.input}")

@@ -128,6 +128,8 @@ class SequenceBuilder:
     def add(self, element: str, spec: EffectSpec, palette: Palette,
             start_s: float, end_s: float, layer: int | None = None) -> bool:
         """Add one effect. Returns False if it was dropped as degenerate."""
+        if element is None:
+            return False        # a fixture the layout no longer has (the par)
         if layer is None:
             layer = self.default_layer
         start = self.quantize(start_s)

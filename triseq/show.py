@@ -39,8 +39,9 @@ class Show:
     net_groups: list[str]
     #: Individual net models.
     nets: list[str]
-    #: The DMX par -- effectively a single pixel.
-    dj: str
+    #: The DMX par -- effectively a single pixel -- or None if the layout has
+    #: none (it was dropped on 2026-08-30).
+    dj: str | None
     #: Every model and group name in the show, for validation.
     all_names: set[str] = field(default_factory=set)
 
@@ -51,7 +52,8 @@ class Show:
         Groups first (they are what you look at), then the individual arches,
         then the DJ par.
         """
-        return [self.tunnel, *self.net_groups, *self.tunnel_arches, self.dj]
+        return [self.tunnel, *self.net_groups, *self.tunnel_arches,
+                *([self.dj] if self.dj else [])]
 
 
 def load_show(rgb_effects: Path | None = None) -> Show:
@@ -96,8 +98,6 @@ def load_show(rgb_effects: Path | None = None) -> Show:
     )
 
     dmx = [n for n, m in models.items() if (m.get("DisplayAs") or "").startswith("Dmx")]
-    if not dmx:
-        raise ShowError(f"No DMX fixture (DisplayAs=Dmx*) found in {path.name}.")
     if len(dmx) > 1:
         # Deterministic pick, but say something -- the arranger only drives one.
         dmx.sort()
@@ -107,7 +107,7 @@ def load_show(rgb_effects: Path | None = None) -> Show:
         tunnel=TUNNEL_GROUP,
         net_groups=net_groups,
         nets=nets,
-        dj=dmx[0],
+        dj=dmx[0] if dmx else None,
         all_names=set(models) | set(groups),
     )
 
@@ -125,4 +125,4 @@ if __name__ == "__main__":
     print(f"          {show.tunnel_arches[0]} ... {show.tunnel_arches[-1]}")
     print(f"Nets    : {', '.join(show.net_groups)}")
     print(f"          {len(show.nets)} models: {', '.join(show.nets)}")
-    print(f"DJ      : {show.dj}")
+    print(f"DJ      : {show.dj or 'none'}")

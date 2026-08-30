@@ -58,8 +58,7 @@ class Script:
         self.settings = settings
         self.base_hue = base_hue
         self.seed = seed
-        self.big = canvas.net_slice("Big Triangle")
-        self.small = canvas.net_slice("Small Triangle Nets")
+        self.big, self.small = canvas.net_pair()
         self._bpm = bpm
         self._palettes: dict[tuple, pal.Palette] = {}
 

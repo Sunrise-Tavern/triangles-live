@@ -1,7 +1,8 @@
 # Triangles — orientation for agents
 
-Music-driven lighting for the Triangles rig (8 triangular nets, a 24-arch
-corridor, one DJ par; ~37k channels on a Falcon controller via DDP). Two
+Music-driven lighting for the Triangles rig (7 triangular nets of two sizes
+-- 465 and 435 nodes -- and a 24-arch corridor; ~35k channels across two
+Falcons via DDP; the DJ par was dropped from the layout on 2026-08-30). Two
 engines share the rig and the ideas but **not** the code:
 
 | | `triseq/` — offline generator | `live/` — live engine |
@@ -95,6 +96,12 @@ LIVE_PLAN.md     design + milestones + measured numbers + open issues
 - aubio's BPM readout is biased ~+1.3 %; the clock uses it only for octave and real tempo changes.
 - aubio's per-beat confidence is not a clean signal (0.0 through intros and clicks); only a *run* of low readings means "no pulse".
 - `bar_length` is hardcoded to 4; non-4/4 material is unusable.
+- The layout is read from `../xlights_rgbeffects.xml` at startup. Nets are
+  padded to the widest node map in the canvas (`Canvas.net_mask`); "Big
+  Triangle" is nets 5-8 and the small group is whatever is left
+  (`Canvas.net_pair`). Both families are "RGB Nodes" now -- the Falcon does
+  the GRB/BGR swap from the port config xLights uploaded, so if a fixture's
+  red and green come out exchanged, re-upload the controller from xLights.
 - Tempo range folds to 70–180 BPM; sub-80 BPM material is octave-doubled.
 - The loudness baseline means the first loud thing after 45 s of quiet reads as "hot" — by design, attempts to fix it cost real drops (see git log).
 - Section vocabularies differ on purpose: offline has six kinds, live has four. Don't chase agreement between them.

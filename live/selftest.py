@@ -34,7 +34,7 @@ from . import palette as pal
 from . import settings as knobs
 from .fake_falcon import FakeFalcon
 from .frame import Canvas
-from .layout import Layout, load_layout
+from .layout import STRING_ORDER, Layout, load_layout
 from .script import Script
 from .testpattern import frame as pattern_frame
 
@@ -69,15 +69,24 @@ def test_layout(layout: Layout) -> str:
           "no model -- a gap in the addressing")
 
     check(len(layout.arches) == 24, f"expected 24 arches, found {len(layout.arches)}")
-    check(len(layout.nets) == 8, f"expected 8 nets, found {len(layout.nets)}")
+    check(len(layout.nets) == 7, f"expected 7 nets, found {len(layout.nets)}")
     check(all(layout[n].kind == "arch" for n in layout.arches), "Tunnel holds a non-arch")
+    sizes = sorted({layout[n].nodes for n in layout.nets})
+    check(sizes == [435, 465], f"nets should be 435 and 465 nodes, got {sizes}")
 
-    # Colour order really is different between the two fixture families -- if
-    # this ever collapses to one value, someone has "simplified" the packer.
-    net_orders = {layout[n].order for n in layout.nets}
-    arch_orders = {layout[n].order for n in layout.arches}
-    check(net_orders == {(0, 1, 2)}, f"nets should be RGB, got {net_orders}")
-    check(arch_orders == {(1, 0, 2)}, f"arches should be GRB, got {arch_orders}")
+    # Each family's wire order must follow its StringType exactly.  Both are
+    # "RGB Nodes" in the 2026-08-30 layout -- the Falcon does the swap now,
+    # from the colour order xLights uploaded to each port -- where the arches
+    # used to be "GRB Nodes" with xLights swapping.  If the arches come out
+    # with red and green exchanged, the Falcon's port config is stale, not
+    # this.
+    orders = {}
+    for name in (*layout.nets, *layout.arches):
+        m = layout[name]
+        want = STRING_ORDER[m.source.get("StringType", "RGB Nodes")]
+        check(m.order == want, f"{name}: order {m.order} does not follow its "
+                               f"StringType {m.source.get('StringType')!r}")
+        orders[m.kind] = m.order
 
     # A red frame must land in the red channel of each fixture, whatever its
     # wire order.  This is the assertion that catches a swapped permutation.
@@ -86,19 +95,19 @@ def test_layout(layout: Layout) -> str:
         rgb = np.zeros((model.nodes, 4), dtype=np.uint8)
         rgb[:, 0] = 255
         model.pack(rgb, out)
-    for name in layout.nets:
+    for name in (*layout.nets, *layout.arches):
         m = layout[name]
-        check(out[m.start - 1] == 255 and out[m.start] == 0,
-              f"{name}: red landed on the wrong channel (RGB model)")
-    for name in layout.arches:
-        m = layout[name]
-        check(out[m.start - 1] == 0 and out[m.start] == 255,
-              f"{name}: red landed on the wrong channel (GRB model)")
-    par = layout[layout.par]
-    check(out[par.start - 1] == 255, "par: red is not on DMX slot 1")
+        slot = m.order.index(0)
+        check(out[m.start - 1 + slot] == 255
+              and all(out[m.start - 1 + i] == 0 for i in range(3) if i != slot),
+              f"{name}: red landed on the wrong channel")
+    if layout.par:
+        par = layout[layout.par]
+        check(out[par.start - 1] == 255, "par: red is not on DMX slot 1")
 
     return (f"{len(models)} models, {layout.channel_count} channels, "
-            f"no overlaps or gaps; colour order verified")
+            f"no overlaps or gaps; nets {orders['net']}, arches {orders['arch']}, "
+            f"{'par' if layout.par else 'no par'}")
 
 
 def test_fseq_roundtrip(layout: Layout) -> str:
@@ -228,19 +237,26 @@ def test_canvas(layout: Layout) -> str:
     canvas = Canvas(layout)
     canvas.nets[:] = (1.0, 0.0, 0.0)
     canvas.arches[:] = (1.0, 0.0, 0.0)
-    canvas.par[:3] = (1.0, 0.0, 0.0)
+    if canvas.par.size:
+        canvas.par[:3] = (1.0, 0.0, 0.0)
     frame = canvas.to_channels()
 
-    for name in layout.nets:
+    for name in (*layout.nets, *layout.arches):
         m = layout[name]
-        check(tuple(frame[m.slice][:3]) == (255, 0, 0),
-              f"{name}: red frame is not red on the wire")
-    for name in layout.arches:
-        m = layout[name]
-        check(tuple(frame[m.slice][:3]) == (0, 255, 0),
-              f"{name}: a GRB arch should carry red on channel 2")
-    par = layout[layout.par]
-    check(tuple(frame[par.slice]) == (255, 0, 0, 0), "par: red is not on slot 1")
+        want = [0, 0, 0]
+        want[m.order.index(0)] = 255
+        check(list(frame[m.slice][:3]) == want,
+              f"{name}: red frame is not red on the wire ({frame[m.slice][:3]})")
+        check(frame[m.slice].reshape(-1, 3)[:, m.order.index(0)].min() == 255,
+              f"{name}: not every node received the frame -- padding leaked")
+    if layout.par:
+        par = layout[layout.par]
+        check(tuple(frame[par.slice]) == (255, 0, 0, 0), "par: red is not on slot 1")
+    # Nothing outside the models may be written: the padded net slots must
+    # stay in the buffer.
+    check(int((frame > 0).sum()) == sum(layout[n].nodes for n in (*layout.nets, *layout.arches))
+          + (1 if layout.par else 0),
+          "the frame lit channels that belong to no model")
 
     # A cleared canvas must be all-off, and painting outside 0..1 must clamp
     # rather than wrap -- an overflowing uint8 shows as a dark flicker.
@@ -253,12 +269,16 @@ def test_canvas(layout: Layout) -> str:
     check(frame[layout[layout.arches[0]].slice].max() == 0, "negative did not clamp")
 
     # Groups must stay contiguous, or an effect aimed at "the small nets" would
-    # silently paint a copy and vanish.
-    check(canvas.net_slice("Big Triangle") == slice(0, 4), "Big Triangle moved")
-    check(canvas.net_slice("Small Triangle Nets") == slice(4, 8),
-          "Small Triangle Nets moved")
-    return (f"{canvas.nets.shape} nets + {canvas.arches.shape} arches -> "
-            f"{layout.channel_count} channels, colour order and clamping hold")
+    # silently paint a copy and vanish; and between them they must cover
+    # every net exactly once.
+    big, small = canvas.net_pair()
+    covered = sorted([*range(big.start, big.stop), *range(small.start, small.stop)])
+    check(covered == list(range(len(layout.nets))),
+          f"big {big} + small {small} do not partition the {len(layout.nets)} nets")
+    return (f"{canvas.nets.shape} nets ({len(layout.nets)}, padded) + "
+            f"{canvas.arches.shape} arches -> {layout.channel_count} channels, "
+            f"big {big.start}-{big.stop - 1}, small {small.start}-{small.stop - 1}, "
+            f"colour order and clamping hold")
 
 
 def test_effects(layout: Layout) -> str:
@@ -311,6 +331,8 @@ def test_effects(layout: Layout) -> str:
         "apex": lambda: fx.apex(canvas, palette, 0.8),
         "par": lambda: fx.par(canvas, palette.color(0), 0.9, white=0.2),
     }
+    if not layout.par:
+        paints.pop("par")      # a layout without one makes fx.par a no-op
     for name, paint in paints.items():
         canvas.clear()
         paint()
@@ -320,9 +342,10 @@ def test_effects(layout: Layout) -> str:
     # Targeting a group must leave the other group alone -- this is the failure
     # a fancy-index copy would produce, silently.
     canvas.clear()
-    fx.wash(canvas, palette, 1.0, targets=canvas.net_slice("Small Triangle Nets"))
-    check(not canvas.nets[0:4].any(), "a small-net wash leaked onto the big nets")
-    check(canvas.nets[4:8].any(), "a small-net wash painted nothing")
+    big, small = canvas.net_pair()
+    fx.wash(canvas, palette, 1.0, targets=small)
+    check(not canvas.nets[big].any(), "a small-net wash leaked onto the big nets")
+    check(canvas.nets[small].any(), "a small-net wash painted nothing")
     return (f"{len(fx.PATTERNS)} corridor patterns, {len(paints)} effects, "
             f"{len(gestures)} gestures, {len(pal.SCHEMES)} schemes, all sane")
 
