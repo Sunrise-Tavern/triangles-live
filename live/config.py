@@ -27,12 +27,18 @@ ENV_VAR = "TRIANGLES_CONFIG"
 
 @dataclass
 class OutputConfig:
-    #: The Falcon.  Empty means render but send nothing, which is the default
-    #: on a laptop -- an accidental blast at the rig is worse than silence.
+    #: Where frames go.  ``"auto"`` sends to every DDP controller declared in
+    #: xlights_networks.xml, each getting its own slice of the show -- that is
+    #: the setting for the rig, which spans two Falcons.  A literal address
+    #: sends everything to that one receiver, which is what the fake Falcon and
+    #: a bench test want.  Empty means render but send nothing, which stays the
+    #: default on a laptop -- an accidental blast at the rig is worse than
+    #: silence, so "auto" is opt-in.
     host: str = ""
     port: int = 4048
-    #: Clip the send to one controller's channel space.  The arches and the
-    #: par sit outside it; see `live layout`.
+    #: Clip the send to one controller's channel space -- a single Falcon at
+    #: the bench, say.  Empty with ``host = "auto"`` means all of them; see
+    #: `live layout` for who owns what.
     controller: str = ""
     fps: float = 40.0
     channels_per_packet: int = 1440

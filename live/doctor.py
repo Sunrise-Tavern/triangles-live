@@ -77,7 +77,8 @@ def check_layout(report: Report) -> None:
         report.add("addressing", WARN,
                    f"{len(orphans)} models outside every controller "
                    f"({orphans[0].name} ... ch {orphans[-1].end})",
-                   "the arches and par have no controller; only the nets will light")
+                   "those channels go nowhere: widen a controller's MaxChannels "
+                   "in xlights_networks.xml, or move the model")
 
 
 def check_tools(report: Report) -> None:
@@ -180,27 +181,53 @@ def check_audio(report: Report, config: Config, deep: bool) -> None:
 
 
 def check_output(report: Report, config: Config) -> None:
+    """Every DDP receiver the show needs, not just the first one.
+
+    A rig on two Falcons fails asymmetrically: the nets light, the corridor
+    stays dark, and nothing anywhere reports an error, because DDP is one-way
+    UDP.  So each target is checked by name and each gets its own line.
+    """
     host = config.output.host
     if not host:
         report.add("falcon", WARN, "no host configured -- rendering only",
                    "set [output] host in the config to light anything")
         return
-    try:
-        socket.gethostbyname(host)
-    except OSError as exc:
-        report.add("falcon", FAIL, f"{host} does not resolve: {exc}",
-                   "check the IP and that this machine is on the show LAN")
-        return
-    reachable = subprocess.run(
-        ["ping", "-c", "1", "-W", "1", host] if not _is_mac()
-        else ["ping", "-c", "1", "-t", "1", host],
-        capture_output=True).returncode == 0
-    if reachable:
-        report.add("falcon", OK, f"{host}:{config.output.port} responds to ping")
+
+    if host.lower() == "auto":
+        from .layout import load_layout
+        try:
+            targets = [(c.name, c.ip) for c in load_layout().ddp_targets()]
+        except Exception as exc:                        # noqa: BLE001
+            report.add("falcon", FAIL, f"cannot read the controller list: {exc}",
+                       "check xlights_networks.xml")
+            return
+        if not targets:
+            report.add("falcon", FAIL,
+                       "[output] host is 'auto' but no DDP controllers exist",
+                       "add them in xlights_networks.xml, or set an address")
+            return
     else:
-        report.add("falcon", WARN, f"{host} does not answer ping",
-                   "DDP is one-way UDP so it may still work, but check the "
-                   "cable and that the Falcon is powered")
+        targets = [("falcon", host)]
+
+    for name, addr in targets:
+        label = f"{name} {addr}" if name != "falcon" else addr
+        try:
+            socket.gethostbyname(addr)
+        except OSError as exc:
+            report.add("falcon", FAIL, f"{label} does not resolve: {exc}",
+                       "check the IP and that this machine is on the show LAN")
+            continue
+        reachable = subprocess.run(
+            ["ping", "-c", "1", "-W", "1", addr] if not _is_mac()
+            else ["ping", "-c", "1", "-t", "1", addr],
+            capture_output=True).returncode == 0
+        if reachable:
+            report.add("falcon", OK,
+                       f"{label}:{config.output.port} responds to ping")
+        else:
+            report.add("falcon", WARN, f"{label} does not answer ping",
+                       "DDP is one-way UDP so it may still work, but check the "
+                       "cable and that the Falcon is powered")
 
 
 def _is_mac() -> bool:

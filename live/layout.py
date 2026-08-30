@@ -170,13 +170,35 @@ class Layout:
             )
         return self.controllers[name]
 
+    def ddp_targets(self) -> list[Controller]:
+        """Every controller the live engine can actually send to, in channel
+        order.
+
+        The show is not one receiver: the nets are on one Falcon and the
+        corridor on another, and ``xlights_networks.xml`` is the only place
+        that records which is which.  Deriving the list from the layout keeps
+        the addresses in one file instead of two -- a second copy in
+        ``live.toml`` drifts, and a stale address is silent, because DDP is
+        UDP and nothing comes back.
+
+        Entries with no ``<network>`` child (an FPP player) own no channels and
+        are skipped; so is anything that is not DDP, since that is the only
+        protocol :mod:`live.ddp` speaks.
+        """
+        return sorted(
+            (c for c in self.controllers.values()
+             if c.channels and c.protocol.upper() == "DDP"),
+            key=lambda c: c.start,
+        )
+
     def unaddressed(self) -> list[Model]:
         """Models that sit outside every controller's channel space.
 
-        Right now this is the 24 arches and the par: their start channels run
-        past the Falcon's 11 160, and nothing else in the show is a controller.
-        Whatever drives them is not something xLights knows about, so the live
-        engine cannot reach them over DDP until that is resolved.
+        Controllers are laid out back to back in document order, so a
+        ``MaxChannels`` that is too small does not fail loudly -- it silently
+        pushes everything after it off the end of the last controller.  Those
+        channels are rendered and then dropped, because there is no receiver
+        that claims them.
         """
         spans = [(c.start, c.end) for c in self.controllers.values() if c.channels]
         return [

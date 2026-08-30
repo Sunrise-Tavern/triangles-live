@@ -927,11 +927,70 @@ def test_doctor(layout: Layout) -> str:
     return f"{len(report.checks)} checks, every non-ok one carries a remedy"
 
 
+def test_multi_target(layout: Layout) -> str:
+    """Two Falcons, two slices, and each addressed from its own channel 0.
+
+    The show does not fit on one controller, and the failure mode when the
+    split is wrong is silent: DDP is UDP, so a receiver that is handed offsets
+    past the end of its channel space drops them and reports nothing.  That is
+    exactly what a dark corridor and a lit set of nets looks like, so the
+    offsets are asserted here rather than discovered at the rig.
+    """
+    from .engine import Engine
+
+    engine = Engine(layout, host="auto")
+    targets = engine.targets
+    check(len(targets) >= 2,
+          f"expected the show to span several controllers, got {len(targets)}")
+
+    caught: dict[str, list[bytes]] = {}
+
+    class Recorder:
+        def __init__(self, key): self.key = caught.setdefault(key, [])
+        def sendto(self, data, _addr): self.key.append(data)
+        def setblocking(self, _flag): pass
+        def close(self): pass
+
+    for sink in targets:
+        sink.sender = ddp.DDPSender(sink.host, port=sink.port,
+                                    sock=Recorder(sink.name))
+
+    frame = np.arange(layout.channel_count, dtype=np.int64).astype(np.uint8)
+    for sink in targets:
+        sink.sender.send_frame(frame[sink.span])
+
+    covered = np.zeros(layout.channel_count, dtype=int)
+    for sink in targets:
+        covered[sink.span] += 1
+        packets = [ddp.parse(p) for p in caught[sink.name]]
+        check(bool(packets), f"{sink.name} sent nothing")
+        check(packets[0].offset == 0,
+              f"{sink.name} starts at offset {packets[0].offset}, not 0 -- a DDP "
+              "offset addresses the receiver's own channel space")
+        width = sink.span.stop - sink.span.start
+        check(packets[-1].end == width,
+              f"{sink.name} covers {packets[-1].end} of its {width} channels")
+        check(packets[-1].push and not any(q.push for q in packets[:-1]),
+              f"{sink.name} must push on its last packet only")
+        body = b"".join(bytes(q.data) for q in packets)
+        check(body == frame[sink.span].tobytes(),
+              f"{sink.name} sent the wrong slice of the show")
+
+    check(not (covered > 1).any(),
+          f"{int((covered > 1).sum())} channels are sent to two controllers")
+    gap = int((covered == 0).sum())
+    return (f"{len(targets)} controllers, {int((covered == 1).sum())} channels "
+            f"covered exactly once, each addressed from its own 0"
+            + (f"; {gap} unaddressed" if gap else ""))
+
+
+
 TESTS = (
     ("channel map", test_layout),
     ("fseq round-trip", test_fseq_roundtrip),
     ("DDP split/reassemble", test_ddp_packets),
     ("UDP loopback -> fseq", test_loopback),
+    ("multi-controller split", test_multi_target),
     ("canvas -> channels", test_canvas),
     ("effect vocabulary", test_effects),
     ("fixed script", test_script),

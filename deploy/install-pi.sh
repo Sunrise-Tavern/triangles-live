@@ -51,7 +51,8 @@ echo "==> Preflight"
 cat <<NOTES
 
 Next:
-  1. Edit live.toml -- [output] host is the Falcon (192.168.50.20), and
+  1. Edit live.toml -- [output] host = "auto" sends to every Falcon in
+     xlights_networks.xml (nets 192.168.1.20, corridor 192.168.1.30), and
      [audio] device is the USB interface.  Find it with:
          ./live.sh listen --devices
   2. Give this Pi a static address on the same subnet as the Falcon.

@@ -34,7 +34,7 @@ over Ethernet) is not available. The only live signal is the sound.
 |---|---|---|
 | Raspberry Pi 4 (2 GB+) or **Pi 5**, PSU, case with fan, SD card | runs the engine | Pi 5 gives real headroom for the DSP + 40 fps render. Dedicated box, not the FPP one |
 | **USB audio interface**, class-compliant, with **line input** (e.g. Behringer UCA222 / U-Phoria UMC22, Focusrite Solo) | the audio feed into the Pi | Pi has no line-in. Mono is enough |
-| **Small gigabit switch** (5 ports) or router | Pi ↔ Falcon (↔ Mac during setup) | Falcon is static `192.168.50.20`; give the Pi a static `192.168.50.x` |
+| **Small gigabit switch** (5 ports) or router | Pi ↔ Falcons (↔ Mac during setup) | Two Falcons: nets `192.168.1.20`, corridor `192.168.1.30`; give the Pi a static `192.168.1.x` |
 | Cat5e/6 cables ×3 (+ spares) | Pi, Falcon, Mac | |
 | ¼" TRS / RCA cable | XR16 aux out → interface line-in | |
 | *Arches + par controller* | **open question** — see bottom | depends on how they're actually wired today |

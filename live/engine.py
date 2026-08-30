@@ -79,6 +79,20 @@ class EngineStatus:
                 for k, v in self.__dict__.items()}
 
 
+@dataclass
+class Sink:
+    """One DDP receiver and the slice of the show it is responsible for."""
+
+    host: str
+    port: int
+    span: slice
+    name: str = ""
+    sender: DDPSender | None = None
+
+    def __str__(self) -> str:
+        return f"{self.name or self.host}@{self.host}:{self.port}"
+
+
 class Engine:
     def __init__(self, layout: Layout | None = None, settings: Settings | None = None,
                  *, fps: float = 40.0, host: str | None = None, port: int = DDP_PORT,
@@ -111,9 +125,24 @@ class Engine:
         self.session = session
         self.status = EngineStatus(audio=audio is not None)
 
-        self.span = slice(0, self.layout.channel_count)
-        if controller:
-            self.span = self.layout.output(controller).slice
+        # Where frames go.  The show spans two Falcons -- nets on one,
+        # corridor on the other -- so this is a list, not a host.
+        #   host="auto"   every DDP controller in xlights_networks.xml
+        #   host=<addr>   that one address, clipped by `controller` if given
+        #   host=""       nowhere; render only, which is the laptop default
+        self.targets: list[Sink] = []
+        if host and host.lower() == "auto":
+            if controller:
+                picks = [self.layout.output(controller)]
+            else:
+                picks = self.layout.ddp_targets()
+            self.targets = [Sink(c.ip, port, c.slice, c.name) for c in picks]
+        elif host:
+            span = (self.layout.output(controller).slice if controller
+                    else slice(0, self.layout.channel_count))
+            self.targets = [Sink(host, port, span, controller or "all")]
+        self.status.target = (", ".join(str(t) for t in self.targets)
+                              if self.targets else "no output")
 
         # Two buffers: the loop always fills the one it did not publish, so a
         # reader can never see half of two different frames.
@@ -121,7 +150,6 @@ class Engine:
         self._which = 0
         self.frame: np.ndarray = self._buffers[1]
 
-        self._sender: DDPSender | None = None
         self._writer: FseqWriter | None = None
         self._thread: threading.Thread | None = None
         self._audio_thread: threading.Thread | None = None
@@ -133,14 +161,12 @@ class Engine:
     def start(self) -> None:
         if self._thread is not None:
             raise RuntimeError("engine already started")
-        if self.host:
-            self._sender = DDPSender(self.host, port=self.port)
+        for sink in self.targets:
+            sink.sender = DDPSender(sink.host, port=sink.port)
         if self.record:
             self.record.parent.mkdir(parents=True, exist_ok=True)
             self._writer = FseqWriter(self.record, self.layout.channel_count,
                                       step_time_ms=int(round(1000.0 / self.fps)))
-        self.status.target = (f"{self.host}:{self.port}" if self.host
-                              else "no output")
         self._stop.clear()
         if self.listener is not None:
             # Audio first: the render loop's show time is the *audio's*
@@ -188,9 +214,10 @@ class Engine:
         if self._audio_thread is not None:
             self._audio_thread.join(timeout=timeout)
             self._audio_thread = None
-        if self._sender is not None:
-            self._sender.close()
-            self._sender = None
+        for sink in self.targets:
+            if sink.sender is not None:
+                sink.sender.close()
+                sink.sender = None
         if self._writer is not None:
             self._writer.close()
             self._writer = None
@@ -237,8 +264,16 @@ class Engine:
                 # the rig go dark, not watch a show that is secretly still lit.
                 out[:] = 0
 
-            if self._sender is not None and settings.output_enabled:
-                self._sender.send_frame(out[self.span], offset=self.span.start)
+            if settings.output_enabled:
+                for sink in self.targets:
+                    if sink.sender is not None:
+                        # Offset 0, not span.start: a DDP offset addresses the
+                        # *receiver's* own channel space, which starts at its
+                        # first channel however far into the show that is.
+                        # Sending the corridor at 11160 puts every packet past
+                        # the end of a controller that owns 25 920 channels,
+                        # and it drops them without a word.
+                        sink.sender.send_frame(out[sink.span])
             if self._writer is not None:
                 self._writer.add_frame(out)
 
@@ -287,7 +322,8 @@ class Engine:
                                             self.script.phrase_index(t, scene))
         s.bpm = self.script.bpm
         s.beat_phase = round(self.script.beat_phase(t), 3)
-        s.packets_sent = self._sender.packets_sent if self._sender else 0
+        s.packets_sent = sum(t.sender.packets_sent for t in self.targets
+                             if t.sender is not None)
 
 
 if __name__ == "__main__":

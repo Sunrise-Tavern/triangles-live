@@ -32,7 +32,12 @@ from .script import Script
 from .testpattern import DURATION, frame as pattern_frame
 from .timing import FrameClock
 
-FALCON_IP = "192.168.50.20"   # from xlights_networks.xml
+# From xlights_networks.xml.  The show spans two of these -- the nets on the
+# first, the corridor on the second -- which is why `serve` takes "auto"
+# rather than an address.  These are only for the single-target commands
+# (`pattern`, `show --send`) that aim at one controller by hand.
+FALCON_NETS = "192.168.1.20"
+FALCON_CORRIDOR = "192.168.1.30"
 
 
 def cmd_layout(args) -> int:
@@ -308,8 +313,7 @@ def cmd_serve(args) -> int:
             print(f"preset  : {exc}", file=sys.stderr)
     print(f"audio   : {args.audio or args.audio_device or 'none (scripted show)'}")
     url = f"http://{'localhost' if args.bind in ('0.0.0.0', '') else args.bind}:{args.port}"
-    print(f"engine  : {args.fps:g} fps -> "
-          f"{args.ddp + ':' + str(args.ddp_port) if args.ddp else 'no output'}")
+    print(f"engine  : {args.fps:g} fps -> {engine.status.target}")
     print(f"open    : {url}")
     try:
         serve(engine, host=args.bind, port=args.port,
@@ -652,7 +656,7 @@ def build_parser(config: Config | None = None) -> argparse.ArgumentParser:
 
     p = sub.add_parser("pattern", help="stream the test pattern over DDP", parents=[common])
     p.add_argument("--host", default="127.0.0.1",
-                   help=f"target; the rig's Falcon is {FALCON_IP}")
+                   help=f"target; nets {FALCON_NETS}, corridor {FALCON_CORRIDOR}")
     p.add_argument("--port", type=int, default=DDP_PORT)
     p.add_argument("--fps", type=float, default=40.0)
     p.add_argument("--seconds", type=float, default=DURATION)
@@ -714,7 +718,9 @@ def build_parser(config: Config | None = None) -> argparse.ArgumentParser:
     p.add_argument("--port", type=int, default=config.web.port,
                    help="web server port")
     p.add_argument("--ddp", default=config.output.host,
-                   help=f"send frames here; the rig's Falcon is {FALCON_IP}")
+                   metavar="HOST", 
+                   help=f"send frames here; nets {FALCON_NETS}, "
+                        f"corridor {FALCON_CORRIDOR}")
     p.add_argument("--ddp-port", type=int, default=config.output.port)
     p.add_argument("--controller", default=config.output.controller,
                    help="clip output to one controller's channels")

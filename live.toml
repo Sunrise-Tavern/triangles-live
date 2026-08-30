@@ -7,20 +7,27 @@
 # A command-line flag beats this file; this file beats the built-in default.
 
 [output]
-# The Falcon, from xlights_networks.xml.  Leave empty to render without
-# sending anything -- that is the right setting on a laptop.
-host = ""
-# host = "192.168.50.20"
+# "auto" = send to every DDP controller in xlights_networks.xml, each getting
+# the slice of the show it owns.  The rig is two Falcons -- nets on
+# 192.168.1.20, corridor on 192.168.1.30 -- so one address cannot cover it.
+# A literal address sends the whole show to that one receiver instead, which is
+# what a bench test or the fake Falcon wants.  Empty renders without sending
+# anything: still the right setting on a laptop.
+host = "auto"
+# host = "127.0.0.1"          # everything at a fake Falcon on this machine
 port = 4048
-# Clip output to one controller's channels.  The 24 arches and the par sit
-# outside the Falcon's 11 160; run `./live.sh layout` to see it.
-controller = "Falcon_F16V5_0E1C"
+# Clip output to a single controller, for testing one in isolation.  Empty
+# with host = "auto" means all of them.  Run `./live.sh layout` to see who owns
+# what: Falcon_F16V5_0E1C is the nets, Falcon_F16V5_8928 the corridor.
+controller = ""
 fps = 40.0
 
 [audio]
 # Input device index or name.  Empty = system default.
 # Run `./live.sh listen --devices` at the rig to find the USB interface.
-device = ""
+# The name, not the index: indices move when a device enumerates differently
+# after a reboot or a replug, and the systemd unit has no one to notice.
+device = "Onyx Artist"
 # Or drive the show from a file instead of the line input, for testing:
 file = ""
 loop = false

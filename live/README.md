@@ -22,7 +22,7 @@ and a systemd unit.  What remains is measuring it on the actual Pi.
 At the rig, that first line becomes:
 
 ```bash
-./live.sh serve --ddp 192.168.50.20 --controller Falcon_F16V5_0E1C
+./live.sh serve --ddp auto                    # both Falcons, from the layout
 ```
 
 `live.sh` is the same wrapper idea as `run.sh` — it just runs `python -m live`
@@ -433,7 +433,7 @@ pre-fires the resolution.
 ```bash
 ./live.sh sim track.mp3 --play          # audio -> DDP -> fseq, with the sound
 ./live.sh serve --audio track.mp3       # the show, in the browser
-./live.sh serve --audio-device 2 --ddp 192.168.50.20 --controller Falcon_F16V5_0E1C
+./live.sh serve --audio-device 2 --ddp auto
 ```
 
 `sim` runs the real engine, sends real packets, and the fake Falcon writes
@@ -1005,7 +1005,7 @@ On the Pi (or the Mac, on the show LAN), aim the pattern at the Falcon and
 watch the nets:
 
 ```bash
-./live.sh pattern --host 192.168.50.20 --controller Falcon_F16V5_0E1C --loop
+./live.sh pattern --host 192.168.1.20 --controller Falcon_F16V5_0E1C --loop
 ```
 
 `--controller` clips the send to that device's channel space (1–11 160) and
