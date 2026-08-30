@@ -343,10 +343,22 @@ def test_canvas(layout: Layout) -> str:
     ally = np.concatenate([G.y[i][mask[i]] for i in range(mask.shape[0])])
     check(allx.min() == 0.0 and allx.max() == 1.0 and ally.min() == 0.0 and ally.max() == 1.0,
           "big triangle frame does not span 0..1")
+    # Every net as one surface: the frame must span 0..1 both ways, and the
+    # left-to-right order must be the order of the nets' x in it.
+    A = canvas.all_geo
+    ax = np.concatenate([A.x[i][mask_all[i]] for i in range(len(layout.nets))]) if (mask_all := canvas.net_mask) is not None else None
+    ay = np.concatenate([A.y[i][mask_all[i]] for i in range(len(layout.nets))])
+    check(ax.min() == 0.0 and ax.max() == 1.0 and ay.min() == 0.0 and ay.max() == 1.0,
+          "all-nets frame does not span 0..1")
+    means = [float(A.x[i][mask_all[i]].mean()) for i in range(len(layout.nets))]
+    check(canvas.net_order == sorted(range(len(layout.nets)), key=means.__getitem__),
+          f"net_order {canvas.net_order} is not left-to-right by x")
+    check(A.aspect > 2.0, f"the array should be much wider than tall (aspect {A.aspect:.2f})")
     return (f"{canvas.nets.shape} nets ({len(layout.nets)}, padded) + "
             f"{canvas.arches.shape} arches -> {layout.channel_count} channels, "
             f"big {big.start}-{big.stop - 1} ({tops[0]} top, {centre[0]} centre), "
-            f"small {small.start}-{small.stop - 1}, colour order and clamping hold")
+            f"small {small.start}-{small.stop - 1}, array {A.aspect:.1f}:1, "
+            f"colour order and clamping hold")
 
 
 def test_effects(layout: Layout) -> str:

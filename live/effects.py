@@ -374,6 +374,38 @@ def apex(canvas: Canvas, palette: Palette, strength: float, *, level: float = 1.
     _blend_nets(canvas, colors, targets, mode)
 
 
+def blob(canvas: Canvas, palette: Palette, x: float, y: float, *,
+         radius: float = 0.15, level: float = 1.0, targets: slice | None = None,
+         mode: str = "add", geo: NetGeometry | None = None) -> None:
+    """One soft round spot at ``(x, y)`` in the frame -- a ball.
+
+    Round in the frame's real proportions: the distance is measured in
+    aspect-corrected units, so a ball on the whole array (3.3:1) is not a
+    streak."""
+    g = _geo(canvas, targets, geo)
+    dx, dy = (g.x - x) * g.aspect, g.y - y
+    d = np.hypot(dx, dy) / max(radius, 1e-3)
+    profile = np.exp(-(d ** 2))
+    colors = palette.ramp(np.clip(d, 0.0, 1.0)) * profile[..., None] * level
+    _blend_nets(canvas, colors, targets, mode)
+
+
+def sweep(canvas: Canvas, palette: Palette, at: float, *, angle: float = 0.0,
+          width: float = 0.12, level: float = 1.0, targets: slice | None = None,
+          mode: str = "add", geo: NetGeometry | None = None) -> None:
+    """One band at position ``at`` (0..1) across the frame -- a wipe.
+
+    ``angle`` 0 sweeps along x (a vertical band moving sideways), 1 along y
+    (a horizontal band moving up or down), between for a diagonal.  Unlike
+    ``bars`` this does not repeat: there is one band, and where it is not,
+    nothing."""
+    g = _geo(canvas, targets, geo)
+    coord = g.x * (1.0 - angle) + g.y * angle
+    profile = np.clip(1.0 - np.abs(coord - at) / max(width, 1e-3), 0.0, 1.0) ** 1.5
+    colors = palette.ramp(coord) * profile[..., None] * level
+    _blend_nets(canvas, colors, targets, mode)
+
+
 def plasma(canvas: Canvas, palette: Palette, t: float, *, scale: float = 3.0,
            speed: float = 0.5, level: float = 1.0,
            targets: slice | None = None, mode: str = "add",

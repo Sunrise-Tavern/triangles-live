@@ -28,12 +28,17 @@ from .layout import Layout, load_layout
 
 
 class NetGeometry:
-    """Where some nets' pixels are: ``(k, nodes)`` vectors, one row per net."""
+    """Where some nets' pixels are: ``(k, nodes)`` vectors, one row per net.
 
-    __slots__ = ("x", "y", "r", "angle")
+    ``aspect`` is width over height of the frame these are normalised in --
+    1.0 for a single net, about 3.3 for the whole array -- so an effect that
+    wants a round thing (a ball, a ring) can undo the stretch.
+    """
 
-    def __init__(self, x, y, r, angle) -> None:
-        self.x, self.y, self.r, self.angle = x, y, r, angle
+    __slots__ = ("x", "y", "r", "angle", "aspect")
+
+    def __init__(self, x, y, r, angle, aspect: float = 1.0) -> None:
+        self.x, self.y, self.r, self.angle, self.aspect = x, y, r, angle, aspect
 
 
 class Canvas:
@@ -65,6 +70,7 @@ class Canvas:
 
         self._geometry(nets, width, arch)
         self._big_geometry()
+        self._all_geometry()
         self._gather()
 
     # -- geometry ---------------------------------------------------------- #
@@ -189,6 +195,41 @@ class Canvas:
         r /= max(1e-6, float((r * self.net_mask[self.big]).max()))
         angle[:] = (np.arctan2(dy, dx) / (2 * np.pi)) % 1.0
         self.big_geo = NetGeometry(x, y, r, angle)
+
+    def _all_geometry(self) -> None:
+        """Every net as one surface: the whole array in the preview's frame.
+
+        The three single nets and the big triangle sit side by side in the
+        layout, about 3.3 times wider than tall.  ``all_geo.x``/``y`` run
+        0..1 across the lot (world X across, world Y up, as "Per Preview"),
+        ``r``/``angle`` are about the array's centre in aspect-corrected
+        units so a ring is round, and ``net_order`` lists the nets left to
+        right for anything that steps through them one at a time.
+        """
+        from .geometry import world_positions
+
+        positions = world_positions(self.layout)
+        count, width = self.nets.shape[:2]
+        points = np.vstack([positions[n] for n in self.net_names])
+        x_lo, x_hi = float(points[:, 0].min()), float(points[:, 0].max())
+        y_lo, y_hi = float(points[:, 1].min()), float(points[:, 1].max())
+        aspect = max(x_hi - x_lo, 1e-6) / max(y_hi - y_lo, 1e-6)
+        x = np.zeros((count, width), dtype=np.float32)
+        y = np.zeros((count, width), dtype=np.float32)
+        centres = []
+        for i, name in enumerate(self.net_names):
+            p = positions[name]
+            n = len(p)
+            x[i, :n] = (p[:, 0] - x_lo) / max(x_hi - x_lo, 1e-6)
+            y[i, :n] = 1.0 - (p[:, 1] - y_lo) / max(y_hi - y_lo, 1e-6)
+            centres.append(float(p[:, 0].mean()))
+        dx, dy = (x - 0.5) * aspect, y - 0.5
+        r = np.hypot(dx, dy).astype(np.float32)
+        r /= max(1e-6, float((r * self.net_mask).max()))
+        angle = ((np.arctan2(dy, dx) / (2 * np.pi)) % 1.0).astype(np.float32)
+        self.all_geo = NetGeometry(x, y, r, angle, aspect)
+        #: Net indices left to right in the preview.
+        self.net_order = [int(i) for i in np.argsort(centres)]
 
     # -- output ------------------------------------------------------------ #
 

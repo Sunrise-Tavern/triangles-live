@@ -91,17 +91,28 @@ class Treatment:
 #: (see :meth:`Canvas._big_geometry`): one wheel turning about the big
 #: triangle's centre, one ring leaving it, bands sweeping across all four.
 #: The small nets echo the same effect at their own scale, dimmer.
+#:
+#: The ``all_*`` gestures paint every net as one surface -- the whole array,
+#: three singles and the big triangle side by side -- so a thing can cross
+#: the room: a band sweeping end to end and back, a ball bouncing along it,
+#: a wave rolling through, a burst from the centre, the nets lit one after
+#: another left to right.
 NET_GESTURES: dict[str, tuple[str, ...]] = {
     QUIET:    ("plasma", "twinkle", "breathe", "orbit", "ripples_slow",
-               "big_plasma", "big_orbit"),
+               "big_plasma", "big_orbit", "all_plasma", "all_wave_slow",
+               "all_drift"),
     CRUISING: ("bars", "trade", "slow_wheel", "rings", "spiral", "ripples",
                "rain", "orbit", "big_bars", "big_wheel", "big_spiral",
-               "big_ripples"),
+               "big_ripples", "all_sweep", "all_ball", "all_wave", "all_fall",
+               "all_diagonal", "all_scan"),
     BUILDING: ("wheel_up", "strobe_small", "bars_fast", "rain_fast",
-               "checker", "spiral_fast", "big_wheel_up", "big_rain"),
+               "checker", "spiral_fast", "big_wheel_up", "big_rain",
+               "all_rise", "all_scan_up", "all_squeeze"),
     HOT:      ("rings", "fast_wheel", "bars_fast", "flare", "checker",
                "halves", "apex_flash", "spiral_fast", "ripples_fast",
-               "big_rings", "big_bars_fast", "big_wheel_fast", "big_apex"),
+               "big_rings", "big_bars_fast", "big_wheel_fast", "big_apex",
+               "all_burst", "all_sweep_fast", "all_ball_fast", "all_scan_fast",
+               "all_slam", "all_diagonal_fast"),
 }
 
 #: Colour schemes each state may draw, one chosen per visit.  Every scheme in
@@ -672,6 +683,10 @@ class Arranger:
         elif name.startswith("big_"):
             self._big(canvas, name[4:], frame, t, phrase, palette, beat, kick,
                       tension, beats)
+        # -- every net as one surface --------------------------------------- #
+        elif name.startswith("all_"):
+            self._all(canvas, name[4:], frame, t, phrase, palette, beat, kick,
+                      tension, beats)
 
     def _big(self, canvas: Canvas, name: str, frame: int, t: float,
              phrase: float, palette, beat: float, kick: float, tension: float,
@@ -753,6 +768,110 @@ class Arranger:
             fx.apex(canvas, pal.WHITE, kick, level=echo, targets=small)
         else:
             raise ValueError(f"unknown big gesture {name!r}")
+
+    def _all(self, canvas: Canvas, name: str, frame: int, t: float,
+             phrase: float, palette, beat: float, kick: float, tension: float,
+             beats: float) -> None:
+        """One gesture across every net as one surface.
+
+        Positions are in ``canvas.all_geo``: x 0 at the left end of the
+        array, 1 at the right; y 0 at the top.  Everything periodic counts
+        in beats; a "bounce" is a triangle wave of the beat count, so the
+        thing turns round exactly on a bar line.
+        """
+        G = canvas.all_geo
+        bed = 0.10          # so the nets the thing is not on are not off
+
+        def bounce(period_beats: float) -> float:
+            u = (beats / period_beats) % 1.0
+            return 2.0 * u if u < 0.5 else 2.0 - 2.0 * u
+
+        if name == "plasma":
+            fx.plasma(canvas, palette, t, scale=1.2, speed=0.25, level=0.75, geo=G)
+        elif name == "wave_slow":
+            # One long wave rolling through the whole array, one crest per
+            # array, a bar and a half per crossing.
+            fx.bars(canvas, palette, beats / 6.0, count=1, width=0.5,
+                    level=0.8, geo=G)
+        elif name == "wave":
+            fx.bars(canvas, palette, beats / 4.0, count=2, width=0.4,
+                    level=0.85, geo=G)
+        elif name == "drift":
+            # A soft spot wandering slowly across the room.
+            fx.wash(canvas, palette.dimmed(bed), 1.0)
+            fx.blob(canvas, palette, bounce(32.0), 0.5 + 0.3 * np.sin(beats / 5.0),
+                    radius=0.35, level=0.8, geo=G)
+        elif name == "sweep":
+            # A band crossing end to end over two bars, then back.
+            fx.wash(canvas, palette.dimmed(bed), 1.0)
+            fx.sweep(canvas, palette, bounce(16.0), width=0.12, level=0.95, geo=G)
+        elif name == "sweep_fast":
+            fx.wash(canvas, palette.dimmed(bed), 1.0)
+            fx.sweep(canvas, palette, bounce(8.0), width=0.10, level=1.0, geo=G)
+        elif name == "fall":
+            # Top to bottom, one drop per bar, over every net at once.
+            fx.wash(canvas, palette.dimmed(bed), 1.0)
+            fx.sweep(canvas, palette, (beats / 4.0) % 1.0, angle=1.0, width=0.2,
+                     level=0.9, geo=G)
+        elif name == "rise":
+            # Bottom to top, quickening with the build.
+            fx.wash(canvas, palette.dimmed(bed), 1.0)
+            fx.sweep(canvas, palette, 1.0 - (beats * (0.25 + 0.75 * tension)) % 1.0,
+                     angle=1.0, width=0.2, level=0.9, geo=G)
+        elif name == "diagonal":
+            fx.wash(canvas, palette.dimmed(bed), 1.0)
+            fx.sweep(canvas, palette, bounce(16.0), angle=0.4, width=0.14,
+                     level=0.95, geo=G)
+        elif name == "diagonal_fast":
+            fx.wash(canvas, palette.dimmed(bed), 1.0)
+            fx.sweep(canvas, palette, bounce(4.0), angle=0.6, width=0.12,
+                     level=1.0, geo=G)
+        elif name == "ball":
+            # A ball crossing the room over four bars and bouncing on the
+            # floor once a bar.
+            fx.wash(canvas, palette.dimmed(bed), 1.0)
+            hop = abs(np.sin(np.pi * (beats / 4.0)))
+            fx.blob(canvas, palette, bounce(32.0), 0.85 - 0.6 * hop,
+                    radius=0.22, level=1.0, geo=G)
+        elif name == "ball_fast":
+            # Crosses in two bars, bounces on every beat.
+            fx.wash(canvas, palette.dimmed(bed), 1.0)
+            hop = abs(np.sin(np.pi * beats))
+            fx.blob(canvas, palette, bounce(16.0), 0.85 - 0.65 * hop,
+                    radius=0.2, level=1.0, geo=G)
+            fx.blob(canvas, pal.WHITE, bounce(16.0), 0.85 - 0.65 * hop,
+                    radius=0.06, level=0.7 * kick, geo=G)
+        elif name == "burst":
+            # A ring out of the centre of the whole array on every beat.
+            fx.wash(canvas, palette.dimmed(bed), 1.0)
+            fx.radial(canvas, palette, beat, width=0.18, level=1.0, geo=G)
+        elif name == "slam":
+            # Both ends rush in and meet in the middle on the beat.
+            fx.wash(canvas, palette.dimmed(bed), 1.0)
+            fx.sweep(canvas, palette, 0.5 * beat, width=0.1, level=1.0, geo=G)
+            fx.sweep(canvas, palette, 1.0 - 0.5 * beat, width=0.1, level=1.0, geo=G)
+            fx.blob(canvas, pal.WHITE, 0.5, 0.5, radius=0.25,
+                    level=_kick(beat, sharp=4.0) * 0.8, geo=G)
+        elif name == "squeeze":
+            # The two ends close in as the build tightens, slowly.
+            fx.wash(canvas, palette.dimmed(bed), 1.0)
+            at = 0.5 * tension * (0.5 + 0.5 * np.sin(np.pi * beats / 4.0))
+            fx.sweep(canvas, palette, at, width=0.12, level=0.95, geo=G)
+            fx.sweep(canvas, palette, 1.0 - at, width=0.12, level=0.95, geo=G)
+        elif name in ("scan", "scan_up", "scan_fast"):
+            # The nets one after another, left to right.
+            order = canvas.net_order
+            per_beat = {"scan": 0.5, "scan_up": 0.5 + tension, "scan_fast": 2.0}[name]
+            position = (beats * per_beat) % len(order)
+            fx.wash(canvas, palette.dimmed(bed), 1.0)
+            for rank, index in enumerate(order):
+                gap = min(abs(position - rank), len(order) - abs(position - rank))
+                glow = max(0.0, 1.0 - gap / 1.2) ** 1.5
+                if glow > 0.0:
+                    fx.wash(canvas, palette, glow * 0.95, gradient=0.6,
+                            targets=slice(index, index + 1))
+        else:
+            raise ValueError(f"unknown all gesture {name!r}")
 
     def _quiet(self, canvas, gesture, frame, t, phrase, palette, beat, bar,
                kick, features) -> None:

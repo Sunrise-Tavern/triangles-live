@@ -450,6 +450,14 @@ wheel turning about the big centre, one ring per beat leaving it, bands
 sweeping across all four nets, while the small nets echo the same effect at
 their own scale, dimmer.
 
+There is a third frame for *every* net at once (`Canvas.all_geo`): the whole
+array as one surface, about 3.3:1 wide, with `net_order` listing the nets left
+to right.  The `all_*` gestures live on it — a band sweeping end to end and
+back, a ball bouncing along the room, a wave rolling through, a burst from the
+centre of the array, both ends slamming into the middle on the beat, the nets
+lit one after another.  `blob` and `sweep` are the two effects added for
+these; both, like everything else, take the frame through `geo`.
+
 Variety comes from three places, all seeded so the same audio still renders
 the same show.  The corridor has fourteen patterns and the nets twenty-odd
 gestures, walked without repeating the previous one; the phrase is the
