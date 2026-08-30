@@ -439,6 +439,16 @@ Anticipation is **abortable** by construction: a build ramps tension with time
 elapsed, and if the sweep ends without a drop it simply relaxes.  Nothing
 pre-fires the resolution.
 
+The four "Big Triangle" nets — top, bottom-left, bottom-right and an inverted
+one in the middle — are mounted as one large triangle, and the canvas carries
+a second frame of reference for them (`Canvas.big_geo`, projected from the
+xLights world positions onto the nets' common plane) in which x/y run across
+the whole big triangle and r/angle are about its centre.  Any net effect
+takes it through its `geo` argument, and the `big_*` gestures use it: one
+wheel turning about the big centre, one ring per beat leaving it, bands
+sweeping across all four nets, while the small nets echo the same effect at
+their own scale, dimmer.
+
 Variety comes from three places, all seeded so the same audio still renders
 the same show.  The corridor has fourteen patterns and the nets twenty-odd
 gestures, walked without repeating the previous one; the phrase is the

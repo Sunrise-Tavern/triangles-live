@@ -275,10 +275,29 @@ def test_canvas(layout: Layout) -> str:
     covered = sorted([*range(big.start, big.stop), *range(small.start, small.stop)])
     check(covered == list(range(len(layout.nets))),
           f"big {big} + small {small} do not partition the {len(layout.nets)} nets")
+    # The big triangle as one surface: its four nets must tile the 0..1 frame
+    # -- a top net in the upper half, two base nets in the lower corners, and
+    # the inverted one holding the centre -- or big_* gestures paint four
+    # unrelated small triangles.
+    G, mask = canvas.big_geo, canvas.net_mask[big]
+    spans = {}
+    for i, name in enumerate(canvas.net_names[big]):
+        x, y = G.x[i][mask[i]], G.y[i][mask[i]]
+        spans[name] = (float(x.mean()), float(y.mean()), float(G.r[i][mask[i]].min()))
+    tops = [n for n, (_, y, _) in spans.items() if y < 0.35]
+    centre = [n for n, (_, _, r) in spans.items() if r < 0.05]
+    left = [n for n, (x, y, _) in spans.items() if x < 0.35 and y > 0.6]
+    right = [n for n, (x, y, _) in spans.items() if x > 0.65 and y > 0.6]
+    check(len(tops) == 1 and len(centre) == 1 and len(left) == 1 and len(right) == 1,
+          f"big triangle frame is not top/centre/left/right: {spans}")
+    allx = np.concatenate([G.x[i][mask[i]] for i in range(mask.shape[0])])
+    ally = np.concatenate([G.y[i][mask[i]] for i in range(mask.shape[0])])
+    check(allx.min() == 0.0 and allx.max() == 1.0 and ally.min() == 0.0 and ally.max() == 1.0,
+          "big triangle frame does not span 0..1")
     return (f"{canvas.nets.shape} nets ({len(layout.nets)}, padded) + "
             f"{canvas.arches.shape} arches -> {layout.channel_count} channels, "
-            f"big {big.start}-{big.stop - 1}, small {small.start}-{small.stop - 1}, "
-            f"colour order and clamping hold")
+            f"big {big.start}-{big.stop - 1} ({tops[0]} top, {centre[0]} centre), "
+            f"small {small.start}-{small.stop - 1}, colour order and clamping hold")
 
 
 def test_effects(layout: Layout) -> str:

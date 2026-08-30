@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .frame import Canvas
+from .frame import Canvas, NetGeometry
 from .palette import Palette
 
 # --------------------------------------------------------------------------- #
@@ -258,18 +258,20 @@ def corridor(canvas: Canvas, levels: np.ndarray, near: Palette,
 
 def wash(canvas: Canvas, palette: Palette, level: float = 1.0, *,
          targets: slice | None = None, gradient: float = 0.0,
-         mode: str = "add") -> None:
+         mode: str = "add",
+         geo: NetGeometry | None = None) -> None:
     """Flat colour over the nets, optionally graduated apex to base."""
-    y = _geo(canvas, targets).y
+    y = _geo(canvas, targets, geo).y
     colors = palette.ramp(y * gradient if gradient else np.zeros_like(y))
     _blend_nets(canvas, colors * level, targets, mode)
 
 
 def bars(canvas: Canvas, palette: Palette, phase: float, *, count: int = 3,
          angle: float = 0.0, width: float = 0.35, level: float = 1.0,
-         targets: slice | None = None, mode: str = "add") -> None:
+         targets: slice | None = None, mode: str = "add",
+         geo: NetGeometry | None = None) -> None:
     """Bands sweeping across the nets.  ``angle`` 0 = vertical, 1 = horizontal."""
-    g = _geo(canvas, targets)
+    g = _geo(canvas, targets, geo)
     coord = g.x * (1.0 - angle) + g.y * angle
     cycle = (coord * count - phase * count) % 1.0
     profile = np.clip(1.0 - np.abs(cycle - 0.5) / max(1e-3, width), 0.0, 1.0)
@@ -279,9 +281,10 @@ def bars(canvas: Canvas, palette: Palette, phase: float, *, count: int = 3,
 
 def radial(canvas: Canvas, palette: Palette, phase: float, *, width: float = 0.25,
            level: float = 1.0, targets: slice | None = None,
-           mode: str = "add") -> None:
+           mode: str = "add",
+         geo: NetGeometry | None = None) -> None:
     """A ring expanding from each net's centre -- the kick's natural shape."""
-    r = _geo(canvas, targets).r
+    r = _geo(canvas, targets, geo).r
     ring = np.clip(1.0 - np.abs(r - phase) / max(1e-3, width), 0.0, 1.0)
     colors = palette.ramp(r) * (ring ** 2)[..., None] * level
     _blend_nets(canvas, colors, targets, mode)
@@ -289,9 +292,10 @@ def radial(canvas: Canvas, palette: Palette, phase: float, *, width: float = 0.2
 
 def pinwheel(canvas: Canvas, palette: Palette, phase: float, *, arms: int = 3,
              level: float = 1.0, targets: slice | None = None,
-             mode: str = "add") -> None:
+             mode: str = "add",
+         geo: NetGeometry | None = None) -> None:
     """Arms rotating about each net's centre."""
-    g = _geo(canvas, targets)
+    g = _geo(canvas, targets, geo)
     spin = (g.angle * arms + phase) % 1.0
     profile = np.clip(1.0 - np.abs(spin - 0.5) * 2.0, 0.0, 1.0) ** 2
     colors = palette.ramp(g.r) * profile[..., None] * level
@@ -300,9 +304,10 @@ def pinwheel(canvas: Canvas, palette: Palette, phase: float, *, arms: int = 3,
 
 def spiral(canvas: Canvas, palette: Palette, phase: float, *, arms: int = 2,
            twist: float = 1.5, level: float = 1.0, targets: slice | None = None,
-           mode: str = "add") -> None:
+           mode: str = "add",
+         geo: NetGeometry | None = None) -> None:
     """A pinwheel whose arms curl: the angle advances with radius."""
-    g = _geo(canvas, targets)
+    g = _geo(canvas, targets, geo)
     spin = (g.angle * arms + g.r * twist + phase) % 1.0
     profile = np.clip(1.0 - np.abs(spin - 0.5) * 2.0, 0.0, 1.0) ** 2
     colors = palette.ramp(g.r) * profile[..., None] * level
@@ -311,9 +316,10 @@ def spiral(canvas: Canvas, palette: Palette, phase: float, *, arms: int = 2,
 
 def ripples(canvas: Canvas, palette: Palette, phase: float, *, rings: float = 3.0,
             level: float = 1.0, targets: slice | None = None,
-            mode: str = "add") -> None:
+            mode: str = "add",
+         geo: NetGeometry | None = None) -> None:
     """Concentric rings flowing outward -- ``radial`` repeated, and smooth."""
-    r = _geo(canvas, targets).r
+    r = _geo(canvas, targets, geo).r
     field = 0.5 + 0.5 * np.sin(2 * np.pi * (r * rings - phase))
     profile = field ** 2
     colors = palette.ramp(r) * profile[..., None] * level
@@ -322,9 +328,10 @@ def ripples(canvas: Canvas, palette: Palette, phase: float, *, rings: float = 3.
 
 def checker(canvas: Canvas, palette: Palette, step: int, *, cells: int = 4,
             level: float = 1.0, targets: slice | None = None,
-            mode: str = "add") -> None:
+            mode: str = "add",
+         geo: NetGeometry | None = None) -> None:
     """A checkerboard that flips parity on every ``step``."""
-    g = _geo(canvas, targets)
+    g = _geo(canvas, targets, geo)
     cx = np.floor(g.x * cells).astype(np.int32)
     cy = np.floor(g.y * cells).astype(np.int32)
     on = ((cx + cy + step) % 2 == 0).astype(np.float32)
@@ -334,9 +341,10 @@ def checker(canvas: Canvas, palette: Palette, step: int, *, cells: int = 4,
 
 def orbit(canvas: Canvas, palette: Palette, phase: float, *, radius: float = 0.55,
           width: float = 0.18, level: float = 1.0, targets: slice | None = None,
-          mode: str = "add") -> None:
+          mode: str = "add",
+         geo: NetGeometry | None = None) -> None:
     """One soft blob circling each net's centre."""
-    g = _geo(canvas, targets)
+    g = _geo(canvas, targets, geo)
     gap = np.abs(((g.angle - phase) + 0.5) % 1.0 - 0.5)
     profile = np.exp(-(gap / width) ** 2) * np.exp(-((g.r - radius) / 0.35) ** 2)
     colors = palette.ramp(g.angle) * profile[..., None] * level
@@ -345,9 +353,10 @@ def orbit(canvas: Canvas, palette: Palette, phase: float, *, radius: float = 0.5
 
 def halves(canvas: Canvas, palette: Palette, left: bool, strength: float = 1.0, *,
            level: float = 1.0, targets: slice | None = None,
-           mode: str = "add") -> None:
+           mode: str = "add",
+         geo: NetGeometry | None = None) -> None:
     """Light one half of each net -- left or right -- with a soft seam."""
-    g = _geo(canvas, targets)
+    g = _geo(canvas, targets, geo)
     edge = g.x - 0.5
     side = np.clip((-edge if left else edge) / 0.08 + 0.5, 0.0, 1.0)
     colors = palette.ramp(g.y) * (side * strength)[..., None] * level
@@ -355,10 +364,11 @@ def halves(canvas: Canvas, palette: Palette, left: bool, strength: float = 1.0, 
 
 
 def apex(canvas: Canvas, palette: Palette, strength: float, *, level: float = 1.0,
-         targets: slice | None = None, mode: str = "add") -> None:
+         targets: slice | None = None, mode: str = "add",
+         geo: NetGeometry | None = None) -> None:
     """A flash that starts at the apex and dies toward the base -- the kick's
     shape on a triangle."""
-    y = _geo(canvas, targets).y
+    y = _geo(canvas, targets, geo).y
     profile = ((1.0 - y) ** 2) * strength
     colors = palette.ramp(y) * profile[..., None] * level
     _blend_nets(canvas, colors, targets, mode)
@@ -366,9 +376,10 @@ def apex(canvas: Canvas, palette: Palette, strength: float, *, level: float = 1.
 
 def plasma(canvas: Canvas, palette: Palette, t: float, *, scale: float = 3.0,
            speed: float = 0.5, level: float = 1.0,
-           targets: slice | None = None, mode: str = "add") -> None:
+           targets: slice | None = None, mode: str = "add",
+         geo: NetGeometry | None = None) -> None:
     """Slow interference of three sines -- texture for beds and breakdowns."""
-    g = _geo(canvas, targets)
+    g = _geo(canvas, targets, geo)
     x, y = g.x * scale, g.y * scale
     phase = t * speed
     field = (np.sin(x + phase) + np.sin(y * 1.3 - phase * 0.7)
@@ -405,25 +416,20 @@ def par(canvas: Canvas, color: np.ndarray | tuple[float, ...], level: float = 1.
 # --------------------------------------------------------------------------- #
 
 
-class _Geo:
-    """The geometry vectors of some nets, ``(k, nodes)`` each."""
-
-    __slots__ = ("x", "y", "r", "angle")
-
-    def __init__(self, canvas: Canvas, targets: slice | None) -> None:
-        sel = slice(None) if targets is None else targets
-        self.x = canvas.net_x[sel]
-        self.y = canvas.net_y[sel]
-        self.r = canvas.net_r[sel]
-        self.angle = canvas.net_angle[sel]
-
-
-def _geo(canvas: Canvas, targets: slice | None) -> _Geo:
+def _geo(canvas: Canvas, targets: slice | None,
+         geo: NetGeometry | None = None) -> NetGeometry:
     """Geometry for exactly the nets an effect is painting.
 
     The nets no longer share one node map, so geometry is per net and has
-    to be sliced the same way the pixel buffer is."""
-    return _Geo(canvas, targets)
+    to be sliced the same way the pixel buffer is.  ``geo`` overrides it
+    with another frame of reference of the same shape -- the big triangle's
+    (``canvas.big_geo`` with ``targets=canvas.big``), which makes the four
+    nets one surface."""
+    if geo is not None:
+        return geo
+    sel = slice(None) if targets is None else targets
+    return NetGeometry(canvas.net_x[sel], canvas.net_y[sel],
+                       canvas.net_r[sel], canvas.net_angle[sel])
 
 
 def _blend_nets(canvas: Canvas, colors: np.ndarray,

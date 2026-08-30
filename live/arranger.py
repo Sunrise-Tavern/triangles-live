@@ -86,14 +86,22 @@ class Treatment:
 #:
 #: Each state's list is ordered loosely from calm to busy, and every gesture in
 #: it has to make sense at that energy: a drop can strobe, a breakdown cannot.
+#:
+#: The ``big_*`` gestures paint the four "Big Triangle" nets as one surface
+#: (see :meth:`Canvas._big_geometry`): one wheel turning about the big
+#: triangle's centre, one ring leaving it, bands sweeping across all four.
+#: The small nets echo the same effect at their own scale, dimmer.
 NET_GESTURES: dict[str, tuple[str, ...]] = {
-    QUIET:    ("plasma", "twinkle", "breathe", "orbit", "ripples_slow"),
+    QUIET:    ("plasma", "twinkle", "breathe", "orbit", "ripples_slow",
+               "big_plasma", "big_orbit"),
     CRUISING: ("bars", "trade", "slow_wheel", "rings", "spiral", "ripples",
-               "rain", "orbit"),
+               "rain", "orbit", "big_bars", "big_wheel", "big_spiral",
+               "big_ripples"),
     BUILDING: ("wheel_up", "strobe_small", "bars_fast", "rain_fast",
-               "checker", "spiral_fast"),
+               "checker", "spiral_fast", "big_wheel_up", "big_rain"),
     HOT:      ("rings", "fast_wheel", "bars_fast", "flare", "checker",
-               "halves", "apex_flash", "spiral_fast", "ripples_fast"),
+               "halves", "apex_flash", "spiral_fast", "ripples_fast",
+               "big_rings", "big_bars_fast", "big_wheel_fast", "big_apex"),
 }
 
 #: Colour schemes each state may draw, one chosen per visit.  Every scheme in
@@ -660,6 +668,91 @@ class Arranger:
         elif name == "apex_flash":
             fx.pinwheel(canvas, palette, beats / 4.0, arms=3, level=0.45)
             fx.apex(canvas, pal.WHITE, kick, level=0.9)
+        # -- the big triangle as one surface -------------------------------- #
+        elif name.startswith("big_"):
+            self._big(canvas, name[4:], frame, t, phrase, palette, beat, kick,
+                      tension, beats)
+
+    def _big(self, canvas: Canvas, name: str, frame: int, t: float,
+             phrase: float, palette, beat: float, kick: float, tension: float,
+             beats: float) -> None:
+        """One gesture over the big triangle, echoed small on the small nets.
+
+        Every call paints the big nets through ``canvas.big_geo`` -- the
+        four of them as one triangle -- and the small nets with the same
+        effect in their own frame at a lower level, so the two groups read
+        as the same idea at two scales rather than one group resting.
+        """
+        big, small = self.big, self.small
+        G = canvas.big_geo
+        echo = 0.45
+        if name == "plasma":
+            fx.plasma(canvas, palette, t, scale=1.6, speed=0.3, level=0.75,
+                      targets=big, geo=G)
+            fx.plasma(canvas, palette, t, scale=2.5, speed=0.35, level=echo,
+                      targets=small)
+        elif name == "orbit":
+            fx.orbit(canvas, palette, beats / 16.0, radius=0.6, width=0.12,
+                     level=0.9, targets=big, geo=G)
+            fx.orbit(canvas, palette, -beats / 8.0, width=0.22, level=echo,
+                     targets=small)
+        elif name == "bars":
+            # Three bands across the whole big triangle, one bar per pass.
+            fx.bars(canvas, palette, phrase * 2.0, count=2, angle=0.2,
+                    width=0.3, level=0.95, targets=big, geo=G)
+            fx.bars(canvas, palette, phrase * 4.0, count=3, angle=0.15,
+                    width=0.3, level=echo, targets=small)
+        elif name == "bars_fast":
+            fx.bars(canvas, palette, beats / 2.0, count=3, angle=0.35,
+                    width=0.22, level=0.95, targets=big, geo=G)
+            fx.bars(canvas, palette, beats, count=4, angle=0.35, width=0.22,
+                    level=echo, targets=small)
+        elif name == "wheel":
+            # One turn per four bars about the big triangle's centre.
+            fx.pinwheel(canvas, palette, beats / 16.0, arms=3, level=0.85,
+                        targets=big, geo=G)
+            fx.pinwheel(canvas, palette, -beats / 8.0, arms=3, level=echo,
+                        targets=small)
+        elif name == "wheel_up":
+            # One turn per two bars, tightening to one per beat.
+            fx.pinwheel(canvas, palette, beats * (0.125 + 0.875 * tension),
+                        arms=3, level=0.85, targets=big, geo=G)
+            self._rest(canvas, small, t, palette)
+        elif name == "wheel_fast":
+            fx.pinwheel(canvas, palette, -beats / 4.0, arms=6, level=0.8,
+                        targets=big, geo=G)
+            fx.pinwheel(canvas, palette, beats / 2.0, arms=5, level=echo,
+                        targets=small)
+        elif name == "spiral":
+            fx.spiral(canvas, palette, beats / 16.0, arms=2, twist=2.0,
+                      level=0.85, targets=big, geo=G)
+            fx.spiral(canvas, palette, -beats / 8.0, arms=2, twist=1.5,
+                      level=echo, targets=small)
+        elif name == "ripples":
+            # One ring per bar out of the big centre.
+            fx.ripples(canvas, palette, beats / 4.0, rings=2.5, level=0.85,
+                       targets=big, geo=G)
+            fx.ripples(canvas, palette, beats / 2.0, rings=3.0, level=echo,
+                       targets=small)
+        elif name == "rings":
+            # One ring per beat, launched on the beat, across the big triangle.
+            fx.radial(canvas, palette, beat, width=0.25, level=0.95,
+                      targets=big, geo=G)
+            fx.radial(canvas, palette, beat, width=0.3, level=echo,
+                      targets=small)
+        elif name == "rain":
+            # Bands falling the height of the big triangle, faster as it builds.
+            fx.bars(canvas, palette, -beats * (0.25 + 0.75 * tension), count=3,
+                    angle=1.0, width=0.25, level=0.9, targets=big, geo=G)
+            self._rest(canvas, small, t, palette)
+        elif name == "apex":
+            # The kick flashes from the big apex and dies toward the base.
+            fx.pinwheel(canvas, palette, beats / 8.0, arms=3, level=0.4,
+                        targets=big, geo=G)
+            fx.apex(canvas, pal.WHITE, kick, level=0.95, targets=big, geo=G)
+            fx.apex(canvas, pal.WHITE, kick, level=echo, targets=small)
+        else:
+            raise ValueError(f"unknown big gesture {name!r}")
 
     def _quiet(self, canvas, gesture, frame, t, phrase, palette, beat, bar,
                kick, features) -> None:

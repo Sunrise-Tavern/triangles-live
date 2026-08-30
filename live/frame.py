@@ -27,6 +27,15 @@ import numpy as np
 from .layout import Layout, load_layout
 
 
+class NetGeometry:
+    """Where some nets' pixels are: ``(k, nodes)`` vectors, one row per net."""
+
+    __slots__ = ("x", "y", "r", "angle")
+
+    def __init__(self, x, y, r, angle) -> None:
+        self.x, self.y, self.r, self.angle = x, y, r, angle
+
+
 class Canvas:
     """One frame's worth of pixels, plus the geometry to paint them by."""
 
@@ -55,6 +64,7 @@ class Canvas:
         self.par = self._source[n_net + n_arch:]
 
         self._geometry(nets, width, arch)
+        self._big_geometry()
         self._gather()
 
     # -- geometry ---------------------------------------------------------- #
@@ -105,6 +115,70 @@ class Canvas:
         #: 0 at the front of the corridor, 1 at the back.
         n = len(self.arch_names)
         self.depth = (np.arange(n, dtype=np.float32) / max(1, n - 1))
+
+    def _big_geometry(self) -> None:
+        """Geometry of the "Big Triangle" nets as *one* surface.
+
+        Four nets -- top, bottom-left, bottom-right and an inverted one in the
+        middle -- are mounted as one large triangle.  Painted per net they
+        are four small triangles doing the same thing; painted through this
+        they are one: ``big.x``/``big.y`` run 0..1 across the whole big
+        triangle (y 0 at its apex), ``big.r``/``big.angle`` are about its
+        centre.  Same ``(k, nodes)`` shape as the per-net vectors sliced by
+        :attr:`big`, so any net effect takes it via its ``geo`` argument.
+
+        Computed from the xLights world positions: the nets are projected
+        onto their common plane (they are not quite coplanar -- the mounting
+        angles differ by a few degrees -- which is why this is a projection
+        and not a lookup).
+        """
+        from .geometry import world_positions
+
+        self.big = self.net_slice("Big Triangle")
+        width = self.nets.shape[1]
+        names = self.net_names[self.big]
+        positions = world_positions(self.layout)
+        points = np.vstack([positions[n] for n in names]).astype(np.float64)
+        centre = points.mean(axis=0)
+        _, _, vt = np.linalg.svd(points - centre, full_matrices=False)
+        normal = vt[2]
+        # In-plane "up" is world Y projected into the plane; "right" is
+        # across, signed so that x grows from the bottom-left net to the
+        # bottom-right one.
+        up = np.array([0.0, 1.0, 0.0]) - normal * normal[1]
+        up /= max(np.linalg.norm(up), 1e-9)
+        right = np.cross(up, normal)
+        right /= max(np.linalg.norm(right), 1e-9)
+        u = (points - centre) @ right
+        v = (points - centre) @ up
+        base = [i for i, n in enumerate(names)
+                if positions[n][:, 1].mean() < points[:, 1].mean()]
+        if len(base) >= 2:
+            lo, hi = sorted(base, key=lambda i: positions[names[i]].mean(axis=0) @ right)[::len(base) - 1]
+            if positions[names[hi]].mean(axis=0) @ right < positions[names[lo]].mean(axis=0) @ right:
+                right, u = -right, -u
+
+        count = len(names)
+        x = np.zeros((count, width), dtype=np.float32)
+        y = np.zeros((count, width), dtype=np.float32)
+        r = np.zeros((count, width), dtype=np.float32)
+        angle = np.zeros((count, width), dtype=np.float32)
+        u_lo, u_hi = float(u.min()), float(u.max())
+        v_lo, v_hi = float(v.min()), float(v.max())
+        cursor = 0
+        for i, name in enumerate(names):
+            n = self.layout[name].nodes
+            uu, vv = u[cursor:cursor + n], v[cursor:cursor + n]
+            cursor += n
+            x[i, :n] = (uu - u_lo) / max(u_hi - u_lo, 1e-9)
+            y[i, :n] = 1.0 - (vv - v_lo) / max(v_hi - v_lo, 1e-9)
+        # Centre of the big triangle: its centroid, one third up from the base.
+        cx, cy = 0.5, 2.0 / 3.0
+        dx, dy = x - cx, y - cy
+        r[:] = np.hypot(dx, dy)
+        r /= max(1e-6, float((r * self.net_mask[self.big]).max()))
+        angle[:] = (np.arctan2(dy, dx) / (2 * np.pi)) % 1.0
+        self.big_geo = NetGeometry(x, y, r, angle)
 
     # -- output ------------------------------------------------------------ #
 
