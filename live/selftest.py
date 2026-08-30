@@ -110,6 +110,41 @@ def test_layout(layout: Layout) -> str:
             f"{'par' if layout.par else 'no par'}")
 
 
+def test_orient(layout: Layout) -> str:
+    """The orientation bands must rise base -> apex and run front -> back."""
+    from . import orient
+
+    canvas = Canvas(layout)
+    mask = canvas.net_mask
+
+    def lit_net_y(t: float, big: bool) -> float:
+        orient.paint(canvas, t)
+        if big:
+            nets, y, m = canvas.nets[canvas.big], canvas.big_geo.y, mask[canvas.big]
+        else:
+            nets, y, m = canvas.nets, canvas.net_y, mask
+        bright = (nets.max(axis=-1) > 0.5) & m
+        check(bright.any(), f"nothing lit at {t:.1f}s")
+        return float(y[bright].mean())
+
+    early, late = lit_net_y(orient.hold("nets up", 0.6), False), lit_net_y(orient.hold("nets up", 4.4), False)
+    check(early > 0.8 and late < 0.2,
+          f"nets band runs {early:.2f} -> {late:.2f}; want base (1) -> apex (0)")
+    early, late = lit_net_y(orient.hold("big up", 0.6), True), lit_net_y(orient.hold("big up", 4.4), True)
+    check(early > 0.8 and late < 0.2,
+          f"big band runs {early:.2f} -> {late:.2f}; want base (1) -> apex (0)")
+
+    def lit_arch(t: float) -> int:
+        orient.paint(canvas, t)
+        return int(np.argmax(canvas.arches.max(axis=(1, 2))))
+
+    first, last = lit_arch(orient.hold("tunnel", 0.3)), lit_arch(orient.hold("tunnel", 5.7))
+    check(first == 0 and last == len(layout.arches) - 1,
+          f"tunnel runs arch {first} -> {last}; want 0 -> {len(layout.arches) - 1}")
+    return (f"{len(orient.STAGES)} stages: nets and the big triangle rise base -> apex, "
+            f"tunnel runs front -> back over {len(layout.arches)} arches")
+
+
 def test_fseq_roundtrip(layout: Layout) -> str:
     rng = np.random.default_rng(1)
     frames = [
@@ -1111,6 +1146,7 @@ TESTS = (
     ("UDP loopback -> fseq", test_loopback),
     ("multi-controller split", test_multi_target),
     ("canvas -> channels", test_canvas),
+    ("orientation", test_orient),
     ("effect vocabulary", test_effects),
     ("fixed script", test_script),
     ("preview geometry", test_geometry),

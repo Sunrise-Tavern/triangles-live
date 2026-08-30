@@ -30,6 +30,7 @@ from .frame import Canvas
 from .preview import Projection, contact_sheet, write_png
 from .script import Script
 from .testpattern import DURATION, frame as pattern_frame
+from . import orient
 from .timing import FrameClock
 
 # From xlights_networks.xml.  The show spans two of these -- the nets on the
@@ -103,6 +104,51 @@ def cmd_pattern(args) -> int:
         sender.close()
     print(clock.stats.summary())
     print(f"{sender.frames_sent} frames, {sender.packets_sent} packets")
+    return 0
+
+
+def cmd_orient(args) -> int:
+    """Stream the orientation pattern: bands rising on the nets, one arch at a
+    time down the tunnel.  Sends to both Falcons like `serve` does."""
+    layout = load_layout()
+    canvas = Canvas(layout)
+    if args.host.lower() == "auto":
+        picks = ([layout.output(args.controller)] if args.controller
+                 else layout.ddp_targets())
+        sinks = [(c.ip, c.slice, c.name) for c in picks]
+    else:
+        span = (layout.output(args.controller).slice if args.controller
+                else slice(0, layout.channel_count))
+        sinks = [(args.host, span, args.controller or "all")]
+    if not sinks:
+        print("no DDP controller to send to")
+        return 1
+    senders = [(DDPSender(host, port=args.port,
+                          channels_per_packet=args.channels_per_packet), span, name)
+               for host, span, name in sinks]
+    for _, span, name in senders:
+        print(f"-> {name}: channels {span.start + 1}-{span.stop}")
+    print("stages: " + ", ".join(f"{n} ({s:g}s)" for n, s in orient.STAGES)
+          + " -- Ctrl-C to stop")
+    clock = FrameClock(fps=args.fps)
+    out = layout.blank_channels()
+    last = None
+    try:
+        for i, t in clock:
+            if args.stage:
+                t = orient.hold(args.stage, t)
+            stage = orient.paint(canvas, t)
+            if stage != last:
+                print(f"  {stage}")
+                last = stage
+            canvas.to_channels(out)
+            for sender, span, _ in senders:
+                sender.send_frame(out[span])
+    except KeyboardInterrupt:
+        print()
+    finally:
+        for sender, _, _ in senders:
+            sender.close()
     return 0
 
 
@@ -666,6 +712,21 @@ def build_parser(config: Config | None = None) -> argparse.ArgumentParser:
     p.add_argument("--channels-per-packet", type=int,
                    default=DEFAULT_CHANNELS_PER_PACKET)
     p.set_defaults(func=cmd_pattern)
+
+    p = sub.add_parser("orient", help="orientation check: bands rise on the nets, "
+                                      "one arch at a time down the tunnel",
+                       parents=[common])
+    p.add_argument("--host", default="auto",
+                   help='"auto" = every Falcon in xlights_networks.xml (default); '
+                        "or one address")
+    p.add_argument("--port", type=int, default=DDP_PORT)
+    p.add_argument("--fps", type=float, default=40.0)
+    p.add_argument("--controller", help="send to one controller only")
+    p.add_argument("--stage", choices=[n for n, _ in orient.STAGES],
+                   help="hold one stage instead of cycling")
+    p.add_argument("--channels-per-packet", type=int,
+                   default=DEFAULT_CHANNELS_PER_PACKET)
+    p.set_defaults(func=cmd_orient)
 
     p = sub.add_parser("fake-falcon", help="receive DDP and write an fseq", parents=[common])
     p.add_argument("--out", default="out/capture.fseq")

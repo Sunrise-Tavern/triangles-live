@@ -12,6 +12,7 @@ and a systemd unit.  What remains is measuring it on the actual Pi.
 
 ```bash
 ./live.sh serve            # the daemon + browser UI -> http://localhost:8080
+./live.sh orient           # at the rig: is up up, is front front?  (see below)
 ./live.sh selftest         # everything below, checked, no hardware or xLights
 ./live.sh layout           # the channel map, and what is unaddressable
 ./live.sh show             # render the fixed 30 s show -> out/show.fseq
@@ -577,6 +578,20 @@ Then a systemd unit with `Restart=always`, `Nice=-5` (audio capture and a
 interface has its static address and never find the Falcon.
 
 `[show] blackout_on_start` decides whether a mid-set restart comes back dark.
+
+## Checking the orientation, after a remap
+
+`./live.sh orient` sends three looping stages to both Falcons (stop the
+service first — `sudo systemctl stop triangles-live` — or the two will fight
+over the rig): a white band rising from base to apex on every net at once;
+the same band rising across the four "Big Triangle" nets *as one triangle* —
+the two base nets first, then the inverted middle one, the top net last; and
+one arch lit at a time from the front of the corridor to the back.  `--stage
+"big up"` holds one stage.  A band that falls, runs sideways, or crosses the
+four big nets out of step points at that model's orientation or world
+position in xLights; arches lighting out of order point at the Tunnel group.
+`./live.sh pattern` remains the channel-map check (start channels, colour
+order, node maps).
 
 ## Recording a session, when something is wrong
 
