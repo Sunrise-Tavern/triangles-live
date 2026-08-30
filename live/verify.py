@@ -308,7 +308,27 @@ def check_file(path: Path, *, fps: float = 40.0, backend: str = "aubio",
 # --------------------------------------------------------------------------- #
 
 
-def arc_track(samplerate: int = SAMPLERATE) -> tuple[np.ndarray, list[tuple[str, float, float]]]:
+#: (kind, bars, kick, bass, hat, sweep) -- the default miniature arrangement.
+ARC_PLAN = [("quiet", 6, 0.0, 0.30, 0.15, 0.0),
+            ("cruising", 8, 0.75, 0.55, 0.30, 0.0),
+            ("building", 6, 0.50, 0.40, 0.55, 1.0),
+            ("hot", 8, 1.00, 0.90, 0.60, 0.0)]
+
+#: The same arc with a drop that outlasts the 45 s loudness baseline, one
+#: ordinary-sounding dip inside it, and a real breakdown after.  What the
+#: state machine must *not* do here is leave hot while the music has not
+#: changed -- see ``StateThresholds.hot_fall``.
+LONG_DROP_PLAN = [("quiet", 6, 0.0, 0.30, 0.15, 0.0),
+                  ("cruising", 8, 0.75, 0.55, 0.30, 0.0),
+                  ("building", 6, 0.50, 0.40, 0.55, 1.0),
+                  ("hot", 20, 1.00, 0.90, 0.60, 0.0),
+                  ("hot", 1, 0.70, 0.65, 0.45, 0.0),
+                  ("hot", 20, 1.00, 0.90, 0.60, 0.0),
+                  ("quiet", 8, 0.0, 0.30, 0.15, 0.0)]
+
+
+def arc_track(samplerate: int = SAMPLERATE, plan=None
+              ) -> tuple[np.ndarray, list[tuple[str, float, float]]]:
     """A miniature arrangement: quiet, cruising, a sweep, then a drop.
 
     Small enough to run inside the self-test, and shaped like music rather
@@ -321,11 +341,7 @@ def arc_track(samplerate: int = SAMPLERATE) -> tuple[np.ndarray, list[tuple[str,
     bpm, sr = 128.0, samplerate
     beat = 60.0 / bpm
     bar = beat * 4
-    #: (kind, bars, kick, bass, hat, sweep)
-    plan = [("quiet", 6, 0.0, 0.30, 0.15, 0.0),
-            ("cruising", 8, 0.75, 0.55, 0.30, 0.0),
-            ("building", 6, 0.50, 0.40, 0.55, 1.0),
-            ("hot", 8, 1.00, 0.90, 0.60, 0.0)]
+    plan = plan if plan is not None else ARC_PLAN
 
     rng = np.random.default_rng(11)
     n = int(0.18 * sr)

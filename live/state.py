@@ -92,6 +92,28 @@ class StateThresholds:
     drop_bass_ratio: float = 1.5
     #: Time constant of the band-share baselines above.
     share_tau_s: float = 45.0
+    #: Leaving hot needs the music to actually come down, measured against
+    #: the drop's *own* level rather than the 45 s baseline.  The baseline
+    #: keeps learning through the drop, so after a minute of it "loud" has
+    #: become "normal" and ``energy`` drifts to 1.0 with nothing changing --
+    #: measured on a real session, hot ended at 152 s on "energy fell" while
+    #: the RMS was 0.038, as loud as anything in the preceding minute (0.026-
+    #: 0.074), and the show went hot -> cruising -> building in one second of
+    #: unchanged music.  So the fast level must also fall to this fraction of
+    #: a slow average taken only while hot: the real ends of hot passages in
+    #: that session read 0.34 (159-160 s: 0.045 -> 0.015) and 0.24 (252-253
+    #: s); the false exit read 0.78.
+    hot_fall: float = 0.6
+    #: ...where "slow" is this long.  Long enough that one loud bar does not
+    #: make the next ordinary one look like a fall (the same session peaks at
+    #: 0.074 for a second inside a 0.03 plateau), short enough that a fade
+    #: over a phrase or two still registers.
+    hot_level_tau_s: float = 16.0
+    #: Safety net for a fade with no step in it: below this fraction of the
+    #: set's own peak the passage is not hot whatever the step rule says.
+    #: Measured, the loudest 60 s of a session sits at 0.9-1.2 and its real
+    #: breakdowns at 0.5-0.65.
+    hot_floor_level: float = 0.35
     #: ...and the build actually lasted.
     min_build_s: float = 2.5
     #: How much of the loudness baseline must be filled before the energy
@@ -150,11 +172,16 @@ class StateMachine:
         self._rising_for = 0.0
         self._hot_for = 0.0
         self._quiet_for = 0.0
+        #: Absolute smoothed loudness, and its slow average while hot.
+        self._loud = 0.0
+        self._hot_level = 0.0
+        self._level = 1.0
         self._now = 0.0
         self._alpha = 1.0 - math.exp(-block_s / self.t.energy_tau_s)
         self._slow_alpha = 1.0 - math.exp(-block_s / self.t.slope_tau_s)
         self._bright_alpha = 1.0 - math.exp(-block_s / 8.0)
         self._share_alpha = 1.0 - math.exp(-block_s / self.t.share_tau_s)
+        self._hot_alpha = 1.0 - math.exp(-block_s / self.t.hot_level_tau_s)
         self._share_warm = int(round(1.0 / self._share_alpha))
         self.history: list[tuple[float, str]] = field(default_factory=list)  # type: ignore
         self.history = []
@@ -174,6 +201,10 @@ class StateMachine:
         self._bright += (features.centroid - self._bright) * self._bright_alpha
         brightness = features.centroid / max(self._bright, 1e-6)
 
+        self._loud += (features.rms - self._loud) * self._alpha
+        self._level = features.level
+        if self.state == HOT:
+            self._hot_level += (features.rms - self._hot_level) * self._hot_alpha
         self._high += (features.high_share - self._high) * self._alpha
         if not features.silent:
             # Cumulative mean until the window fills, then an EMA -- the same
@@ -253,6 +284,12 @@ class StateMachine:
         if held < self.t.dwell_s:
             return ""
 
+        if self.state == HOT and not self._fallen():
+            # Nothing has changed in the music, whatever the baseline says.
+            # Every exit from hot -- to cruising *or* straight to quiet --
+            # waits here for the level to actually step down.
+            return ""
+
         if self._energy < self.t.quiet_enter:
             return self._enter(QUIET, "energy below floor")
         if self.state == QUIET and self._energy < self.t.quiet_leave:
@@ -293,9 +330,18 @@ class StateMachine:
             return self._enter(CRUISING, "energy above floor")
         return ""
 
+    def _fallen(self) -> bool:
+        """Has the level come down from what hot has been running at?"""
+        return (self._loud < self.t.hot_fall * self._hot_level
+                or self._level < self.t.hot_floor_level)
+
     def _enter(self, state: str, reason: str) -> str:
         if state == self.state:
             return ""
+        if state == HOT:
+            # The reference for leaving is what hot sounds like, starting
+            # from the level it was entered at.
+            self._hot_level = self._loud
         self.state = state
         self.entered_at = self._now
         return reason

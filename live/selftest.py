@@ -799,6 +799,38 @@ def test_state_machine(layout: Layout) -> str:
             f"drop {drop - wanted[HOT]:+.1f}s from the boundary")
 
 
+def test_long_drop(layout: Layout) -> str:
+    """A drop longer than the loudness baseline stays hot until the music falls."""
+    from .audio import ArraySource
+    from .listener import Listener
+    from .state import HOT, StateMachine
+    from .verify import LONG_DROP_PLAN, arc_track
+
+    audio, sections = arc_track(plan=LONG_DROP_PLAN)
+    machine = StateMachine()
+    listener = Listener(ArraySource(audio))
+    for block in listener.source.blocks():
+        machine.push(listener.step(block))
+
+    history = machine.history
+    drop_start = next(start for kind, start, _ in sections if kind == "hot")
+    breakdown = next(start for kind, start, _ in sections[3:] if kind == "quiet")
+    entered = [t for t, s in history if s == HOT]
+    check(entered, "never entered hot")
+    check(len(entered) == 1,
+          f"entered hot {len(entered)} times: {[(round(t, 1), s) for t, s in history]}")
+    left = [t for t, s in history if t > entered[0] and s != HOT]
+    check(left, "never left hot after the breakdown")
+    check(left[0] >= breakdown - 0.5,
+          f"left hot at {left[0]:.1f}s, {breakdown - left[0]:.1f}s before the "
+          f"breakdown at {breakdown:.1f}s (drop ran {breakdown - drop_start:.0f}s)")
+    check(left[0] - breakdown <= 4.0,
+          f"left hot {left[0] - breakdown:+.1f}s after the breakdown")
+    return (f"held hot through {breakdown - drop_start:.0f}s of drop (baseline "
+            f"45s) and a one-bar dip, left {left[0] - breakdown:+.1f}s into "
+            f"the breakdown")
+
+
 def test_arranger(layout: Layout) -> str:
     """Audio in, pixels out: the whole chain, interleaved as the engine runs it."""
     from .arranger import Arranger
@@ -1001,6 +1033,7 @@ TESTS = (
     ("audio -> beats", test_beat_pipeline),
     ("bar tracking", test_downbeat),
     ("state machine", test_state_machine),
+    ("long drop", test_long_drop),
     ("arranger", test_arranger),
     ("config", test_config),
     ("doctor", test_doctor),
