@@ -62,6 +62,9 @@ class Settings:
     #: How much of the show's material changes with a transition rather than
     #: a cut: 0 is always a cut, 1 lets every phrase fade, wipe or dip.
     transitions: float = 0.75
+    #: Phrases a corridor pattern and net gesture are held for.  The colour
+    #: still moves every phrase; the material only every this many.
+    pattern_hold: float = 4.0
     #: Some net gestures lead with one group of triangles (big or small) and
     #: rest the other.  This is how bright the resting group's slow plasma
     #: is: 0 restores the original behaviour, where it holds the bed wash and
@@ -124,6 +127,7 @@ SCHEMA: dict[str, tuple] = {
     "scheme": ("choice", None, None, None, "Colour scheme"),
     "seed": ("float", 0.0, 999.0, 1.0, "Shuffle seed"),
     "transitions": ("float", 0.0, 1.0, 0.05, "Transitions"),
+    "pattern_hold": ("float", 1.0, 8.0, 1.0, "Pattern hold (phrases)"),
     "rest_level": ("float", 0.0, 1.0, 0.01, "Resting nets"),
     "quiet_enter": ("float", 0.2, 1.2, 0.01, "Quiet threshold"),
     "build_high_share": ("float", 0.2, 0.8, 0.01, "Build sensitivity"),

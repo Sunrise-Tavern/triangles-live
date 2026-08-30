@@ -250,12 +250,18 @@ class Arranger:
         index = self.clock.beat_index_at(t)
         return (index - self.clock.downbeat) // self.clock.bar_length
 
-    #: Degrees the hue steps per phrase inside a section, and how many steps
-    #: before it comes back.  Small and bounded on purpose: the golden-angle
-    #: jump between sections is the journey, and this is only so a ninety
-    #: second drop is not one flat colour the whole way through.
-    PHRASE_HUE_STEP = 9.0
-    PHRASE_HUE_CYCLE = 4
+    #: Degrees the hue moves per phrase inside a section.  This used to be a
+    #: 9-degree nudge cycling over four phrases, barely visible; now the
+    #: phrase is the *colour* clock -- the pattern and gesture hold for
+    #: several phrases (``pattern_hold``) and what changes between them is
+    #: the colour, so the step has to read as a change.  Monotonic, so a
+    #: long section keeps travelling rather than snapping back.
+    PHRASE_HUE_STEP = 24.0
+
+    def material_index(self, phrase: int) -> int:
+        """Which stretch of held material ``phrase`` falls in."""
+        hold = self.settings.pattern_hold if self.settings else 4.0
+        return int(phrase // max(1, int(round(hold))))
 
     def _visit_roll(self, key: str, treat: Treatment) -> float:
         """A stable 0..1 for this visit to this state, per ``key``."""
@@ -294,7 +300,7 @@ class Arranger:
     def palette_for(self, treat: Treatment, phrase: int = 0) -> pal.Palette:
         offset = self.settings.hue_offset if self.settings else 0.0
         lock = self.settings.hue_lock if self.settings else False
-        drift = (phrase % self.PHRASE_HUE_CYCLE) * self.PHRASE_HUE_STEP
+        drift = phrase * self.PHRASE_HUE_STEP
         hue = self.base_hue + offset + (0.0 if lock
                                         else self.journey * pal.GOLDEN_ANGLE + drift)
         scheme = self.scheme_for(treat)
@@ -335,8 +341,8 @@ class Arranger:
         """Which net gesture this phrase draws."""
         options = NET_GESTURES.get(treat.kind, ("bars",))
         visit = self.visits.get(treat.kind, 1)
-        return options[self._walk(f"nets:{treat.kind}:{visit}", phrase,
-                                  len(options))]
+        return options[self._walk(f"nets:{treat.kind}:{visit}",
+                                  self.material_index(phrase), len(options))]
 
     #: How much busier each return of a state is than the one before, and how
     #: many returns it keeps escalating for.  Small steps: a second drop should
@@ -374,6 +380,7 @@ class Arranger:
         # candidates under the walk's index: the pattern changed every half
         # second against a nominal four bars.
         visit = self.visits.get(treat.kind, 1)
+        phrase = self.material_index(phrase)
         key = (treat.kind, visit, phrase)
         held = self._pattern_held.get(treat.kind)
         if held is not None and held[0] == key:
@@ -441,7 +448,7 @@ class Arranger:
         look = (treat.kind, name, self.gesture, palette,
                 self.far_rotation_for(treat), treat)
 
-        if self._look is not None and look[:3] != self._look[:3]:
+        if self._look is not None and _identity(look) != _identity(self._look):
             # The material changed.  Decide how the old gives way to the new;
             # a change arriving mid-transition simply replaces the outgoing
             # look, which is what a cut would have shown anyway.
@@ -671,6 +678,12 @@ class Arranger:
 
 def _kick(phase: float, sharp: float = 2.0) -> float:
     return float(max(0.0, 1.0 - phase) ** sharp)
+
+
+def _identity(look: tuple) -> tuple:
+    """What makes a look different from the last: material, or colour."""
+    palette = look[3]
+    return (*look[:3], palette.name if palette is not None else "")
 
 
 def _smooth(x: float) -> float:

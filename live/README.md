@@ -178,7 +178,9 @@ scene hold · colour scheme override · shuffle seed · transitions · resting
 nets.  Presets are named JSON files under `live/presets/`, saved and loaded
 from the panel.
 
-*Shuffle seed* reseeds every deterministic choice the show makes — which
+*Pattern hold* is how many phrases the corridor pattern and net gesture are
+kept for — the colour still moves every phrase, the material only every
+`pattern_hold` of them.  *Shuffle seed* reseeds every deterministic choice the show makes — which
 pattern, gesture, scheme and transition each phrase gets — so two rigs, or two
 nights, need not draw the same show from the same music; the same seed always
 does.  *Transitions* is how much of the material arrives with a fade, wipe or
@@ -437,7 +439,10 @@ pre-fires the resolution.
 
 Variety comes from three places, all seeded so the same audio still renders
 the same show.  The corridor has fourteen patterns and the nets twenty-odd
-gestures, walked per phrase without repeating the previous one.  Each *visit*
+gestures, walked without repeating the previous one; the phrase is the
+*colour* clock (24 degrees of hue per phrase) and the material is held for
+`pattern_hold` phrases, four by default, so a look develops through colour
+before it is replaced.  Each *visit*
 to a state chooses its own colour scheme (a second drop may be tetradic where
 the first was triadic), saturation and corridor depth rotation.  And a change
 of look — a new phrase, a new state — arrives by a transition chosen per
