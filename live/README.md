@@ -175,13 +175,18 @@ otherwise build 130 000 of them a second.
 
 ### Controls
 
-Output enable · blackout · master brightness · gamma · corridor rate ·
+Output enable · blackout · master brightness · gamma · saturation ·
+contrast · corridor rate ·
 articulation · corridor pattern override · hue offset · hue lock · tempo ·
 scene hold · colour scheme override · shuffle seed · transitions · resting
 nets.  Presets are named JSON files under `live/presets/`, saved and loaded
 from the panel.
 
-*Pattern hold* is how many phrases the corridor pattern and net gesture are
+*Saturation* and *contrast* grade the whole rig — nets and corridor together
+— after the frame is painted: saturation 0 is grayscale, contrast above 1
+pushes darks down and brights up about the midpoint.  Both sit at 1.0 by
+default, where they cost nothing and change nothing.  *Pattern hold* is how
+many phrases the corridor pattern and net gesture are
 kept for — the colour still moves every phrase, the material only every
 `pattern_hold` of them.  *Shuffle seed* reseeds every deterministic choice the show makes — which
 pattern, gesture, scheme and transition each phrase gets — so two rigs, or two

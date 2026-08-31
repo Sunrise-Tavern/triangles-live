@@ -317,6 +317,25 @@ def test_canvas(layout: Layout) -> str:
     check(frame[layout[layout.nets[0]].slice].max() == 255, "over-bright did not clamp")
     check(frame[layout[layout.arches[0]].slice].max() == 0, "negative did not clamp")
 
+    # The grade must desaturate to gray, spread about the midpoint, and be a
+    # strict no-op at neutral -- the fseq oracle depends on the last one.
+    canvas.clear()
+    canvas.nets[:] = (0.8, 0.2, 0.4)
+    canvas.arches[:] = (0.1, 0.6, 0.3)
+    before = canvas._source.copy()
+    canvas.grade(1.0, 1.0)
+    check(np.array_equal(canvas._source, before), "a neutral grade changed pixels")
+    canvas.grade(0.0, 1.0)
+    check(np.allclose(canvas.nets[..., 0], canvas.nets[..., 1])
+          and np.allclose(canvas.nets[..., 1], canvas.nets[..., 2])
+          and np.allclose(canvas.arches[..., 0], canvas.arches[..., 2]),
+          "saturation 0 should be grayscale")
+    canvas.nets[:] = (0.8, 0.2, 0.4)
+    canvas.grade(1.0, 1.4)
+    check(float(canvas.nets[..., 0].max()) > 0.9 and float(canvas.nets[..., 1].min()) < 0.1,
+          f"contrast 1.4 should spread 0.8/0.2 apart, got "
+          f"{canvas.nets[0, 0].round(2)}")
+
     # Groups must stay contiguous, or an effect aimed at "the small nets" would
     # silently paint a copy and vanish; and between them they must cover
     # every net exactly once.

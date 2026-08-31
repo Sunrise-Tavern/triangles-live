@@ -35,6 +35,10 @@ class Settings:
     brightness: float = 1.0
     #: 1.0 is linear, matching the Falcon's DefaultGammaUnderFullControl=1.
     gamma: float = 1.0
+    #: Colour saturation over the whole rig: 0 grayscale, 1 as designed.
+    saturation: float = 1.0
+    #: Contrast about the midpoint: 1 as designed, above it punchier.
+    contrast: float = 1.0
 
     # -- arrangement ------------------------------------------------------- #
     #: Multiplies how many corridor phrases fit in a scene.  Lower = slower
@@ -117,6 +121,8 @@ SCHEMA: dict[str, tuple] = {
     "blackout": ("bool", None, None, None, "Blackout"),
     "brightness": ("float", 0.0, 1.0, 0.01, "Master brightness"),
     "gamma": ("float", 0.5, 3.0, 0.05, "Gamma"),
+    "saturation": ("float", 0.0, 2.0, 0.05, "Saturation"),
+    "contrast": ("float", 0.5, 1.5, 0.05, "Contrast"),
     "corridor_rate": ("float", 0.25, 4.0, 0.05, "Corridor rate"),
     "articulation": ("float", 0.0, 1.0, 0.01, "Articulation"),
     "pattern": ("choice", None, None, None, "Corridor pattern"),

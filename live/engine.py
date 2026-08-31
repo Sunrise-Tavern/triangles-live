@@ -266,6 +266,8 @@ class Engine:
 
             out = self._buffers[self._which]
             self.script.render(index, t)
+            if settings.saturation != 1.0 or settings.contrast != 1.0:
+                self.canvas.grade(settings.saturation, settings.contrast)
             self.canvas.to_channels(out, brightness=settings.brightness,
                                     gamma=settings.gamma)
             if settings.blackout:

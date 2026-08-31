@@ -302,6 +302,29 @@ class Canvas:
             raise ValueError("the nets outside 'Big Triangle' are not contiguous")
         return big, slice(rest[0], rest[-1] + 1)
 
+    def grade(self, saturation: float = 1.0, contrast: float = 1.0) -> None:
+        """Colour-grade the whole rig -- nets and corridor together.
+
+        ``saturation`` scales each pixel's distance from its own luma
+        (Rec. 709 weights): 0 is grayscale, 1 as painted, above 1 more vivid.
+        ``contrast`` spreads values around the midpoint: above 1 darks get
+        darker and brights brighter, below 1 everything moves toward the
+        middle.  Both are 1.0 by default and then this is never called, so a
+        capture from before these knobs existed still re-renders identically.
+        """
+        for buffer in (self.nets, self.arches):
+            if saturation != 1.0:
+                luma = (buffer[..., 0] * 0.2126 + buffer[..., 1] * 0.7152
+                        + buffer[..., 2] * 0.0722)[..., None]
+                buffer -= luma
+                buffer *= saturation
+                buffer += luma
+            if contrast != 1.0:
+                buffer -= 0.5
+                buffer *= contrast
+                buffer += 0.5
+            np.clip(buffer, 0.0, 1.0, out=buffer)
+
     def clear(self) -> None:
         self._source[:] = 0.0
 
