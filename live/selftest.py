@@ -22,6 +22,7 @@ import asyncio
 import json
 import socket
 import sys
+import struct
 import tempfile
 import threading
 import time
@@ -108,6 +109,64 @@ def test_layout(layout: Layout) -> str:
     return (f"{len(models)} models, {layout.channel_count} channels, "
             f"no overlaps or gaps; nets {orders['net']}, arches {orders['arch']}, "
             f"{'par' if layout.par else 'no par'}")
+
+
+def test_clips(layout: Layout) -> str:
+    """Clips load lazily, loop, and refuse a file from another layout."""
+    import time as _time
+
+    import zstandard
+
+    from . import fseq
+    from .clips import Clips
+
+    frames = np.arange(24 * 90, dtype=np.uint32).reshape(24, 90) % 256
+    frames = frames.astype(np.uint8)
+
+    def v2_header(channels, count, comp, blocks, data_offset):
+        return struct.pack("<4sHBBHIIBBBBBBQ", b"PSEQ", data_offset, 0, 2,
+                           HEADER := 32, channels, count, 50, 0,
+                           comp | ((blocks >> 8) << 4), blocks & 0xFF, 0, 0, 7)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        # An uncompressed clip, via the writer the engine already trusts.
+        with fseq.FseqWriter(root / "plain.fseq", 90, step_time_ms=50) as w:
+            for row in frames:
+                w.add_frame(row)
+        # The same frames zstd-compressed in two blocks, as xLights writes.
+        half = frames[:12].tobytes(), frames[12:].tobytes()
+        blobs = [zstandard.ZstdCompressor().compress(b) for b in half]
+        table = b"".join(struct.pack("<II", first, len(blob))
+                         for first, blob in zip((0, 12), blobs))
+        (root / "packed.fseq").write_bytes(
+            v2_header(90, 24, fseq.COMPRESSION_ZSTD, 2, 32 + len(table))
+            + table + b"".join(blobs))
+        # A clip rendered against some other rig.
+        with fseq.FseqWriter(root / "othermap.fseq", 33, step_time_ms=50) as w:
+            w.add_frame(np.zeros(33, dtype=np.uint8))
+
+        for name in ("plain", "packed"):
+            _, back = fseq.read_all(root / f"{name}.fseq")
+            check(np.array_equal(back, frames), f"{name}: frames differ after read")
+
+        clips = Clips(root, channel_count=90)
+        check(clips.names == ["packed", "plain"],
+              f"expected [packed, plain], got {clips.names} -- the 33-channel "
+              "file must be skipped, not offered")
+        check(clips.get("plain") is None, "get() must not block on first ask")
+        for _ in range(100):
+            clip = clips.get("plain")
+            if clip is not None:
+                break
+            _time.sleep(0.05)
+        check(clip is not None, "the loader thread never finished")
+        check(np.array_equal(clip.frame_at(0.0), frames[0])
+              and np.array_equal(clip.frame_at(0.10), frames[2])
+              and np.array_equal(clip.frame_at(24 * 0.05 + 0.05), frames[1]),
+              "frame_at does not step and loop at the clip's own fps")
+    return ("zstd and plain fseq round-trip, lazy load off the render "
+            "thread, wrong-layout clip refused, loop wraps")
 
 
 def test_orient(layout: Layout) -> str:
@@ -1199,6 +1258,7 @@ TESTS = (
     ("multi-controller split", test_multi_target),
     ("canvas -> channels", test_canvas),
     ("orientation", test_orient),
+    ("clips", test_clips),
     ("effect vocabulary", test_effects),
     ("fixed script", test_script),
     ("preview geometry", test_geometry),

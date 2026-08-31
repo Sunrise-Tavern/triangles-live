@@ -57,6 +57,9 @@ class Settings:
     bpm: float = 128.0
     #: Freeze on one scene instead of following the music.
     scene: str = "auto"
+    #: Play a canned xLights loop from clips/ instead of the arranger.
+    #: "off" = the show.  Master brightness and gamma still apply.
+    clip: str = "off"
     #: Force one colour scheme instead of letting each visit to a state
     #: choose its own.
     scheme: str = "auto"
@@ -130,6 +133,7 @@ SCHEMA: dict[str, tuple] = {
     "hue_lock": ("bool", None, None, None, "Lock hue"),
     "bpm": ("float", 60.0, 200.0, 0.5, "Tempo"),
     "scene": ("choice", None, None, None, "Scene"),
+    "clip": ("choice", None, None, None, "Clip"),
     "scheme": ("choice", None, None, None, "Colour scheme"),
     "seed": ("float", 0.0, 999.0, 1.0, "Shuffle seed"),
     "transitions": ("float", 0.0, 1.0, 0.05, "Transitions"),
@@ -143,7 +147,7 @@ SCHEMA: dict[str, tuple] = {
 
 #: Filled in by :mod:`live.engine`, which owns the vocabularies.
 CHOICES: dict[str, list[str]] = {"pattern": ["auto"], "scene": ["auto"],
-                                 "scheme": ["auto"]}
+                                 "scheme": ["auto"], "clip": ["off"]}
 
 
 def _coerce(key: str, raw: Any) -> Any:

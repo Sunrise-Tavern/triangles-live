@@ -29,6 +29,7 @@ import numpy as np
 from . import effects as fx
 from . import palette as pal
 from .arranger import Arranger
+from .clips import Clips
 from .audio import AudioSource
 from .ddp import DDP_PORT, DDPSender
 from .listener import Listener
@@ -63,6 +64,8 @@ class EngineStatus:
     beat_phase: float = 0.0
     target: str = "-"
     elapsed_s: float = 0.0
+    #: Name of the canned loop playing instead of the show, or "".
+    clip: str = ""
     # -- only meaningful when driven by audio --
     audio: bool = False
     confidence: float = 0.0
@@ -130,6 +133,12 @@ class Engine:
             self.script = Script(self.canvas, settings=self.settings, seed=seed)
         self.session = session
         self.status = EngineStatus(audio=audio is not None)
+
+        #: Canned xLights loops, selectable from the panel.  Scanned once at
+        #: startup; the choice list is what the UI's "Clip" knob offers.
+        self.clips = Clips(channel_count=self.layout.channel_count)
+        CHOICES["clip"] = ["off", *self.clips.names]
+        self._clip_anchor: tuple[str, float] | None = None
 
         # Where frames go.  The show spans two Falcons -- nets on one,
         # corridor on the other -- so this is a list, not a host.
@@ -265,11 +274,36 @@ class Engine:
                 self.listener.clock.latency = settings.latency_ms / 1000.0
 
             out = self._buffers[self._which]
-            self.script.render(index, t)
-            if settings.saturation != 1.0 or settings.contrast != 1.0:
-                self.canvas.grade(settings.saturation, settings.contrast)
-            self.canvas.to_channels(out, brightness=settings.brightness,
-                                    gamma=settings.gamma)
+            clip = (self.clips.get(settings.clip)
+                    if settings.clip != "off" else None)
+            if clip is not None:
+                # A canned loop, verbatim.  Anchored to when it was picked,
+                # so it starts from its first frame; the arranger underneath
+                # is simply not rendered, and resumes the moment the knob
+                # goes back to "off".
+                if (self._clip_anchor is None
+                        or self._clip_anchor[0] != clip.name):
+                    self._clip_anchor = (clip.name, t)
+                frame_ = clip.frame_at(t - self._clip_anchor[1])
+                if settings.brightness != 1.0 or settings.gamma != 1.0:
+                    scale = (np.arange(256, dtype=np.float32) / 255.0)
+                    if settings.gamma != 1.0:
+                        scale **= settings.gamma
+                    lut = np.clip(scale * settings.brightness * 255.0 + 0.5,
+                                  0, 255).astype(np.uint8)
+                    out[:] = lut[frame_]
+                else:
+                    out[:] = frame_
+                self.status.clip = clip.name
+            else:
+                if settings.clip == "off":
+                    self._clip_anchor = None
+                self.status.clip = ""
+                self.script.render(index, t)
+                if settings.saturation != 1.0 or settings.contrast != 1.0:
+                    self.canvas.grade(settings.saturation, settings.contrast)
+                self.canvas.to_channels(out, brightness=settings.brightness,
+                                        gamma=settings.gamma)
             if settings.blackout:
                 # Blackout is applied to the *frame*, not the canvas, so the
                 # preview shows black too -- an operator hitting it must see

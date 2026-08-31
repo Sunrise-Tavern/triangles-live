@@ -26,3 +26,5 @@ logs/
 
 # Recorded diagnostic sessions (audio + traces; large)
 sessions/
+# xLights-rendered loops, selectable in the panel; deploy travels by rsync
+clips/

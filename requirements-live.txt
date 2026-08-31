@@ -7,3 +7,5 @@
 numpy<2.3
 aiohttp>=3.9
 sounddevice>=0.4.6
+# fseq clips from xLights are zstd-compressed
+zstandard>=0.22

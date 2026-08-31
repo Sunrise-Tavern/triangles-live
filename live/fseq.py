@@ -46,6 +46,7 @@ import numpy as np
 MAGIC = b"PSEQ"
 HEADER_SIZE = 32
 COMPRESSION_NONE = 0
+COMPRESSION_ZSTD = 1
 
 
 class FseqError(RuntimeError):
@@ -60,6 +61,8 @@ class FseqHeader:
     data_offset: int
     version: tuple[int, int]
     compression_type: int
+    #: v2 compressed files only: number of compression blocks.
+    block_count: int
     unique_id: int
     variable_headers: dict[str, bytes]
 
@@ -170,10 +173,12 @@ def _read_header(fh: BinaryIO) -> FseqHeader:
         raise FseqError("not an fseq file (bad magic)")
     (
         _magic, data_offset, minor, major, var_offset, channels, frames,
-        step_ms, _flags, comp, _blocks_lo, _ranges, _reserved, uid,
+        step_ms, _flags, comp, blocks_lo, _ranges, _reserved, uid,
     ) = struct.unpack("<4sHBBHIIBBBBBBQ", raw)
     if major != 2:
         raise FseqError(f"only fseq v2 is supported, this is v{major}.{minor}")
+    # Upper nibble of the compression byte holds the block count's high bits.
+    block_count = ((comp >> 4) << 8) | blocks_lo
 
     variable: dict[str, bytes] = {}
     fh.seek(var_offset)
@@ -189,31 +194,72 @@ def _read_header(fh: BinaryIO) -> FseqHeader:
     return FseqHeader(
         channel_count=channels, frame_count=frames, step_time_ms=step_ms,
         data_offset=data_offset, version=(major, minor),
-        compression_type=comp & 0x0F, unique_id=uid, variable_headers=variable,
+        compression_type=comp & 0x0F, block_count=block_count,
+        unique_id=uid, variable_headers=variable,
     )
 
 
 def read_frames(path: str | Path) -> Iterator[np.ndarray]:
-    """Yield each frame as a uint8 array of length ``channel_count``."""
+    """Yield each frame as a uint8 array of length ``channel_count``.
+
+    Handles uncompressed files and zstd-compressed ones (what xLights writes
+    by default; every clip in ``clips/`` is one).  zstd needs the
+    ``zstandard`` package -- in requirements-live.txt, so the Pi has it.
+    """
     path = Path(path)
     with path.open("rb") as fh:
         header = _read_header(fh)
-        if header.compression_type != COMPRESSION_NONE:
+        if header.compression_type == COMPRESSION_NONE:
+            fh.seek(header.data_offset)
+            for _ in range(header.frame_count):
+                block = fh.read(header.channel_count)
+                if len(block) < header.channel_count:
+                    raise FseqError("file truncated mid-frame")
+                yield np.frombuffer(block, dtype=np.uint8)
+            return
+        if header.compression_type != COMPRESSION_ZSTD:
             raise FseqError(
-                f"{path.name} is compressed (type {header.compression_type}); "
-                "this reader only handles uncompressed files.  Re-render with "
-                "compression off, or use xLights --fseqcmp to compare."
+                f"{path.name}: compression type {header.compression_type} is "
+                "neither none (0) nor zstd (1); re-render it in xLights."
             )
+        try:
+            import zstandard
+        except ImportError as exc:            # pragma: no cover
+            raise FseqError(
+                f"{path.name} is zstd-compressed and the zstandard package is "
+                "missing -- pip install zstandard (it is in "
+                "requirements-live.txt)."
+            ) from exc
+        # The block table sits right after the 32-byte fixed header: one
+        # (first frame, compressed size) pair per block.
+        fh.seek(HEADER_SIZE)
+        table = [struct.unpack("<II", fh.read(8))
+                 for _ in range(header.block_count)]
         fh.seek(header.data_offset)
-        for _ in range(header.frame_count):
-            block = fh.read(header.channel_count)
-            if len(block) < header.channel_count:
-                raise FseqError("file truncated mid-frame")
-            yield np.frombuffer(block, dtype=np.uint8)
+        decompressor = zstandard.ZstdDecompressor()
+        emitted = 0
+        for _first_frame, size in table:
+            if size == 0:
+                continue
+            raw = decompressor.decompress(
+                fh.read(size),
+                max_output_size=header.channel_count * header.frame_count)
+            count = len(raw) // header.channel_count
+            block = np.frombuffer(
+                raw[:count * header.channel_count], dtype=np.uint8
+            ).reshape(count, header.channel_count)
+            for row in block:
+                if emitted >= header.frame_count:
+                    return
+                emitted += 1
+                yield row
+        if emitted < header.frame_count:
+            raise FseqError(f"{path.name}: {emitted} frames decoded, header "
+                            f"promises {header.frame_count}")
 
 
 def read_all(path: str | Path) -> tuple[FseqHeader, np.ndarray]:
-    """Whole file as (header, (frames, channels) uint8 array).  Tests only."""
+    """Whole file as (header, (frames, channels) uint8 array)."""
     header = read_header(path)
     data = np.stack(list(read_frames(path))) if header.frame_count else np.zeros(
         (0, header.channel_count), dtype=np.uint8

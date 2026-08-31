@@ -592,6 +592,19 @@ interface has its static address and never find the Falcon.
 
 `[show] blackout_on_start` decides whether a mid-set restart comes back dark.
 
+## Clips: canned xLights loops
+
+Drop whole-rig `.fseq` files rendered by xLights into `clips/` (next to
+`live/`) and each appears in the panel's **Clip** knob.  Picking one loops it
+on the rig verbatim in place of the arranger — master brightness and gamma
+still apply — and "off" hands back to the show exactly where it left off.
+Clips load lazily off the render thread (a 60 s whole-rig clip is ~40 MB
+decompressed), start from their first frame when picked, and a clip rendered
+against a different layout is skipped with a log line rather than played onto
+the wrong fixtures.  The files are zstd-compressed by xLights; `zstandard`
+is in requirements-live.txt.  `clips/` is gitignored — it travels to the Pi
+by rsync like the code does.
+
 ## Checking the orientation, after a remap
 
 Net geometry is taken from each model's world position in the xLights
