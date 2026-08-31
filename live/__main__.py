@@ -81,11 +81,14 @@ def cmd_pattern(args) -> int:
     # whole show is harmless but noisy; --controller clips to its slice and
     # sends at offset 0, which is what the device expects.
     span = slice(0, layout.channel_count)
+    offset = 0
     if args.controller:
         controller = layout.output(args.controller)
         span = controller.slice
+        offset = controller.offset
         print(f"clipped to {controller.name}: channels "
-              f"{controller.start}-{controller.end}")
+              f"{controller.start}-{controller.end}"
+              + (f", DDP offset {offset}" if offset else ""))
     sender = DDPSender(args.host, port=args.port,
                        channels_per_packet=args.channels_per_packet)
     clock = FrameClock(fps=args.fps)
@@ -95,7 +98,7 @@ def cmd_pattern(args) -> int:
           + ("" if limit is None else f" for {args.seconds:g}s"))
     try:
         for i, t in clock:
-            sender.send_frame(pattern_frame(layout, t)[span])
+            sender.send_frame(pattern_frame(layout, t)[span], offset=offset)
             if limit is not None and i + 1 >= limit:
                 break
     except KeyboardInterrupt:
@@ -115,19 +118,22 @@ def cmd_orient(args) -> int:
     if args.host.lower() == "auto":
         picks = ([layout.output(args.controller)] if args.controller
                  else layout.ddp_targets())
-        sinks = [(c.ip, c.slice, c.name) for c in picks]
+        sinks = [(c.ip, c.slice, c.name, c.offset) for c in picks]
+    elif args.controller:
+        c = layout.output(args.controller)
+        sinks = [(args.host, c.slice, c.name, c.offset)]
     else:
-        span = (layout.output(args.controller).slice if args.controller
-                else slice(0, layout.channel_count))
-        sinks = [(args.host, span, args.controller or "all")]
+        sinks = [(args.host, slice(0, layout.channel_count), "all", 0)]
     if not sinks:
         print("no DDP controller to send to")
         return 1
     senders = [(DDPSender(host, port=args.port,
-                          channels_per_packet=args.channels_per_packet), span, name)
-               for host, span, name in sinks]
-    for _, span, name in senders:
-        print(f"-> {name}: channels {span.start + 1}-{span.stop}")
+                          channels_per_packet=args.channels_per_packet),
+                span, name, offset)
+               for host, span, name, offset in sinks]
+    for _, span, name, offset in senders:
+        print(f"-> {name}: channels {span.start + 1}-{span.stop}"
+              + (f" at DDP offset {offset}" if offset else ""))
     print("stages: " + ", ".join(f"{n} ({s:g}s)" for n, s in orient.STAGES)
           + " -- Ctrl-C to stop")
     clock = FrameClock(fps=args.fps)
@@ -142,12 +148,12 @@ def cmd_orient(args) -> int:
                 print(f"  {stage}")
                 last = stage
             canvas.to_channels(out)
-            for sender, span, _ in senders:
-                sender.send_frame(out[span])
+            for sender, span, _, offset in senders:
+                sender.send_frame(out[span], offset=offset)
     except KeyboardInterrupt:
         print()
     finally:
-        for sender, _, _ in senders:
+        for sender, _, _, _ in senders:
             sender.close()
     return 0
 

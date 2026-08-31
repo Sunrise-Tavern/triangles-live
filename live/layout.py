@@ -62,10 +62,23 @@ class Controller:
     protocol: str
     start: int          # 1-based
     channels: int
+    #: xLights' "Keep Channel Numbers": the controller was *uploaded* expecting
+    #: absolute show channel numbers, so DDP data for it must be addressed at
+    #: its absolute start, not at 0.  Getting this wrong is silent and looks
+    #: like part of the rig being dark: the Falcon drops data below its start
+    #: offset without a word (measured: the corridor Falcon starts at 9406,
+    #: 0-based data reached only the first ~16.5k of its 25920 channels, and
+    #: the back of the tunnel never lit).
+    keep_channels: bool = False
 
     @property
     def end(self) -> int:
         return self.start + self.channels - 1
+
+    @property
+    def offset(self) -> int:
+        """0-based DDP offset this controller's data must start at."""
+        return self.start - 1 if self.keep_channels else 0
 
     @property
     def slice(self) -> slice:
@@ -241,9 +254,11 @@ def _controllers(networks: Path) -> dict[str, Controller]:
     for ctrl in root.findall("./Controller"):
         name = ctrl.get("Name") or ""
         size = sum(int(n.get("MaxChannels", "0")) for n in ctrl.findall("./network"))
+        keep = any(n.get("KeepChannelNumbers", "0") == "1"
+                   for n in ctrl.findall("./network"))
         found[name] = Controller(
             name=name, ip=ctrl.get("IP", ""), protocol=ctrl.get("Protocol", ""),
-            start=cursor, channels=size,
+            start=cursor, channels=size, keep_channels=keep,
         )
         cursor += size
     return found

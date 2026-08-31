@@ -89,6 +89,10 @@ class Sink:
     port: int
     span: slice
     name: str = ""
+    #: DDP offset the slice is addressed at.  0 for a receiver that owns its
+    #: own space; the controller's absolute start for one uploaded with
+    #: xLights' "Keep Channel Numbers" (see Controller.offset).
+    offset: int = 0
     sender: DDPSender | None = None
 
     def __str__(self) -> str:
@@ -138,11 +142,15 @@ class Engine:
                 picks = [self.layout.output(controller)]
             else:
                 picks = self.layout.ddp_targets()
-            self.targets = [Sink(c.ip, port, c.slice, c.name) for c in picks]
+            self.targets = [Sink(c.ip, port, c.slice, c.name, c.offset)
+                            for c in picks]
         elif host:
-            span = (self.layout.output(controller).slice if controller
-                    else slice(0, self.layout.channel_count))
-            self.targets = [Sink(host, port, span, controller or "all")]
+            if controller:
+                c = self.layout.output(controller)
+                self.targets = [Sink(host, port, c.slice, controller, c.offset)]
+            else:
+                self.targets = [Sink(host, port,
+                                     slice(0, self.layout.channel_count), "all")]
         self.status.target = (", ".join(str(t) for t in self.targets)
                               if self.targets else "no output")
 
@@ -269,13 +277,15 @@ class Engine:
             if settings.output_enabled:
                 for sink in self.targets:
                     if sink.sender is not None:
-                        # Offset 0, not span.start: a DDP offset addresses the
-                        # *receiver's* own channel space, which starts at its
-                        # first channel however far into the show that is.
-                        # Sending the corridor at 11160 puts every packet past
-                        # the end of a controller that owns 25 920 channels,
-                        # and it drops them without a word.
-                        sink.sender.send_frame(out[sink.span])
+                        # The offset is the *receiver's* choice, recorded in
+                        # xlights_networks.xml.  Both Falcons here are
+                        # uploaded with "Keep Channel Numbers", so they expect
+                        # absolute show offsets -- the corridor Falcon starts
+                        # at 9406 and silently drops anything below it, which
+                        # is what a dark back half of the tunnel looks like.
+                        # A receiver without that flag expects 0-based.
+                        sink.sender.send_frame(out[sink.span],
+                                               offset=sink.offset)
             if self._writer is not None:
                 self._writer.add_frame(out)
 

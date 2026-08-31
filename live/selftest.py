@@ -1108,13 +1108,16 @@ def test_doctor(layout: Layout) -> str:
 
 
 def test_multi_target(layout: Layout) -> str:
-    """Two Falcons, two slices, and each addressed from its own channel 0.
+    """Two Falcons, two slices, each addressed the way it was uploaded.
 
     The show does not fit on one controller, and the failure mode when the
-    split is wrong is silent: DDP is UDP, so a receiver that is handed offsets
-    past the end of its channel space drops them and reports nothing.  That is
-    exactly what a dark corridor and a lit set of nets looks like, so the
-    offsets are asserted here rather than discovered at the rig.
+    addressing is wrong is silent: DDP is UDP, so a receiver drops offsets
+    outside its input range and reports nothing.  Both Falcons are uploaded
+    with xLights' "Keep Channel Numbers", so each expects *absolute* show
+    offsets -- for the nets Falcon that happens to equal 0-based, which is
+    how sending everything from 0 looked verified while the back half of
+    the corridor stayed dark at the rig.  The expected offset comes from
+    the layout, so this follows the networks file rather than a guess.
     """
     from .engine import Engine
 
@@ -1137,19 +1140,22 @@ def test_multi_target(layout: Layout) -> str:
 
     frame = np.arange(layout.channel_count, dtype=np.int64).astype(np.uint8)
     for sink in targets:
-        sink.sender.send_frame(frame[sink.span])
+        sink.sender.send_frame(frame[sink.span], offset=sink.offset)
 
     covered = np.zeros(layout.channel_count, dtype=int)
     for sink in targets:
         covered[sink.span] += 1
         packets = [ddp.parse(p) for p in caught[sink.name]]
         check(bool(packets), f"{sink.name} sent nothing")
-        check(packets[0].offset == 0,
-              f"{sink.name} starts at offset {packets[0].offset}, not 0 -- a DDP "
-              "offset addresses the receiver's own channel space")
+        controller = layout.output(sink.name)
+        want = controller.offset
+        check(packets[0].offset == want,
+              f"{sink.name} starts at offset {packets[0].offset}, not {want} -- "
+              f"the controller was uploaded with keep_channels="
+              f"{controller.keep_channels}")
         width = sink.span.stop - sink.span.start
-        check(packets[-1].end == width,
-              f"{sink.name} covers {packets[-1].end} of its {width} channels")
+        check(packets[-1].end == want + width,
+              f"{sink.name} covers up to {packets[-1].end}, want {want + width}")
         check(packets[-1].push and not any(q.push for q in packets[:-1]),
               f"{sink.name} must push on its last packet only")
         body = b"".join(bytes(q.data) for q in packets)
@@ -1159,8 +1165,9 @@ def test_multi_target(layout: Layout) -> str:
     check(not (covered > 1).any(),
           f"{int((covered > 1).sum())} channels are sent to two controllers")
     gap = int((covered == 0).sum())
+    offsets = {t.name: layout.output(t.name).offset for t in targets}
     return (f"{len(targets)} controllers, {int((covered == 1).sum())} channels "
-            f"covered exactly once, each addressed from its own 0"
+            f"covered exactly once, DDP offsets {offsets}"
             + (f"; {gap} unaddressed" if gap else ""))
 
 
