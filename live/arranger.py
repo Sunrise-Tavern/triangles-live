@@ -152,11 +152,17 @@ class Arranger:
     def __init__(self, canvas: Canvas, listener: Listener, *,
                  settings: Settings | None = None,
                  state: StateMachine | None = None,
-                 base_hue: float = 190.0, seed: int = 7) -> None:
+                 base_hue: float = 190.0, seed: int = 7,
+                 clips=None) -> None:
         self.canvas = canvas
         self.listener = listener
         self.settings = settings
         self.machine = state or StateMachine()
+        #: A live.clips.Clips library, or None.  With one, some phrases play
+        #: a canned xLights loop -- beat-locked, enveloped by the music --
+        #: instead of a painted look; without one (every offline tool, the
+        #: selftests) the show is exactly as before, and deterministic.
+        self.clips = clips
         self.base_hue = base_hue
         self._seed = seed
         self.big, self.small = canvas.net_pair()
@@ -465,17 +471,28 @@ class Arranger:
             # it is free-running on no evidence and following it would make the
             # rig twitch at an imaginary tempo.  Everything below is a function
             # of wall time, slow enough that you have to watch to see it move.
-            self._look = (SILENT, "", "", None, 0.0, treat)
+            self._look = (SILENT, "", "", None, 0.0, treat, 0.0)
             self._outgoing = None
             self._silent(t)
             return
 
         index = self.phrase_index(t, treat)
-        self.gesture = self.gesture_for(treat, index)
-        name = self.pattern_for(treat, index)
+        clip_name = self.clip_for(treat, index)
         palette = self.palette_for(treat, index)
-        look = (treat.kind, name, self.gesture, palette,
-                self.far_rotation_for(treat), treat)
+        if clip_name is not None:
+            # This stretch of material is a canned loop.  Anchored in beats
+            # at the phrase start, so it begins at its first frame and its
+            # authored rhythm rides the clock.
+            self.gesture = "clip"
+            anchor = self._beats(self._phrase[0] if self._phrase[0] is not None
+                                 else t)
+            look = (treat.kind, f"clip:{clip_name}", "clip", palette,
+                    self.far_rotation_for(treat), treat, anchor)
+        else:
+            self.gesture = self.gesture_for(treat, index)
+            name = self.pattern_for(treat, index)
+            look = (treat.kind, name, self.gesture, palette,
+                    self.far_rotation_for(treat), treat, 0.0)
 
         if self._look is not None and _identity(look) != _identity(self._look):
             # The material changed.  Decide how the old gives way to the new;
@@ -509,11 +526,15 @@ class Arranger:
     def _paint(self, canvas: Canvas, look: tuple, frame: int, t: float,
                phrase: float) -> None:
         """One look, fully painted: corridor, nets, par."""
-        kind, name, gesture, palette, far_degrees, treat = look
+        kind, name, gesture, palette, far_degrees, treat, anchor = look
         beat = self.clock.phase(t)
         bar = self.clock.bar_phase(t)
         kick = _kick(beat)
         features = self.features
+
+        if name.startswith("clip:"):
+            self._paint_clip(canvas, name[5:], kind, t, anchor, beat, kick)
+            return
 
         far = palette.rotated(far_degrees)
         levels = fx.PATTERNS[name](
@@ -529,6 +550,63 @@ class Arranger:
 
         getattr(self, f"_{kind}")(canvas, gesture, frame, t, phrase, palette,
                                   beat, bar, kick, features)
+
+    def clip_for(self, treat: Treatment, phrase: int) -> str | None:
+        """The clip this stretch of material plays, or None for a painted look.
+
+        Decided once per pattern_hold span by the same seeded machinery as
+        everything else: a roll against ``clip_share`` says whether this
+        stretch is a clip at all, and the no-repeat walk picks which, from
+        the clips whose *measured* energy suits the state.  A clip that is
+        not decoded yet is skipped for this stretch (the loader is already
+        on it) rather than waited for.
+        """
+        if self.clips is None or treat.kind == SILENT:
+            return None
+        share = self.settings.clip_share if self.settings else 0.3
+        if share <= 0.0:
+            return None
+        options = self.clips.vocabulary(treat.kind)
+        if not options:
+            return None
+        visit = self.visits.get(treat.kind, 1)
+        material = self.material_index(phrase)
+        roll = zlib.crc32(f"{self.seed}:cliproll:{treat.kind}:{visit}:"
+                          f"{material}".encode())
+        if (roll % 1000) / 1000.0 >= share:
+            return None
+        name = options[self._walk(f"clips:{treat.kind}:{visit}", material,
+                                  len(options))]
+        return name if self.clips.get(name) is not None else None
+
+    def _paint_clip(self, canvas: Canvas, name: str, kind: str, t: float,
+                    anchor: float, beat: float, kick: float) -> None:
+        """A canned loop as this phrase's material, ridden by the music.
+
+        The playhead advances in *beats* from the phrase it started in, so
+        the authored motion speeds up and slows down with the track; the
+        level envelope is the state's -- the kick pulses it while cruising
+        and hot, a build's flashes quicken with its tension, quiet breathes.
+        The clip's own colours are kept: that is what it is for.
+        """
+        clip = self.clips.get(name) if self.clips is not None else None
+        if clip is None:                # evicted or failed mid-phrase
+            fx.wash(canvas, self.palette_for(TREATMENTS[kind]), 0.5)
+            return
+        canvas.from_channels(clip.frame_at_beats(self._beats(t) - anchor))
+        if kind == QUIET:
+            envelope = 0.65 + 0.15 * float(np.sin(2 * np.pi * self.clock.bar_phase(t)))
+        elif kind == BUILDING:
+            tension = min(1.0, self.machine.report.since_s / 8.0)
+            flash = _kick((self._beats(t) * (2 + int(tension * 6))) % 1.0,
+                          sharp=3.0)
+            envelope = 0.55 + 0.15 * tension + 0.30 * tension * flash
+        elif kind == HOT:
+            envelope = 0.70 + 0.30 * kick
+        else:
+            envelope = 0.75 + 0.25 * kick
+        canvas.nets *= envelope
+        canvas.arches *= envelope
 
     # Each treatment is the offline show's recipe for that kind of section.
 

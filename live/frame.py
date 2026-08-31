@@ -302,6 +302,22 @@ class Canvas:
             raise ValueError("the nets outside 'Big Triangle' are not contiguous")
         return big, slice(rest[0], rest[-1] + 1)
 
+    def from_channels(self, frame: np.ndarray) -> None:
+        """The gather, backwards: a wire-order uint8 frame into the canvas.
+
+        This is how a canned clip (an .fseq rendered by xLights) becomes
+        paint: once it is in the canvas it can be enveloped by the music,
+        graded, and crossfaded against a painted look like anything else.
+        Colour order is undone by the same index tables the gather uses, so
+        a GRB fixture round-trips exactly; padded net slots stay untouched.
+        """
+        if frame.shape[0] < self.layout.channel_count:
+            raise ValueError(
+                f"frame has {frame.shape[0]} channels, the layout needs "
+                f"{self.layout.channel_count}")
+        self.clear()
+        self._source[self._src] = frame[self._dst] * np.float32(1.0 / 255.0)
+
     def grade(self, saturation: float = 1.0, contrast: float = 1.0) -> None:
         """Colour-grade the whole rig -- nets and corridor together.
 

@@ -122,23 +122,28 @@ class Engine:
         self.audio = audio
         self.listener: Listener | None = None
         self.machine: StateMachine | None = None
+        #: Canned xLights loops: the panel's "Clip" knob and the arranger's
+        #: rotation both draw on this.  Built before the script, which
+        #: holds a reference.
+        self.clips = Clips(channel_count=self.layout.channel_count)
+        CHOICES["clip"] = ["off", *self.clips.names]
+        # Energy measurements for the rotation; cheap when index.json is
+        # current (it deploys with the clips), a one-time scan when not.
+        self.clips.build_index(background=True)
+        self._clip_anchor: tuple[str, float] | None = None
+
         if audio is not None:
             self.listener = Listener(audio, backend=backend, window=window,
                                      silence_dbfs=silence_dbfs)
             self.machine = StateMachine(thresholds)
             self.script = Arranger(self.canvas, self.listener,
                                    settings=self.settings, state=self.machine,
-                                   seed=seed)
+                                   seed=seed, clips=self.clips)
         else:
             self.script = Script(self.canvas, settings=self.settings, seed=seed)
         self.session = session
         self.status = EngineStatus(audio=audio is not None)
 
-        #: Canned xLights loops, selectable from the panel.  Scanned once at
-        #: startup; the choice list is what the UI's "Clip" knob offers.
-        self.clips = Clips(channel_count=self.layout.channel_count)
-        CHOICES["clip"] = ["off", *self.clips.names]
-        self._clip_anchor: tuple[str, float] | None = None
 
         # Where frames go.  The show spans two Falcons -- nets on one,
         # corridor on the other -- so this is a list, not a host.

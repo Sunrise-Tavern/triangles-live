@@ -598,12 +598,26 @@ Drop whole-rig `.fseq` files rendered by xLights into `clips/` (next to
 `live/`) and each appears in the panel's **Clip** knob.  Picking one loops it
 on the rig verbatim in place of the arranger — master brightness and gamma
 still apply — and "off" hands back to the show exactly where it left off.
-Clips load lazily off the render thread (a 60 s whole-rig clip is ~40 MB
-decompressed), start from their first frame when picked, and a clip rendered
-against a different layout is skipped with a log line rather than played onto
-the wrong fixtures.  The files are zstd-compressed by xLights; `zstandard`
-is in requirements-live.txt.  `clips/` is gitignored — it travels to the Pi
-by rsync like the code does.
+Clips load lazily off the render thread (a 60 s whole-rig clip is ~40 MB,
+decoded once into `clips/.cache/` and memory-mapped after), start from their
+first frame when picked, and a clip rendered against a different layout is
+skipped with a log line rather than played onto the wrong fixtures.  The
+files are zstd-compressed by xLights; `zstandard` is in
+requirements-live.txt.  `clips/` is gitignored — it travels to the Pi by
+rsync like the code does.
+
+Clips are also **in the music rotation**: some phrases play a clip instead
+of a painted look — the *Clips in rotation* knob is the share (default 0.3,
+0 switches it off).  A clip phrase is beat-locked (the playhead advances in
+beats, native speed at 128 BPM, so the authored motion rides the tempo) and
+enveloped by the state: the kick pulses it while cruising and hot, a build's
+flashes quicken with its tension, quiet breathes.  Which clips suit which
+state is *measured*, not tagged: `clips/index.json` records each clip's mean
+level and flicker (built once, in the background, and deployed with the
+clips), and each state draws from its own band of the ranking — the dimmest,
+stillest loops go to quiet, the brightest and busiest to hot.  Transitions
+apply to clip phrases like any other look, and the same seed still renders
+the same show.
 
 ## Checking the orientation, after a remap
 

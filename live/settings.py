@@ -60,6 +60,9 @@ class Settings:
     #: Play a canned xLights loop from clips/ instead of the arranger.
     #: "off" = the show.  Master brightness and gamma still apply.
     clip: str = "off"
+    #: Share of phrases the rotation gives to a canned clip instead of a
+    #: painted look, beat-locked and enveloped by the music.  0 = never.
+    clip_share: float = 0.3
     #: Force one colour scheme instead of letting each visit to a state
     #: choose its own.
     scheme: str = "auto"
@@ -134,6 +137,7 @@ SCHEMA: dict[str, tuple] = {
     "bpm": ("float", 60.0, 200.0, 0.5, "Tempo"),
     "scene": ("choice", None, None, None, "Scene"),
     "clip": ("choice", None, None, None, "Clip"),
+    "clip_share": ("float", 0.0, 1.0, 0.05, "Clips in rotation"),
     "scheme": ("choice", None, None, None, "Colour scheme"),
     "seed": ("float", 0.0, 999.0, 1.0, "Shuffle seed"),
     "transitions": ("float", 0.0, 1.0, 0.05, "Transitions"),

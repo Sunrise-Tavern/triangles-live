@@ -10,11 +10,20 @@ gamma still apply, since they are the operator's, not the author's).
 Loading is lazy and off the render thread: a 30 s whole-rig clip is about
 40 MB decompressed, half a second of zstd on a laptop and a few on a Pi,
 and the show must not freeze while it happens.  Until the clip is ready the
-arranger keeps playing.
+arranger keeps playing.  A decoded clip is kept as a raw file next to the
+fseq (clips/.cache/) and memory-mapped, so a load happens once per clip
+ever, the OS pages frames in as needed, and thirty clips do not mean a
+gigabyte resident on a Pi.
+
+Clips also carry an *energy* (clips/index.json): how bright and how
+flickery the material is, measured from the frames themselves.  That is
+what lets the arranger put a slow dim loop in a quiet passage and a strobing
+one in a drop without anyone tagging files by hand.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from pathlib import Path
@@ -41,6 +50,14 @@ class Clip:
         """The frame ``seconds`` into the loop, wrapping."""
         index = int(seconds * self.fps) % max(1, len(self.frames))
         return self.frames[index]
+
+    #: Playback reference: at this tempo a beat-locked clip runs at its
+    #: authored speed; faster music plays it proportionally faster.
+    REFERENCE_BPM = 128.0
+
+    def frame_at_beats(self, beats: float) -> np.ndarray:
+        """The frame ``beats`` into the loop, at the reference tempo's rate."""
+        return self.frame_at(beats * 60.0 / self.REFERENCE_BPM)
 
 
 class Clips:
@@ -97,16 +114,25 @@ class Clips:
     def _load(self, name: str) -> None:
         path = self.dir / f"{name}.fseq"
         try:
-            header, frames = read_all(path)
-            clip = Clip(name, frames, header.fps)
-            log.info("clip %s: %d frames at %g fps loaded", name,
-                     len(frames), header.fps)
+            header = read_header(path)
+            raw = self.dir / ".cache" / f"{name}.raw"
+            size = header.frame_count * header.channel_count
+            if not (raw.exists() and raw.stat().st_size == size
+                    and raw.stat().st_mtime >= path.stat().st_mtime):
+                _, frames = read_all(path)
+                raw.parent.mkdir(exist_ok=True)
+                frames.tofile(raw)
+            mapped = np.memmap(raw, dtype=np.uint8, mode="r",
+                               shape=(header.frame_count, header.channel_count))
+            # Touch every page here, on the loader thread, so the render
+            # thread never eats a page fault: measured, the first frames of
+            # a cold clip cost up to 46 ms against a 25 ms frame budget.
+            int(mapped[::16, ::2048].sum())
+            clip = Clip(name, mapped, header.fps)
+            log.info("clip %s: %d frames at %g fps mapped", name,
+                     header.frame_count, header.fps)
             with self._lock:
                 self._loaded[name] = clip
-                # A little cache: whole-rig clips are ~40 MB each decoded.
-                while len(self._loaded) > 3:
-                    oldest = next(n for n in self._loaded if n != name)
-                    del self._loaded[oldest]
         except (OSError, FseqError, MemoryError) as exc:
             log.error("clip %s failed to load: %s", name, exc)
             with self._lock:
@@ -114,3 +140,73 @@ class Clips:
         finally:
             with self._lock:
                 self._loading.discard(name)
+
+    # -- energy ------------------------------------------------------------ #
+
+    #: Fraction of the ranked list each state draws from.  Bands overlap on
+    #: purpose -- a mid-energy clip may serve two states.
+    BANDS = {"quiet": (0.0, 0.30), "cruising": (0.20, 0.70),
+             "building": (0.45, 0.85), "hot": (0.65, 1.0)}
+
+    def build_index(self, background: bool = False) -> None:
+        """Measure every clip's energy into clips/index.json.
+
+        Level is the mean of the frames; flicker the mean frame-to-frame
+        change -- both subsampled, both from the decoded cache.  Stale or
+        missing entries are measured, existing ones kept, so on a deploy the
+        index rsyncs with the clips and the Pi never computes it.
+        """
+        if background:
+            threading.Thread(target=self.build_index, daemon=True,
+                             name="clip-index").start()
+            return
+        index_path = self.dir / "index.json"
+        try:
+            index = json.loads(index_path.read_text())
+        except (OSError, ValueError):
+            index = {}
+        changed = False
+        for name in self.names:
+            path = self.dir / f"{name}.fseq"
+            entry = index.get(name)
+            if entry and entry.get("mtime") == int(path.stat().st_mtime):
+                continue
+            try:
+                _, frames = read_all(path)
+            except (OSError, FseqError, MemoryError) as exc:
+                log.warning("clip %s: not measurable (%s)", name, exc)
+                continue
+            sub = np.asarray(frames[::4, ::16], dtype=np.float32) / 255.0
+            level = float(sub.mean())
+            flicker = float(np.abs(np.diff(sub, axis=0)).mean()) if len(sub) > 1 else 0.0
+            index[name] = {"mtime": int(path.stat().st_mtime),
+                           "level": round(level, 5), "flicker": round(flicker, 5)}
+            changed = True
+            log.info("clip %s: level %.3f flicker %.4f", name, level, flicker)
+        if changed:
+            try:
+                index_path.write_text(json.dumps(index, indent=1, sort_keys=True))
+            except OSError as exc:
+                log.warning("could not write %s: %s", index_path, exc)
+        with self._lock:
+            self._index = index
+
+    def vocabulary(self, kind: str) -> list[str]:
+        """Clip names whose measured energy suits a state, calm to busy.
+
+        Ranked by level + 4x flicker (flicker separates a strobe from a
+        bright wash at the same mean) and cut by BANDS.  Empty until the
+        index exists, which switches the rotation off rather than guessing.
+        """
+        with self._lock:
+            index = getattr(self, "_index", None) or {}
+        scored = sorted(
+            (index[n]["level"] + 4.0 * index[n]["flicker"], n)
+            for n in self.names if n in index)
+        if not scored:
+            return []
+        lo, hi = self.BANDS.get(kind, (0.0, 1.0))
+        count = len(scored)
+        picked = [n for rank, (_, n) in enumerate(scored)
+                  if lo * (count - 1) <= rank <= hi * (count - 1)]
+        return picked or [scored[min(int(lo * count), count - 1)][1]]

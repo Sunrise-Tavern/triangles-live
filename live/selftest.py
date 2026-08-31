@@ -165,8 +165,77 @@ def test_clips(layout: Layout) -> str:
               and np.array_equal(clip.frame_at(0.10), frames[2])
               and np.array_equal(clip.frame_at(24 * 0.05 + 0.05), frames[1]),
               "frame_at does not step and loop at the clip's own fps")
+        # from_channels must be the gather backwards, colour order and all.
+        canvas = Canvas(layout)
+        rng = np.random.default_rng(3)
+        wire = rng.integers(0, 256, layout.channel_count, dtype=np.uint8)
+        canvas.from_channels(wire)
+        back = canvas.to_channels()
+        check(np.array_equal(back, wire),
+              "from_channels -> to_channels is not the identity")
+
+        # The energy index ranks clips and hands each state a sensible band.
+        clips.build_index()
+        vocab = {k: clips.vocabulary(k) for k in ("quiet", "hot")}
+        check(all(vocab.values()), f"empty vocabulary from the index: {vocab}")
+
+        # And with clips in its hand the arranger plays one: same audio,
+        # clip_share 1, the look must become a clip and stay deterministic.
+        from .arranger import Arranger
+        from .audio import ArraySource
+        from .listener import Listener
+        from .settings import Settings
+        from .state import StateMachine
+        from .verify import arc_track
+
+        with fseq.FseqWriter(root / "rig.fseq", layout.channel_count,
+                             step_time_ms=50) as w:
+            for i in range(20):
+                w.add_frame(np.full(layout.channel_count, 40 + 10 * (i % 4),
+                                    dtype=np.uint8))
+        rig_clips = Clips(root, channel_count=layout.channel_count)
+        rig_clips.build_index()
+        rig_clips.get("rig")
+        for _ in range(100):
+            if rig_clips.get("rig") is not None:
+                break
+            _time.sleep(0.05)
+        check(rig_clips.get("rig") is not None, "rig clip never loaded")
+
+        audio, _ = arc_track()
+
+        def run() -> tuple[list, np.ndarray]:
+            cv = Canvas(layout)
+            listener = Listener(ArraySource(audio))
+            st = Settings()
+            st.clip_share = 1.0
+            arranger = Arranger(cv, listener, state=StateMachine(),
+                                settings=st, clips=rig_clips)
+            out = np.zeros(layout.channel_count, dtype=np.uint8)
+            looks, sample, now, index = [], [], 0.0, 0
+            for block in listener.source.blocks():
+                f = listener.step(block)
+                arranger.machine.push(f)
+                while now <= f.t:
+                    arranger.render(index, now)
+                    if index % 97 == 0:
+                        sample.append(cv.to_channels(out).copy())
+                    if arranger._look is not None:
+                        looks.append(arranger._look[1])
+                    index += 1
+                    now += 1.0 / 40.0
+            return looks, np.stack(sample)
+
+        looks_a, sample_a = run()
+        check(any(n.startswith("clip:") for n in looks_a),
+              "clip_share 1 never played a clip")
+        looks_b, sample_b = run()
+        check(np.array_equal(sample_a, sample_b),
+              "the show with clips is not deterministic")
     return ("zstd and plain fseq round-trip, lazy load off the render "
-            "thread, wrong-layout clip refused, loop wraps")
+            "thread, wrong-layout clip refused, loop wraps; from_channels "
+            "is the gather backwards; the rotation plays a clip and stays "
+            "deterministic")
 
 
 def test_orient(layout: Layout) -> str:
