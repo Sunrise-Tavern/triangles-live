@@ -641,10 +641,14 @@ rsync like the code does.
 
 Clips are also **in the music rotation**: some phrases play a clip instead
 of a painted look — the *Clips in rotation* knob is the share (default 0.3,
-0 switches it off).  A clip phrase is beat-locked (the playhead advances in
-beats, native speed at 128 BPM, so the authored motion rides the tempo) and
-enveloped by the state: the kick pulses it while cruising and hot, a build's
-flashes quicken with its tension, quiet breathes.  Which clips suit which
+0 switches it off).  A clip phrase is beat-locked — the playhead
+integrates a bass-scaled rate (0.65–1.35× the 128 BPM reference speed, from
+the pump), so the authored motion pushes harder when the low end does and
+eases off in a lull — and enveloped by the state: the kick pulses it while
+cruising and hot, a build's flashes quicken with its tension, quiet
+breathes.  On top, the content *bounces*: a brightness wave rolls apex to
+base through the triangles on each beat and a ripple runs the tunnel with
+it, both sized by the pump.  Which clips suit which
 state is *measured*, not tagged: `clips/index.json` records each clip's mean
 level and flicker (built once, in the background, and deployed with the
 clips), and each state draws from its own band of the ranking — the dimmest,

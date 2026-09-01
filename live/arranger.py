@@ -217,6 +217,9 @@ class Arranger:
         #: Storm bolts in flight: launch times.  Spawned by measured kicks.
         self._bolts: list[float] = []
         self._bolt_last = -1e9
+        #: Per clip stretch: (last beat count, playhead position in beats).
+        #: The playhead integrates a bass-scaled rate, so it cannot jump.
+        self._clip_heads: dict[tuple, tuple[float, float]] = {}
         #: Per state, the (kind, visit, phrase) a pattern was chosen for and
         #: the pattern -- so the choice holds for the phrase.
         self._pattern_held: dict[str, tuple[tuple, str]] = {}
@@ -962,20 +965,45 @@ class Arranger:
         if clip is None:                # evicted or failed mid-phrase
             fx.wash(canvas, self.palette_for(TREATMENTS[kind]), 0.5)
             return
-        canvas.from_channels(clip.frame_at_beats(self._beats(t) - anchor))
+        # The playhead runs on a bass-scaled rate: the authored motion pushes
+        # harder when the low end does, eases off in a lull.  Integrated, not
+        # multiplied -- position must stay continuous as the rate moves.
+        pump = self._pump
+        now_beats = self._beats(t)
+        key = (name, round(anchor, 4))
+        if len(self._clip_heads) > 64:
+            self._clip_heads.clear()
+        last, position = self._clip_heads.get(key, (now_beats, 0.0))
+        if now_beats > last:            # a transition paints twice per frame
+            position += (now_beats - last) * (0.65 + 0.70 * pump)
+            self._clip_heads[key] = (now_beats, position)
+        canvas.from_channels(clip.frame_at_beats(position))
+
         if kind == QUIET:
             envelope = 0.65 + 0.15 * float(np.sin(2 * np.pi * self.clock.bar_phase(t)))
+            bounce = 0.0
         elif kind == BUILDING:
             tension = min(1.0, self.machine.report.since_s / 8.0)
-            flash = _kick((self._beats(t) * (2 + int(tension * 6))) % 1.0,
-                          sharp=3.0)
+            flash = _kick((now_beats * (2 + int(tension * 6))) % 1.0, sharp=3.0)
             envelope = 0.55 + 0.15 * tension + 0.30 * tension * flash
+            bounce = 0.25 * tension * pump
         elif kind == HOT:
             envelope = 0.70 + 0.30 * kick
+            bounce = 0.40 * pump
         else:
             envelope = 0.75 + 0.25 * kick
+            bounce = 0.30 * pump
         canvas.nets *= envelope
         canvas.arches *= envelope
+        if bounce > 0.01:
+            # The content itself bounces with the bass: a brightness wave
+            # rolls apex-to-base through the triangles on each beat, and a
+            # ripple runs the clip's tunnel front to back with it.
+            wave = np.exp(-((canvas.net_y - beat) * 2.5) ** 2)
+            canvas.nets *= (1.0 - bounce) + (2.0 * bounce) * wave[..., None]
+            ripple = np.exp(-((canvas.depth - beat) * 3.0) ** 2)
+            canvas.arches *= ((1.0 - bounce)
+                              + (2.0 * bounce) * ripple[:, None, None])
 
     # Each treatment is the offline show's recipe for that kind of section.
 

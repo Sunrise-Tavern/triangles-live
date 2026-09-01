@@ -141,6 +141,29 @@ class Clips:
             with self._lock:
                 self._loading.discard(name)
 
+    def preload(self, background: bool = False) -> None:
+        """Load every clip, serially, so the rotation finds them ready.
+
+        Without this the rotation's walk kept choosing clips that were not
+        decoded yet -- each miss kicks a load, but the *next* stretch walks
+        to a different name, so for minutes after a start almost every clip
+        stretch fell back to a painted look.  One thread, one clip at a
+        time: the memmap cache makes each load cheap after the first ever
+        run, and the render thread never competes with a decode burst.
+        """
+        if background:
+            threading.Thread(target=self.preload, daemon=True,
+                             name="clip-preload").start()
+            return
+        for name in self.names:
+            with self._lock:
+                if name in self._loaded or name in self._failed:
+                    continue
+                if name in self._loading:
+                    continue
+                self._loading.add(name)
+            self._load(name)
+
     # -- energy ------------------------------------------------------------ #
 
     #: Fraction of the ranked list each state draws from.  Bands overlap on

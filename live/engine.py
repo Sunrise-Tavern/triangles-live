@@ -131,6 +131,7 @@ class Engine:
         # Energy measurements for the rotation; cheap when index.json is
         # current (it deploys with the clips), a one-time scan when not.
         self.clips.build_index(background=True)
+        self.clips.preload(background=True)
         self._clip_anchor: tuple[str, float] | None = None
 
         if audio is not None:
