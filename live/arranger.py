@@ -973,7 +973,12 @@ class Arranger:
         key = (name, round(anchor, 4))
         if len(self._clip_heads) > 64:
             self._clip_heads.clear()
-        last, position = self._clip_heads.get(key, (now_beats, 0.0))
+        if key not in self._clip_heads:
+            # Seed the head on first sight -- with a non-stored default the
+            # advance test compared now against now forever and the clip
+            # froze on its first frame (measured: heads empty, position 0).
+            self._clip_heads[key] = (now_beats, 0.0)
+        last, position = self._clip_heads[key]
         if now_beats > last:            # a transition paints twice per frame
             position += (now_beats - last) * (0.65 + 0.70 * pump)
             self._clip_heads[key] = (now_beats, position)
