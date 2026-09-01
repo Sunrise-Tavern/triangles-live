@@ -202,6 +202,17 @@ class Arranger:
         self._scratch: Canvas | None = None
         #: (when the current phrase started, its index).
         self._phrase: tuple[float | None, int] = (None, 0)
+        #: Peak-hold envelope of the *measured* kick (bass flux over its own
+        #: average): jumps on a hit, decays over about a bar.  This is what
+        #: lets a whole showpiece ride the bass -- the instantaneous detector
+        #: is a spike a frame wide, unusable as a level.
+        self._pump = 0.0
+        self._pump_t: float | None = None
+        #: Beat anchor per (piece, kind, visit, material): a showpiece's arc
+        #: must run from the start of its *material stretch*, not from each
+        #: phrase -- anchored per phrase, the 8-bar cycle restarted every 4
+        #: bars and the blow never fired (measured: bars 0-3 only).
+        self._piece_anchors: dict[tuple, float] = {}
         #: Per state, the (kind, visit, phrase) a pattern was chosen for and
         #: the pattern -- so the choice holds for the phrase.
         self._pattern_held: dict[str, tuple[tuple, str]] = {}
@@ -479,6 +490,15 @@ class Arranger:
         canvas = self.canvas
         canvas.clear()
 
+        features_now = self.features
+        if self._pump_t is None:
+            self._pump_t = t
+        decayed = self._pump * float(np.exp(-(t - self._pump_t) * 1.6))
+        instant = (min(1.0, float(features_now.kick) / 4.0)
+                   if features_now is not None else 0.0)
+        self._pump = max(decayed, instant)
+        self._pump_t = t
+
         if self.machine.state != self._last_state:
             self.journey += 1
             self.visits[self.machine.state] = self.visits.get(
@@ -504,8 +524,11 @@ class Arranger:
         palette = self.palette_for(treat, index)
         if piece_name is not None:
             self.gesture = "piece"
-            anchor = self._beats(self._phrase[0] if self._phrase[0] is not None
-                                 else t)
+            key = (piece_name, treat.kind, self.visits.get(treat.kind, 1),
+                   self.material_index(index))
+            if len(self._piece_anchors) > 64:
+                self._piece_anchors.clear()
+            anchor = self._piece_anchors.setdefault(key, self._beats(t))
             look = (treat.kind, f"piece:{piece_name}", "piece", palette,
                     self.far_rotation_for(treat), treat, anchor)
         elif clip_name is not None:
@@ -634,76 +657,118 @@ class Arranger:
         return options[self._walk(f"pieces:{treat.kind}:{visit}", material,
                                   len(options))]
 
-    #: The charge cycle: bars down the tunnel, one bar of blow, bars back.
-    CHARGE_RUN_BARS = 4.0
+    #: Both showpieces share one arc, in bars: travel in from the back of
+    #: the tunnel, hit the triangles, travel home.  Eight bars a cycle, the
+    #: hit landing on a downbeat because the runs are whole bars.
+    CHARGE_ARC = (4.0, 1.0, 3.0)      # in, blow, out
+    DNA_ARC = (4.0, 2.0, 2.0)         # in, bounce, out
 
     def _piece_charge(self, canvas: Canvas, kind: str, t: float, anchor: float,
                       palette, beat: float, kick: float, features) -> None:
-        """A comet charges from the back of the tunnel; reaching the mouth it
-        blows through every triangle at once; then it runs home.
+        """A comet charges from the back of the tunnel, shatters the
+        triangles at the mouth, and runs home.
 
-        The run takes four bars each way and the hue steps 45 degrees on
-        every bar from a base that is randomized (seeded) per cycle, so no
-        two charges wear the same colours.  The blow lands exactly on the
-        bar line the run arrives on -- the clock predicts it, nothing reacts
-        late -- and it *shatters*: every pixel of every triangle ignites as
-        the front passes, burns white for an instant, fades at its own rate
-        and drops out as the debris disperses, with a different scatter
-        every cycle.
+        Four bars in, hue stepping 45 degrees per bar from a base randomized
+        (seeded) per cycle; one full bar of blow -- the tunnel's mouth glows
+        and dies while every triangle pixel ignites, burns white, fades at
+        its own rate and drops out (fx.shatter, re-seeded per cycle); three
+        bars back.  The blow lands exactly on a bar line: the clock predicts
+        the arrival, nothing reacts late.
         """
+        run_in, blow_bars, run_out = self.CHARGE_ARC
+        cycle_bars = run_in + blow_bars + run_out
         bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
-        run = self.CHARGE_RUN_BARS
-        cycle_bars = 2.0 * run
         cycle, u = int(bars // cycle_bars), bars % cycle_bars
+        pump = self._pump
+        punch = kick * (0.4 + 0.6 * pump)          # beat-shaped, bass-sized
         base = (_hash(f"{self.seed}:charge:{cycle}") % 3600) / 10.0
-        hue = base + 45.0 * int(u)
-        paint = pal.generate(hue, "complementary", value=0.95).floored()
+        paint = pal.generate(base + 45.0 * int(u), "complementary",
+                             value=0.80 + 0.20 * punch).floored()
         far = paint.rotated(60.0)
 
-        position = 1.0 - u / run if u < run else (u - run) / run
-        glow = np.exp(-((canvas.depth - position) * 6.0) ** 2)
-        levels = (0.06 + 0.94 * glow * (0.75 + 0.25 * kick)).astype(np.float32)
-        fx.corridor(canvas, levels, paint, far, brightness=1.0, height=0.35)
-
-        blow = u - run          # bars since the head hit the mouth
-        if 0.0 <= blow < 1.0:
-            G = canvas.all_geo
-            fx.shatter(canvas, paint, blow, seed=_hash(f"{self.seed}:blow:{cycle}"),
-                       level=1.0, geo=G)
-            if blow < 0.15:
-                # The instant of impact: one white flash at the centre before
-                # the debris carries the energy outward.
-                fx.blob(canvas, pal.WHITE, 0.5, 0.5, radius=0.25,
-                        level=(1.0 - blow / 0.15) * (0.6 + 0.4 * kick), geo=G)
-        else:
+        G = canvas.all_geo
+        if u < run_in or u >= run_in + blow_bars:  # -- travelling
+            if u < run_in:
+                position = 1.0 - u / run_in
+            else:
+                position = (u - run_in - blow_bars) / run_out
+            glow = np.exp(-((canvas.depth - position) * 6.0) ** 2)
+            levels = (0.05 + 0.05 * punch + 0.90 * glow * (0.65 + 0.35 * punch))
+            # The triangles keep time with the bass while the comet travels:
+            # a wash that lands with each hit, and a soft centre bounce.
             fx.plasma(canvas, paint.dimmed(0.5), t, scale=2.0, speed=0.4,
-                      level=0.30)
+                      level=0.25 + 0.25 * pump)
+            fx.blob(canvas, paint, 0.5, 0.72 - 0.30 * pump * kick,
+                    radius=0.24, level=0.35 + 0.45 * punch, geo=G)
+        else:                                      # -- the blow
+            blow = (u - run_in) / blow_bars
+            levels = (0.05 + 0.95 * np.exp(-canvas.depth * 5.0)
+                      * (1.0 - 0.7 * blow))
+            fx.shatter(canvas, paint, blow,
+                       seed=_hash(f"{self.seed}:blow:{cycle}"),
+                       level=0.8 + 0.2 * pump, geo=G)
+            if blow < 0.15:
+                fx.blob(canvas, pal.WHITE, 0.5, 0.5, radius=0.25,
+                        level=(1.0 - blow / 0.15) * (0.5 + 0.5 * pump), geo=G)
+        fx.corridor(canvas, levels.astype(np.float32), paint, far,
+                    brightness=1.0, height=0.35)
 
     def _piece_dna(self, canvas: Canvas, kind: str, t: float, anchor: float,
                    palette, beat: float, kick: float, features) -> None:
-        """A double helix screws through the tunnel toward the mouth while
-        the triangles take the bass on the chin.
+        """A DNA segment travels the tunnel, and the triangles bounce.
 
-        The crush is driven by the *measured* kick -- bass flux over its own
-        average, the analyzer's kick detector -- scaled into 0..1, and shaped
-        by the predicted beat so it lands with the room: on a hit, two bands
-        slam from the ends of the array into its centre and a flash blooms
-        out as it decays.  No bass, no crush; a heavier hit crushes harder.
+        The helix is a *travelling* stretch about two rings long (a focus
+        window over six turns of thread), screwing toward the mouth over
+        four bars.  Arrived, it parks at the mouth and spins while the
+        triangles bounce for two bars: two balls hopping in counter-phase
+        across the whole array, hop depth driven by the measured kick --
+        bass flux over its own average -- with a white core flashing on the
+        hit.  Then it screws home in two.  A soft centre hop keeps the
+        triangles breathing with the bass even while the helix travels.
         """
+        run_in, bounce_bars, run_out = self.DNA_ARC
+        cycle_bars = run_in + bounce_bars + run_out
         beats = self._beats(t) - anchor
-        fx.helix(canvas, palette, beats / 4.0, turns=2.0, level=0.95)
+        bars = beats / max(1, self.clock.bar_length)
+        u = bars % cycle_bars
 
         strength = min(1.0, float(getattr(features, "kick", 0.0)) / 4.0)             if features is not None else 0.5
-        env = _kick(beat, sharp=2.5) * strength
+        hop = abs(float(np.sin(np.pi * beats)))
         G = canvas.all_geo
+
+        if u < run_in:
+            centre = 1.0 - u / run_in
+        elif u < run_in + bounce_bars:
+            centre = 0.0
+        else:
+            centre = (u - run_in - bounce_bars) / run_out
+        fx.helix(canvas, palette, beats / 4.0, turns=6.0, level=0.95,
+                 focus=(centre, 5.5))
+        fx.corridor(canvas, np.full(len(canvas.arch_names), 0.05,
+                                    dtype=np.float32),
+                    palette.dimmed(0.6), palette.rotated(60.0),
+                    brightness=1.0, height=0.35)
+
         fx.plasma(canvas, palette.dimmed(0.35), t, scale=2.2, speed=0.5,
-                  level=0.30)
-        if env > 0.02:
-            at = 0.5 * env
-            fx.sweep(canvas, palette, at, width=0.10, level=env, geo=G)
-            fx.sweep(canvas, palette, 1.0 - at, width=0.10, level=env, geo=G)
-            fx.blob(canvas, pal.WHITE, 0.5, 0.5,
-                    radius=0.12 + 0.40 * (1.0 - env), level=env * 0.9, geo=G)
+                  level=0.25)
+        if run_in <= u < run_in + bounce_bars:
+            # The hit: two balls bouncing in counter-phase, as deep as the
+            # bass hits hard.
+            depth = 0.30 + 0.55 * strength
+            hop2 = abs(float(np.sin(np.pi * (beats + 0.5))))
+            fx.blob(canvas, palette, 0.32, 0.88 - depth * hop,
+                    radius=0.20, level=0.95, geo=G)
+            fx.blob(canvas, palette.rotated(180.0), 0.68, 0.88 - depth * hop2,
+                    radius=0.20, level=0.95, geo=G)
+            env = _kick(beat, sharp=2.5) * strength
+            if env > 0.05:
+                fx.blob(canvas, pal.WHITE, 0.5, 0.5,
+                        radius=0.12 + 0.30 * (1.0 - env), level=env * 0.8,
+                        geo=G)
+        else:
+            # Travelling: the triangles keep a small bounce with the bass.
+            fx.blob(canvas, palette, 0.5, 0.80 - 0.25 * strength * hop,
+                    radius=0.22, level=0.45, geo=G)
 
     def _paint_clip(self, canvas: Canvas, name: str, kind: str, t: float,
                     anchor: float, beat: float, kick: float) -> None:

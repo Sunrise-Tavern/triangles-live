@@ -258,6 +258,7 @@ def corridor(canvas: Canvas, levels: np.ndarray, near: Palette,
 
 def helix(canvas: Canvas, palette: Palette, phase: float, *, turns: float = 2.0,
           amplitude: float = 0.35, width: float = 0.10, level: float = 1.0,
+          focus: tuple[float, float] | None = None,
           mode: str = "add") -> None:
     """A double helix down the corridor -- two strands winding along the
     arches, crossing like DNA.
@@ -278,6 +279,13 @@ def helix(canvas: Canvas, palette: Palette, phase: float, *, turns: float = 2.0,
     c2 = palette.rotated(180.0).color(0)
     contribution = (one[..., None] * c1 + two[..., None] * c2
                     + cross[..., None] * (c1 + c2) * 0.35) * level
+    if focus is not None:
+        # A travelling segment: only the stretch of tunnel around ``centre``
+        # carries the helix, so it reads as a thing moving through, not a
+        # texture the tunnel is made of.
+        centre, sharpness = focus
+        window = np.exp(-((canvas.depth - centre) * sharpness) ** 2)
+        contribution = contribution * window[:, None, None]
     _blend(canvas.arches, contribution.astype(np.float32), mode)
 
 

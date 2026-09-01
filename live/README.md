@@ -466,16 +466,20 @@ these; both, like everything else, take the frame through `geo`.
 Two **showpieces** own the whole rig for their stretch — tunnel and
 triangles telling one story — and sit in the rotation beside clips (15 % of
 material stretches in the states that suit them), or on demand via the
-*Piece* knob (`auto` / `off` / by name).  `charge`: a comet runs from the
-back of the tunnel over four bars, hue stepping 45° per bar from a base
-randomized per cycle; on the bar line it reaches the mouth, a burst blows
-through every triangle as one, and it runs home with the colours still
-turning.  `dna`: a double helix — two counter-phased strands and their
-crossing rungs — screws through the tunnel toward the mouth while the
-triangles take the bass on the chin: each *measured* kick (bass flux, the
-analyzer's detector, scaled by hit strength and shaped by the predicted
-beat) slams two bands from the ends of the array into its centre with a
-flash that blooms as it decays.
+*Piece* knob (`auto` / `off` / by name).  Both share one eight-bar arc —
+travel in from the back of the tunnel, hit the triangles, travel home — and
+both ride a bass **pump**: a peak-hold envelope of the measured kick (bass
+flux over its own average) that jumps on a hit and decays over about a bar,
+sizing every element — head glow, bed depth, helix width, bounce depth,
+colour punch.  `charge`: the comet runs in over four bars, hue stepping 45°
+per bar from a base randomized per cycle, while the triangles keep time with
+a bass-bounced wash; on the bar line it reaches the mouth and the triangles
+*shatter* — every pixel ignites as the front passes, burns white, fades at
+its own rate and drops out, re-scattered every cycle — then it runs home in
+three.  `dna`: a travelling helix segment about two rings long screws toward
+the mouth in four bars, parks there spinning for two while the triangles
+bounce — two balls in counter-phase across the whole array, hop depth from
+the pump, white cores flashing on the hit — then screws home in two.
 
 Variety comes from three places, all seeded so the same audio still renders
 the same show.  The corridor has fourteen patterns and the nets twenty-odd
