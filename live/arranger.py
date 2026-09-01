@@ -511,8 +511,15 @@ class Arranger:
             self.visits[self.machine.state] = self.visits.get(
                 self.machine.state, 0) + 1
             self._last_state = self.machine.state
-            # A new state is a new phrase, whatever the old one had left.
-            self._phrase = (t, self._phrase[1] + 1)
+            # A new state is a new *material*, not merely a new phrase: a
+            # drop must re-deal what is playing.  Before this, a clip or
+            # piece stretch rode through the state change wearing the wrong
+            # energy for up to pattern_hold more phrases -- reported as the
+            # show sitting in the cruising look while the state had moved.
+            hold = max(1, int(round(self.settings.pattern_hold
+                                    if self.settings else 4.0)))
+            count = self._phrase[1]
+            self._phrase = (t, (count // hold + 1) * hold)
 
         _, treat, phrase = self.locate(t)
         if treat.kind == SILENT:
