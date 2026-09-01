@@ -463,6 +463,20 @@ centre of the array, both ends slamming into the middle on the beat, the nets
 lit one after another.  `blob` and `sweep` are the two effects added for
 these; both, like everything else, take the frame through `geo`.
 
+Two **showpieces** own the whole rig for their stretch — tunnel and
+triangles telling one story — and sit in the rotation beside clips (15 % of
+material stretches in the states that suit them), or on demand via the
+*Piece* knob (`auto` / `off` / by name).  `charge`: a comet runs from the
+back of the tunnel over four bars, hue stepping 45° per bar from a base
+randomized per cycle; on the bar line it reaches the mouth, a burst blows
+through every triangle as one, and it runs home with the colours still
+turning.  `dna`: a double helix — two counter-phased strands and their
+crossing rungs — screws through the tunnel toward the mouth while the
+triangles take the bass on the chin: each *measured* kick (bass flux, the
+analyzer's detector, scaled by hit strength and shaped by the predicted
+beat) slams two bands from the ends of the array into its centre with a
+flash that blooms as it decays.
+
 Variety comes from three places, all seeded so the same audio still renders
 the same show.  The corridor has fourteen patterns and the nets twenty-odd
 gestures, walked without repeating the previous one; the phrase is the

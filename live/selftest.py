@@ -238,6 +238,45 @@ def test_clips(layout: Layout) -> str:
             "deterministic")
 
 
+def test_pieces(layout: Layout) -> str:
+    """Each showpiece must light tunnel and triangles, and stay finite."""
+    from .arranger import PIECES, Arranger
+    from .audio import ArraySource
+    from .listener import Listener
+    from .settings import Settings
+    from .state import StateMachine
+    from .verify import arc_track
+
+    audio, _ = arc_track()
+    audio = audio[: 44100 * 18]
+    details = []
+    for name in PIECES:
+        canvas = Canvas(layout)
+        listener = Listener(ArraySource(audio))
+        st = Settings()
+        st.piece = name
+        arranger = Arranger(canvas, listener, state=StateMachine(), settings=st)
+        arches = nets = 0.0
+        now, index = 0.0, 0
+        for block in listener.source.blocks():
+            f = listener.step(block)
+            arranger.machine.push(f)
+            while now <= f.t:
+                arranger.render(index, now)
+                check(np.isfinite(canvas._source).all(), f"{name}: NaN or inf")
+                arches = max(arches, float(canvas.arches.max()))
+                nets = max(nets, float(canvas.nets.max()))
+                index += 1
+                now += 1.0 / 40.0
+        check(arranger._look is not None and arranger._look[1] == f"piece:{name}",
+              f"{name}: the Piece knob did not hold the look "
+              f"({arranger._look and arranger._look[1]})")
+        check(arches > 0.5, f"{name}: the tunnel never lit ({arches:.2f})")
+        check(nets > 0.5, f"{name}: the triangles never lit ({nets:.2f})")
+        details.append(name)
+    return f"{', '.join(details)}: tunnel and triangles both lit, held via the knob"
+
+
 def test_orient(layout: Layout) -> str:
     """The orientation bands must rise base -> apex and run front -> back."""
     from . import orient
@@ -556,6 +595,7 @@ def test_effects(layout: Layout) -> str:
         "orbit": lambda: fx.orbit(canvas, palette, 0.6),
         "halves": lambda: fx.halves(canvas, palette, True, 0.8),
         "apex": lambda: fx.apex(canvas, palette, 0.8),
+        "helix": lambda: fx.helix(canvas, palette, 0.3),
         "par": lambda: fx.par(canvas, palette.color(0), 0.9, white=0.2),
     }
     if not layout.par:
@@ -1328,6 +1368,7 @@ TESTS = (
     ("canvas -> channels", test_canvas),
     ("orientation", test_orient),
     ("clips", test_clips),
+    ("showpieces", test_pieces),
     ("effect vocabulary", test_effects),
     ("fixed script", test_script),
     ("preview geometry", test_geometry),

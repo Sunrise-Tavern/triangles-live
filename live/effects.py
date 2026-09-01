@@ -256,6 +256,31 @@ def corridor(canvas: Canvas, levels: np.ndarray, near: Palette,
     _blend(canvas.arches, contribution, mode)
 
 
+def helix(canvas: Canvas, palette: Palette, phase: float, *, turns: float = 2.0,
+          amplitude: float = 0.35, width: float = 0.10, level: float = 1.0,
+          mode: str = "add") -> None:
+    """A double helix down the corridor -- two strands winding along the
+    arches, crossing like DNA.
+
+    Each arch shows the two strands at positions along its strip that rotate
+    with depth; advancing ``phase`` screws the whole helix toward the mouth
+    of the tunnel.  Strand one wears the palette's first colour, strand two
+    its complement, and where they cross (the rungs) a soft glow ties them.
+    """
+    angle = 2.0 * np.pi * (turns * canvas.depth + phase)
+    offset = amplitude * np.sin(angle)
+    t = canvas.arch_t[None, :]
+    one = np.clip(1.0 - np.abs(t - (0.5 + offset[:, None])) / width, 0.0, 1.0) ** 1.5
+    two = np.clip(1.0 - np.abs(t - (0.5 - offset[:, None])) / width, 0.0, 1.0) ** 1.5
+    cross = ((1.0 - np.abs(np.sin(angle)))[:, None] ** 3
+             * np.clip(1.0 - np.abs(t - 0.5) / (width * 1.5), 0.0, 1.0))
+    c1 = palette.color(0)
+    c2 = palette.rotated(180.0).color(0)
+    contribution = (one[..., None] * c1 + two[..., None] * c2
+                    + cross[..., None] * (c1 + c2) * 0.35) * level
+    _blend(canvas.arches, contribution.astype(np.float32), mode)
+
+
 def wash(canvas: Canvas, palette: Palette, level: float = 1.0, *,
          targets: slice | None = None, gradient: float = 0.0,
          mode: str = "add",

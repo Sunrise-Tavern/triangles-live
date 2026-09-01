@@ -63,6 +63,9 @@ class Settings:
     #: Share of phrases the rotation gives to a canned clip instead of a
     #: painted look, beat-locked and enveloped by the music.  0 = never.
     clip_share: float = 0.3
+    #: Showpieces -- composed whole-rig sequences (charge, dna).  "auto"
+    #: lets the rotation play them now and then, "off" never, a name always.
+    piece: str = "auto"
     #: Force one colour scheme instead of letting each visit to a state
     #: choose its own.
     scheme: str = "auto"
@@ -138,6 +141,7 @@ SCHEMA: dict[str, tuple] = {
     "scene": ("choice", None, None, None, "Scene"),
     "clip": ("choice", None, None, None, "Clip"),
     "clip_share": ("float", 0.0, 1.0, 0.05, "Clips in rotation"),
+    "piece": ("choice", None, None, None, "Piece"),
     "scheme": ("choice", None, None, None, "Colour scheme"),
     "seed": ("float", 0.0, 999.0, 1.0, "Shuffle seed"),
     "transitions": ("float", 0.0, 1.0, 0.05, "Transitions"),
@@ -151,7 +155,8 @@ SCHEMA: dict[str, tuple] = {
 
 #: Filled in by :mod:`live.engine`, which owns the vocabularies.
 CHOICES: dict[str, list[str]] = {"pattern": ["auto"], "scene": ["auto"],
-                                 "scheme": ["auto"], "clip": ["off"]}
+                                 "scheme": ["auto"], "clip": ["off"],
+                                 "piece": ["auto", "off"]}
 
 
 def _coerce(key: str, raw: Any) -> Any:

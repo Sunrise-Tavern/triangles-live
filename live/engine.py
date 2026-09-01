@@ -28,7 +28,7 @@ import numpy as np
 
 from . import effects as fx
 from . import palette as pal
-from .arranger import Arranger
+from .arranger import PIECES, Arranger
 from .clips import Clips
 from .audio import AudioSource
 from .ddp import DDP_PORT, DDPSender
@@ -127,6 +127,7 @@ class Engine:
         #: holds a reference.
         self.clips = Clips(channel_count=self.layout.channel_count)
         CHOICES["clip"] = ["off", *self.clips.names]
+        CHOICES["piece"] = ["auto", "off", *PIECES]
         # Energy measurements for the rotation; cheap when index.json is
         # current (it deploys with the clips), a one-time scan when not.
         self.clips.build_index(background=True)

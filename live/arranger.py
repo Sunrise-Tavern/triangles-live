@@ -137,6 +137,21 @@ TRANSITIONS: tuple[tuple[str, float], ...] = (
 )
 
 
+#: Showpieces: composed sequences that own the whole rig for their stretch --
+#: tunnel and triangles telling one story -- unlike a pattern or a gesture,
+#: which each paint their half.  Each name maps to the states it suits, and to
+#: a ``_piece_<name>`` method.  They join the rotation at PIECE_SHARE, and the
+#: panel's "Piece" knob forces one for a look.
+PIECES: dict[str, tuple[str, ...]] = {
+    "charge": (CRUISING, BUILDING, HOT),
+    "dna": (CRUISING, HOT),
+}
+
+#: Share of material stretches the rotation gives a showpiece, in the states
+#: it suits, after the clip roll has passed.
+PIECE_SHARE = 0.15
+
+
 TREATMENTS: dict[str, Treatment] = {
     SILENT:   Treatment(SILENT,   "analogous",     0.45, 0.40, "comet",    16.0, 16.0, True, 0.00),
     QUIET:    Treatment(QUIET,    "analogous",     0.60, 0.60, "sparkle",   4.0,  8.0, True, 0.30),
@@ -477,9 +492,16 @@ class Arranger:
             return
 
         index = self.phrase_index(t, treat)
-        clip_name = self.clip_for(treat, index)
+        piece_name = self.piece_for(treat, index)
+        clip_name = None if piece_name else self.clip_for(treat, index)
         palette = self.palette_for(treat, index)
-        if clip_name is not None:
+        if piece_name is not None:
+            self.gesture = "piece"
+            anchor = self._beats(self._phrase[0] if self._phrase[0] is not None
+                                 else t)
+            look = (treat.kind, f"piece:{piece_name}", "piece", palette,
+                    self.far_rotation_for(treat), treat, anchor)
+        elif clip_name is not None:
             # This stretch of material is a canned loop.  Anchored in beats
             # at the phrase start, so it begins at its first frame and its
             # authored rhythm rides the clock.
@@ -535,6 +557,10 @@ class Arranger:
         if name.startswith("clip:"):
             self._paint_clip(canvas, name[5:], kind, t, anchor, beat, kick)
             return
+        if name.startswith("piece:"):
+            getattr(self, f"_piece_{name[6:]}")(canvas, kind, t, anchor,
+                                                palette, beat, kick, features)
+            return
 
         far = palette.rotated(far_degrees)
         levels = fx.PATTERNS[name](
@@ -578,6 +604,95 @@ class Arranger:
         name = options[self._walk(f"clips:{treat.kind}:{visit}", material,
                                   len(options))]
         return name if self.clips.get(name) is not None else None
+
+    def piece_for(self, treat: Treatment, phrase: int) -> str | None:
+        """The showpiece this stretch plays, or None.
+
+        The "Piece" knob wins: a named piece plays always, "off" removes
+        them from the rotation, "auto" rolls -- the same seeded machinery as
+        clips, so the same audio and seed still render the same show.
+        """
+        held = self.settings.piece if self.settings else "auto"
+        if held in PIECES:
+            return held
+        if held == "off" or treat.kind == SILENT:
+            return None
+        options = [n for n, kinds in PIECES.items() if treat.kind in kinds]
+        if not options:
+            return None
+        visit = self.visits.get(treat.kind, 1)
+        material = self.material_index(phrase)
+        roll = zlib.crc32(f"{self.seed}:pieceroll:{treat.kind}:{visit}:"
+                          f"{material}".encode())
+        if (roll % 1000) / 1000.0 >= PIECE_SHARE:
+            return None
+        return options[self._walk(f"pieces:{treat.kind}:{visit}", material,
+                                  len(options))]
+
+    #: The charge cycle: bars down the tunnel, one bar of blow, bars back.
+    CHARGE_RUN_BARS = 4.0
+
+    def _piece_charge(self, canvas: Canvas, kind: str, t: float, anchor: float,
+                      palette, beat: float, kick: float, features) -> None:
+        """A comet charges from the back of the tunnel; reaching the mouth it
+        blows through every triangle at once; then it runs home.
+
+        The run takes four bars each way and the hue steps 45 degrees on
+        every bar from a base that is randomized (seeded) per cycle, so no
+        two charges wear the same colours.  The blow lands exactly on the
+        bar line the run arrives on -- the clock predicts it, nothing reacts
+        late -- and its flash core rides the kick.
+        """
+        bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
+        run = self.CHARGE_RUN_BARS
+        cycle_bars = 2.0 * run
+        cycle, u = int(bars // cycle_bars), bars % cycle_bars
+        base = (zlib.crc32(f"{self.seed}:charge:{cycle}".encode()) % 3600) / 10.0
+        hue = base + 45.0 * int(u)
+        paint = pal.generate(hue, "complementary", value=0.95).floored()
+        far = paint.rotated(60.0)
+
+        position = 1.0 - u / run if u < run else (u - run) / run
+        glow = np.exp(-((canvas.depth - position) * 6.0) ** 2)
+        levels = (0.06 + 0.94 * glow * (0.75 + 0.25 * kick)).astype(np.float32)
+        fx.corridor(canvas, levels, paint, far, brightness=1.0, height=0.35)
+
+        blow = u - run          # bars since the head hit the mouth
+        if 0.0 <= blow < 1.0:
+            G = canvas.all_geo
+            fx.radial(canvas, paint, blow, width=0.30, level=1.0 - 0.6 * blow,
+                      geo=G)
+            fx.blob(canvas, pal.WHITE, 0.5, 0.5, radius=0.30,
+                    level=(1.0 - blow) ** 2 * (0.5 + 0.5 * kick), geo=G)
+        else:
+            fx.plasma(canvas, paint.dimmed(0.5), t, scale=2.0, speed=0.4,
+                      level=0.30)
+
+    def _piece_dna(self, canvas: Canvas, kind: str, t: float, anchor: float,
+                   palette, beat: float, kick: float, features) -> None:
+        """A double helix screws through the tunnel toward the mouth while
+        the triangles take the bass on the chin.
+
+        The crush is driven by the *measured* kick -- bass flux over its own
+        average, the analyzer's kick detector -- scaled into 0..1, and shaped
+        by the predicted beat so it lands with the room: on a hit, two bands
+        slam from the ends of the array into its centre and a flash blooms
+        out as it decays.  No bass, no crush; a heavier hit crushes harder.
+        """
+        beats = self._beats(t) - anchor
+        fx.helix(canvas, palette, beats / 4.0, turns=2.0, level=0.95)
+
+        strength = min(1.0, float(getattr(features, "kick", 0.0)) / 4.0)             if features is not None else 0.5
+        env = _kick(beat, sharp=2.5) * strength
+        G = canvas.all_geo
+        fx.plasma(canvas, palette.dimmed(0.35), t, scale=2.2, speed=0.5,
+                  level=0.30)
+        if env > 0.02:
+            at = 0.5 * env
+            fx.sweep(canvas, palette, at, width=0.10, level=env, geo=G)
+            fx.sweep(canvas, palette, 1.0 - at, width=0.10, level=env, geo=G)
+            fx.blob(canvas, pal.WHITE, 0.5, 0.5,
+                    radius=0.12 + 0.40 * (1.0 - env), level=env * 0.9, geo=G)
 
     def _paint_clip(self, canvas: Canvas, name: str, kind: str, t: float,
                     anchor: float, beat: float, kick: float) -> None:
