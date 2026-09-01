@@ -67,6 +67,15 @@ def _band(coord: np.ndarray, at: float, width: float = BAND) -> np.ndarray:
     return np.clip(1.0 - np.abs(coord - at) / width, 0.0, 1.0)
 
 
+def paint_one_arch(canvas: Canvas, index: int) -> None:
+    """Arch ``index`` (0-based, tunnel front-to-back order) solid white,
+    every other arch a dim blue -- for walking the corridor and checking
+    which physical arch answers to which position."""
+    canvas.clear()
+    canvas.arches[..., 2] = FLOOR
+    canvas.arches[index] = 1.0
+
+
 def paint(canvas: Canvas, t: float) -> str:
     """Paint the orientation pattern for show time ``t``; returns the stage."""
     canvas.clear()

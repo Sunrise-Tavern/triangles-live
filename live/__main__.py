@@ -136,14 +136,29 @@ def cmd_orient(args) -> int:
               + (f" at DDP offset {offset}" if offset else ""))
     print("stages: " + ", ".join(f"{n} ({s:g}s)" for n, s in orient.STAGES)
           + " -- Ctrl-C to stop")
+    if args.arch is not None:
+        if not 1 <= args.arch <= len(layout.arches):
+            print(f"--arch must be 1..{len(layout.arches)} (tunnel order, "
+                  f"front to back)")
+            return 1
+        model = layout[layout.arches[args.arch - 1]]
+        cc = model.source
+        print(f"holding arch {args.arch}: {model.name}, channels "
+              f"{model.start}-{model.end} -- check this one is lit at "
+              f"position {args.arch} from the front")
     clock = FrameClock(fps=args.fps)
     out = layout.blank_channels()
     last = None
     try:
         for i, t in clock:
-            if args.stage:
+            if args.arch is not None:
+                orient.paint_one_arch(canvas, args.arch - 1)
+                stage = f"arch {args.arch}"
+            elif args.stage:
                 t = orient.hold(args.stage, t)
-            stage = orient.paint(canvas, t)
+                stage = orient.paint(canvas, t)
+            else:
+                stage = orient.paint(canvas, t)
             if stage != last:
                 print(f"  {stage}")
                 last = stage
@@ -730,6 +745,10 @@ def build_parser(config: Config | None = None) -> argparse.ArgumentParser:
     p.add_argument("--controller", help="send to one controller only")
     p.add_argument("--stage", choices=[n for n, _ in orient.STAGES],
                    help="hold one stage instead of cycling")
+    p.add_argument("--arch", type=int,
+                   help="hold ONE arch lit solid white (1-24, tunnel order "
+                        "front to back), the rest dim blue -- for checking "
+                        "which physical arch answers to which position")
     p.add_argument("--channels-per-packet", type=int,
                    default=DEFAULT_CHANNELS_PER_PACKET)
     p.set_defaults(func=cmd_orient)
