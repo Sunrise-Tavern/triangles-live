@@ -90,6 +90,9 @@ class Settings:
     # -- state machine (only meaningful when driven by audio) -------------- #
     #: Loudness, relative to a 45 s baseline, below which a passage is quiet.
     quiet_enter: float = 0.62
+    #: Loudness above which (sustained) a passage is hot.  Lower = the show
+    #: reaches its top gear more easily.
+    hot_enter: float = 1.30
     #: Share of spectral energy in the high band that marks a build.
     build_high_share: float = 0.40
     #: How hard a kick must hit, out of a build, to call the drop.
@@ -152,6 +155,7 @@ SCHEMA: dict[str, tuple] = {
     "pattern_hold": ("float", 1.0, 8.0, 1.0, "Pattern hold (phrases)"),
     "rest_level": ("float", 0.0, 1.0, 0.01, "Resting nets"),
     "quiet_enter": ("float", 0.2, 1.2, 0.01, "Quiet threshold"),
+    "hot_enter": ("float", 1.0, 2.0, 0.01, "Hot threshold"),
     "build_high_share": ("float", 0.2, 0.8, 0.01, "Build sensitivity"),
     "drop_kick": ("float", 1.5, 8.0, 0.1, "Drop sensitivity"),
     "latency_ms": ("float", -200.0, 200.0, 1.0, "Latency offset (ms)"),

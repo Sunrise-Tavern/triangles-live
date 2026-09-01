@@ -69,9 +69,12 @@ class StateThresholds:
     #: ...sustained for this long.
     build_hold_s: float = 1.0
     #: A build that has not resolved after this long is not a build any more;
-    #: it is the track.  Resolve it by energy, and let the high-band baseline
-    #: (which has caught up by now) stop it re-entering.
-    max_build_s: float = 20.0
+    #: it is the track.  Was 20 s, which a DJ set overruns constantly: a
+    #: riser of 16-32 bars at 128 BPM is 30-60 s, and every one of them was
+    #: cut short ("build outlasted a build" -> cruising, reported from the
+    #: rig).  The bright-track false-build this guards against is already
+    #: caught by build_high_ratio, so the belt can be this loose.
+    max_build_s: float = 60.0
     #: Fallback only: energy this high is hot even with no build before it,
     #: for when we join a track mid-drop.  Deliberately high -- the event rule
     #: below is the one that should normally fire.
@@ -192,6 +195,7 @@ class StateMachine:
         self._bass_fast = 0.0
         self._last_kick = -1e9
         self._cold_for = 0.0
+        self._build_loud = 0.0
         #: Hot was called by the cold-start rule, on band shape alone.
         self._provisional = False
         self._now = 0.0
@@ -344,9 +348,18 @@ class StateMachine:
             return reason
 
         if self.state == BUILDING and held >= self.t.max_build_s:
+            # Resolving by energy alone sent every long build to cruising:
+            # after a minute the baseline has absorbed the build and energy
+            # reads ~1.0 whatever the room feels.  The baseline-proof
+            # question is whether the loudness *held or grew* across the
+            # build -- a riser that kept its level for a minute is the track
+            # at full tilt, not a lull.
+            sustained = self._loud >= self._build_loud * 0.95
             return self._enter(
-                HOT if self._energy > self.t.hot_leave else CRUISING,
-                "build outlasted a build")
+                HOT if (self._energy > self.t.hot_leave or sustained)
+                else CRUISING,
+                "build became the track" if sustained
+                else "build outlasted a build")
         if self._rising_for > 0.0:
             if self._rising_for >= self.t.build_hold_s and self.state != BUILDING:
                 return self._enter(BUILDING, "high band swept up")
@@ -381,6 +394,10 @@ class StateMachine:
             # from the level it was entered at.
             self._hot_level = self._loud
             self._provisional = False
+        if state == BUILDING:
+            # ...and what the build grew from, for resolving one that
+            # outlasts the clock.
+            self._build_loud = self._loud
         self.state = state
         self.entered_at = self._now
         return reason

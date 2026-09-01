@@ -179,7 +179,7 @@ Output enable · blackout · master brightness · gamma · saturation ·
 contrast · corridor rate ·
 articulation · corridor pattern override · hue offset · hue lock · tempo ·
 scene hold · colour scheme override · shuffle seed · transitions · resting
-nets.  Presets are named JSON files under `live/presets/`, saved and loaded
+nets · quiet and hot thresholds · build and drop sensitivity.  Presets are named JSON files under `live/presets/`, saved and loaded
 from the panel.
 
 *Saturation* and *contrast* grade the whole rig — nets and corridor together

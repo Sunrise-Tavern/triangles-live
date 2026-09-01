@@ -277,6 +277,9 @@ class Engine:
                 self.machine.t.quiet_enter = settings.quiet_enter
                 self.machine.t.build_high_share = settings.build_high_share
                 self.machine.t.drop_kick = settings.drop_kick
+                self.machine.t.hot_enter = settings.hot_enter
+                # Hysteresis must survive the knob: leave stays below enter.
+                self.machine.t.hot_leave = min(1.10, settings.hot_enter - 0.15)
             if self.listener is not None:
                 self.listener.clock.latency = settings.latency_ms / 1000.0
 
