@@ -145,11 +145,12 @@ TRANSITIONS: tuple[tuple[str, float], ...] = (
 PIECES: dict[str, tuple[str, ...]] = {
     "charge": (CRUISING, BUILDING, HOT),
     "dna": (CRUISING, HOT),
+    "volley": (CRUISING, HOT),
+    "tide": (CRUISING, BUILDING),
+    "swarm": (QUIET, CRUISING),
+    "storm": (BUILDING, HOT),
+    "pendulum": (CRUISING, BUILDING),
 }
-
-#: Share of material stretches the rotation gives a showpiece, in the states
-#: it suits, after the clip roll has passed.
-PIECE_SHARE = 0.15
 
 
 TREATMENTS: dict[str, Treatment] = {
@@ -213,6 +214,9 @@ class Arranger:
         #: phrase -- anchored per phrase, the 8-bar cycle restarted every 4
         #: bars and the blow never fired (measured: bars 0-3 only).
         self._piece_anchors: dict[tuple, float] = {}
+        #: Storm bolts in flight: launch times.  Spawned by measured kicks.
+        self._bolts: list[float] = []
+        self._bolt_last = -1e9
         #: Per state, the (kind, visit, phrase) a pattern was chosen for and
         #: the pattern -- so the choice holds for the phrase.
         self._pattern_held: dict[str, tuple[tuple, str]] = {}
@@ -649,10 +653,11 @@ class Arranger:
         options = [n for n, kinds in PIECES.items() if treat.kind in kinds]
         if not options:
             return None
+        share = self.settings.piece_share if self.settings else 0.25
         visit = self.visits.get(treat.kind, 1)
         material = self.material_index(phrase)
         roll = _hash(f"{self.seed}:pieceroll:{treat.kind}:{visit}:{material}")
-        if (roll % 1000) / 1000.0 >= PIECE_SHARE:
+        if (roll % 1000) / 1000.0 >= share:
             return None
         return options[self._walk(f"pieces:{treat.kind}:{visit}", material,
                                   len(options))]
@@ -769,6 +774,179 @@ class Arranger:
             # Travelling: the triangles keep a small bounce with the bass.
             fx.blob(canvas, palette, 0.5, 0.80 - 0.25 * strength * hop,
                     radius=0.22, level=0.45, geo=G)
+
+    def _piece_volley(self, canvas: Canvas, kind: str, t: float, anchor: float,
+                      palette, beat: float, kick: float, features) -> None:
+        """A rally: down the tunnel, off the back wall, out again, then
+        across the triangles and back.  One leg per bar, so every bounce
+        lands on a downbeat; each bounce flashes white, as hard as the bass
+        hits.  Four bars a rally, two rallies a cycle."""
+        pump = self._pump
+        punch = kick * (0.4 + 0.6 * pump)
+        bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
+        unit = bars % 4.0
+        G = canvas.all_geo
+        turn = _kick(unit % 1.0, sharp=3.0) * (0.3 + 0.7 * pump)
+
+        levels = np.full(len(canvas.arch_names), 0.05 + 0.05 * punch,
+                         dtype=np.float32)
+        if unit < 2.0:                     # ball in the tunnel
+            position = unit if unit < 1.0 else 2.0 - unit
+            levels += 0.95 * np.exp(-((canvas.depth - position) * 7.0) ** 2) \
+                * (0.7 + 0.3 * punch)
+            if unit < 1.0 and unit > 0.85:      # about to hit the back wall
+                levels[-2:] += turn
+            fx.plasma(canvas, palette.dimmed(0.4), t, scale=2.2, speed=0.5,
+                      level=0.22 + 0.20 * pump)
+        else:                              # ball across the triangles
+            x = unit - 2.0 if unit < 3.0 else 4.0 - unit
+            fx.blob(canvas, palette, x, 0.5, radius=0.20,
+                    level=0.85 + 0.15 * punch, geo=G)
+            fx.blob(canvas, pal.WHITE, x, 0.5, radius=0.08, level=turn, geo=G)
+        fx.corridor(canvas, levels, palette, palette.rotated(60.0),
+                    brightness=1.0, height=0.35)
+
+    def _piece_tide(self, canvas: Canvas, kind: str, t: float, anchor: float,
+                    palette, beat: float, kick: float, features) -> None:
+        """Water floods the tunnel toward the mouth, crashes on the
+        triangles as foam, and drains back.  Four bars in, two of crash --
+        white spray raining apex to base, splash sized by the bass -- and
+        two to drain."""
+        pump = self._pump
+        punch = kick * (0.4 + 0.6 * pump)
+        bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
+        u = bars % 8.0
+        surge = 0.85 + 0.15 * float(np.sin(2 * np.pi * bars))    # the swell
+        if u < 4.0:                          # flooding, back toward the mouth
+            front = 1.0 - u / 4.0
+            levels = np.clip((canvas.depth - front) / 0.25 + 1.0, 0.0, 1.0)
+        elif u < 6.0:                        # crashed: the tunnel sloshes full
+            levels = np.full(len(canvas.arch_names), 0.8)
+            crash = (u - 4.0) / 2.0
+            G = canvas.all_geo
+            fx.sweep(canvas, pal.WHITE, crash, angle=1.0,
+                     width=0.20 + 0.15 * pump, level=(1.0 - crash * 0.5), geo=G)
+            fx.net_sparkle(canvas, pal.WHITE, int(t * 40),
+                           density=0.01 + 0.04 * pump, level=0.9,
+                           seed=self.seed)
+        else:                                # draining, mouth toward the back
+            front = (u - 6.0) / 2.0
+            levels = np.clip((canvas.depth - front) / 0.25 + 1.0, 0.0, 1.0) * 0.7
+        fx.corridor(canvas, (levels * surge * (0.75 + 0.25 * punch)
+                             ).astype(np.float32),
+                    palette, palette.rotated(40.0), brightness=0.95,
+                    height=0.25)
+        fx.wash(canvas, palette.dimmed(0.30 + 0.25 * pump), 1.0, gradient=0.9)
+
+    def _piece_swarm(self, canvas: Canvas, kind: str, t: float, anchor: float,
+                     palette, beat: float, kick: float, features) -> None:
+        """A cloud of sparks drifts through the tunnel, settles on the
+        triangles as two counter-spinning wheels, and swarms home.  The
+        bass scatters it: a heavy hit widens the cloud and thickens the
+        sparks."""
+        pump = self._pump
+        bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
+        beats = self._beats(t) - anchor
+        u = bars % 8.0
+        if u < 3.0:
+            centre = 1.0 - u / 3.0
+        elif u < 5.0:
+            centre = 0.0
+        else:
+            centre = (u - 5.0) / 3.0
+        window = np.exp(-((canvas.depth - centre) * (5.0 - 2.5 * pump)) ** 2)
+        twinkle = fx.sparkle(len(canvas.arch_names), (bars / 2.0) % 1.0,
+                             steps=16, fraction=0.35 + 0.25 * pump,
+                             seed=self.seed)
+        levels = (0.04 + (0.5 + 0.5 * twinkle) * window).astype(np.float32)
+        fx.corridor(canvas, np.clip(levels, 0.0, 1.0), palette,
+                    palette.rotated(50.0), brightness=0.9, height=0.3)
+        fx.plasma(canvas, palette.dimmed(0.35), t, scale=2.5, speed=0.3,
+                  level=0.25 + 0.15 * pump)
+        if 3.0 <= u < 5.0:
+            # Settled: the swarm organizes into wheels, pulsing on the beat.
+            spin = 0.75 + 0.25 * kick * (0.4 + 0.6 * pump)
+            fx.pinwheel(canvas, palette, beats / 8.0, arms=3, level=spin,
+                        targets=self.big, geo=canvas.big_geo)
+            fx.pinwheel(canvas, palette.rotated(40.0), -beats / 6.0, arms=3,
+                        level=spin * 0.8, targets=self.small)
+            fx.net_sparkle(canvas, pal.WHITE, int(t * 40),
+                           density=0.004 + 0.01 * pump, level=0.8,
+                           seed=self.seed)
+
+    def _piece_storm(self, canvas: Canvas, kind: str, t: float, anchor: float,
+                     palette, beat: float, kick: float, features) -> None:
+        """Clouds gather on the triangles; then the bass throws lightning.
+
+        During the strike bars every qualifying kick -- the *measured*
+        detector, not the grid -- launches a bolt from the triangles down
+        the tunnel, streaking back with an afterglow, while the triangles
+        flash white at the moment of birth.  No bass, no bolts: the storm
+        is only as violent as the music.  Two bars gathering, four of
+        strikes, two of afterglow."""
+        pump = self._pump
+        bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
+        u = bars % 8.0
+        beat_s = max(1e-6, 60.0 / self.bpm)
+
+        instant = float(getattr(features, "kick", 0.0)) if features is not None else 0.0
+        if (2.0 <= u < 6.0 and instant >= 3.0
+                and t - self._bolt_last >= 0.5 * beat_s):
+            self._bolts.append(t)
+            self._bolt_last = t
+        self._bolts = [b for b in self._bolts if t - b < 1.2]
+
+        levels = np.full(len(canvas.arch_names), 0.03, dtype=np.float32)
+        flash = 0.0
+        for born in self._bolts:
+            age = (t - born) / 1.2
+            position = age * 1.4                    # mouth -> back, and out
+            levels += (np.exp(-((canvas.depth - position) * 5.0) ** 2)
+                       * (1.0 - age)).astype(np.float32)
+            flash = max(flash, (1.0 - age * 4.0))
+        if u >= 6.0:
+            levels += 0.10 * (1.0 - (u - 6.0) / 2.0)
+        fx.corridor(canvas, np.clip(levels, 0.0, 1.0), palette.floored(),
+                    pal.WHITE, brightness=0.95, height=0.4)
+
+        # The cloud: heavy, slow, rumbling with the pump.
+        fx.plasma(canvas, palette.dimmed(0.30 + 0.30 * pump), t, scale=1.8,
+                  speed=0.8, level=0.35 + 0.25 * pump)
+        if flash > 0.0:
+            fx.wash(canvas, pal.WHITE, flash * 0.9)
+
+    def _piece_pendulum(self, canvas: Canvas, kind: str, t: float, anchor: float,
+                        palette, beat: float, kick: float, features) -> None:
+        """A pendulum swings the width of the array, one full swing per
+        bar, so it strikes an end on every other beat -- and each strike
+        launches a pulse down the tunnel.  The bass sets how hard: swing
+        brightness, strike flash and pulse depth all ride the pump."""
+        pump = self._pump
+        punch = kick * (0.4 + 0.6 * pump)
+        bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
+        G = canvas.all_geo
+
+        swing = float(np.cos(2 * np.pi * bars))          # 1 = left end
+        x = 0.5 - 0.46 * swing
+        y = 0.42 + 0.40 * ((x - 0.5) / 0.46) ** 2        # the arc of the bob
+        fx.wash(canvas, palette.dimmed(0.18 + 0.12 * pump), 1.0, gradient=0.8)
+        fx.blob(canvas, palette, x, y, radius=0.16 + 0.04 * punch,
+                level=0.8 + 0.2 * punch, geo=G)
+        strike = _kick((bars * 2.0) % 1.0, sharp=3.0) * (0.3 + 0.7 * pump)
+        if strike > 0.05:
+            end_x = 0.04 if swing > 0 else 0.96
+            fx.blob(canvas, pal.WHITE, end_x, 0.75, radius=0.12,
+                    level=strike, geo=G)
+
+        # Each strike sends a pulse into the tunnel; two live at once.
+        levels = np.full(len(canvas.arch_names), 0.05 + 0.05 * punch,
+                         dtype=np.float32)
+        for offset in (0.0, 0.5):
+            phase = (bars - offset) % 1.0
+            levels += (np.exp(-((canvas.depth - phase) * 6.0) ** 2)
+                       * (1.0 - phase) * (0.5 + 0.5 * pump)).astype(np.float32)
+        fx.corridor(canvas, np.clip(levels, 0.0, 1.0), palette,
+                    palette.rotated(70.0), brightness=0.95, height=0.35)
 
     def _paint_clip(self, canvas: Canvas, name: str, kind: str, t: float,
                     anchor: float, beat: float, kick: float) -> None:

@@ -63,9 +63,12 @@ class Settings:
     #: Share of phrases the rotation gives to a canned clip instead of a
     #: painted look, beat-locked and enveloped by the music.  0 = never.
     clip_share: float = 0.3
-    #: Showpieces -- composed whole-rig sequences (charge, dna).  "auto"
-    #: lets the rotation play them now and then, "off" never, a name always.
+    #: Showpieces -- composed whole-rig sequences (charge, dna, volley,
+    #: tide, swarm, storm, pendulum).  "auto" lets the rotation play them,
+    #: "off" never, a name always.
     piece: str = "auto"
+    #: Share of material stretches the rotation gives a showpiece.
+    piece_share: float = 0.25
     #: Force one colour scheme instead of letting each visit to a state
     #: choose its own.
     scheme: str = "auto"
@@ -142,6 +145,7 @@ SCHEMA: dict[str, tuple] = {
     "clip": ("choice", None, None, None, "Clip"),
     "clip_share": ("float", 0.0, 1.0, 0.05, "Clips in rotation"),
     "piece": ("choice", None, None, None, "Piece"),
+    "piece_share": ("float", 0.0, 1.0, 0.05, "Pieces in rotation"),
     "scheme": ("choice", None, None, None, "Colour scheme"),
     "seed": ("float", 0.0, 999.0, 1.0, "Shuffle seed"),
     "transitions": ("float", 0.0, 1.0, 0.05, "Transitions"),

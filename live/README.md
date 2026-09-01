@@ -481,6 +481,21 @@ the mouth in four bars, parks there spinning for two while the triangles
 bounce — two balls in counter-phase across the whole array, hop depth from
 the pump, white cores flashing on the hit — then screws home in two.
 
+Five more share the language.  `volley`: a ball rallies — down the tunnel,
+off the back wall, out, then across the triangles and back, one leg per bar
+so every bounce lands on a downbeat, each flash sized by the bass.  `tide`:
+water floods the tunnel toward the mouth, crashes on the triangles as foam
+(white spray raining apex to base, splash from the pump), and drains back.
+`swarm`: a cloud of sparks drifts through the tunnel, settles into two
+counter-spinning wheels on the triangles, and swarms home — heavy bass
+scatters it wider.  `storm`: clouds gather, then every qualifying *measured*
+kick throws a bolt from the triangles down the tunnel with an afterglow — no
+bass, no bolts.  `pendulum`: a bob swings the width of the array once per
+bar, striking an end on every other beat, each strike launching a pulse down
+the tunnel.  *Pieces in rotation* is the share of material stretches the
+rotation deals them (default 0.25) — more pieces split the share, the knob
+raises it.
+
 Variety comes from three places, all seeded so the same audio still renders
 the same show.  The corridor has fourteen patterns and the nets twenty-odd
 gestures, walked without repeating the previous one; the phrase is the
