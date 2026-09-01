@@ -646,7 +646,10 @@ class Arranger:
         every bar from a base that is randomized (seeded) per cycle, so no
         two charges wear the same colours.  The blow lands exactly on the
         bar line the run arrives on -- the clock predicts it, nothing reacts
-        late -- and its flash core rides the kick.
+        late -- and it *shatters*: every pixel of every triangle ignites as
+        the front passes, burns white for an instant, fades at its own rate
+        and drops out as the debris disperses, with a different scatter
+        every cycle.
         """
         bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
         run = self.CHARGE_RUN_BARS
@@ -665,10 +668,13 @@ class Arranger:
         blow = u - run          # bars since the head hit the mouth
         if 0.0 <= blow < 1.0:
             G = canvas.all_geo
-            fx.radial(canvas, paint, blow, width=0.30, level=1.0 - 0.6 * blow,
-                      geo=G)
-            fx.blob(canvas, pal.WHITE, 0.5, 0.5, radius=0.30,
-                    level=(1.0 - blow) ** 2 * (0.5 + 0.5 * kick), geo=G)
+            fx.shatter(canvas, paint, blow, seed=_hash(f"{self.seed}:blow:{cycle}"),
+                       level=1.0, geo=G)
+            if blow < 0.15:
+                # The instant of impact: one white flash at the centre before
+                # the debris carries the energy outward.
+                fx.blob(canvas, pal.WHITE, 0.5, 0.5, radius=0.25,
+                        level=(1.0 - blow / 0.15) * (0.6 + 0.4 * kick), geo=G)
         else:
             fx.plasma(canvas, paint.dimmed(0.5), t, scale=2.0, speed=0.4,
                       level=0.30)

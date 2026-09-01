@@ -596,6 +596,7 @@ def test_effects(layout: Layout) -> str:
         "halves": lambda: fx.halves(canvas, palette, True, 0.8),
         "apex": lambda: fx.apex(canvas, palette, 0.8),
         "helix": lambda: fx.helix(canvas, palette, 0.3),
+        "shatter": lambda: fx.shatter(canvas, palette, 0.4, seed=5),
         "par": lambda: fx.par(canvas, palette.color(0), 0.9, white=0.2),
     }
     if not layout.par:

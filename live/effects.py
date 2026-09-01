@@ -431,6 +431,30 @@ def sweep(canvas: Canvas, palette: Palette, at: float, *, angle: float = 0.0,
     _blend_nets(canvas, colors, targets, mode)
 
 
+def shatter(canvas: Canvas, palette: Palette, progress: float, *, seed: int = 0,
+            level: float = 1.0, targets: slice | None = None,
+            mode: str = "add", geo: NetGeometry | None = None) -> None:
+    """Pixels blowing apart from the centre: an explosion as debris.
+
+    ``progress`` runs 0..1 over the blast.  Every pixel gets its own seeded
+    fate: it ignites when the ragged front (its radius plus jitter) is
+    passed, burns white-hot for an instant, fades at its own rate, and may
+    drop out entirely as the debris disperses -- so the end of the blast is
+    scattered embers with growing gaps, not a fading wash.  Same seed, same
+    explosion; pass a different one per blast for new debris every time.
+    """
+    g = _geo(canvas, targets, geo)
+    rng = np.random.default_rng((seed, 977))
+    jitter, rate, fate = rng.random((3, *g.r.shape), dtype=np.float32)
+    ignite = (g.r + 0.30 * jitter) / 1.30
+    age = np.maximum(progress - ignite, 0.0)
+    burning = (age > 0.0) & (fate > progress * 0.65)
+    glow = np.exp(-age * (3.0 + 7.0 * rate)) * burning
+    heat = np.clip(1.0 - age * 5.0, 0.0, 1.0)[..., None]
+    colors = (palette.ramp(g.r) * (1.0 - heat) + heat) * glow[..., None] * level
+    _blend_nets(canvas, colors.astype(np.float32), targets, mode)
+
+
 def plasma(canvas: Canvas, palette: Palette, t: float, *, scale: float = 3.0,
            speed: float = 0.5, level: float = 1.0,
            targets: slice | None = None, mode: str = "add",
