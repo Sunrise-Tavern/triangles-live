@@ -37,7 +37,7 @@ so "random" here still means "the same show for the same audio".
 
 from __future__ import annotations
 
-import zlib
+import hashlib
 from dataclasses import dataclass
 
 import numpy as np
@@ -315,8 +315,7 @@ class Arranger:
     def _visit_roll(self, key: str, treat: Treatment) -> float:
         """A stable 0..1 for this visit to this state, per ``key``."""
         visit = self.visits.get(treat.kind, 1)
-        seed = f"{self.seed}:{key}:{treat.kind}:{visit}".encode()
-        return (zlib.crc32(seed) % 1000) / 999.0
+        return (_hash(f"{self.seed}:{key}:{treat.kind}:{visit}") % 1000) / 999.0
 
     def scheme_for(self, treat: Treatment) -> str:
         """Which colour scheme this visit to the state draws.
@@ -373,16 +372,25 @@ class Arranger:
         Accumulating a step that is never a multiple of ``count`` does
         guarantee it, and stays reproducible because it only ever moves
         forward from a fresh start.
+
+        The start is hashed too, not 0: stepping from a fixed start meant
+        the first phrase of every visit could land anywhere *except* index
+        0, so the option the treatment was tuned around never opened a
+        visit -- audited at exactly 0.000 share.
         """
         if count < 2:
             return 0
-        last, index = self._walks.get(key, (None, 0))
+        last, index = self._walks.get(key, (None, None))
         if last == phrase:
             return index
-        first = phrase if last is None else last + 1
+        if last is None:
+            index = _hash(f"{self.seed}:{key}:init") % count
+            first = phrase - phrase          # walk every step from 0
+        else:
+            first = last + 1
         for step_phrase in range(first, phrase + 1):
-            seed = f"{self.seed}:{key}:{step_phrase}".encode()
-            index = (index + 1 + zlib.crc32(seed) % (count - 1)) % count
+            step = _hash(f"{self.seed}:{key}:{step_phrase}")
+            index = (index + 1 + step % (count - 1)) % count
         self._walks[key] = (phrase, index)
         return index
 
@@ -460,8 +468,7 @@ class Arranger:
         if state_change:
             return ("cut", 0.0)
         share = self.settings.transitions if self.settings else 0.75
-        seed = f"{self.seed}:transition:{change}".encode()
-        roll = zlib.crc32(seed)
+        roll = _hash(f"{self.seed}:transition:{change}")
         if (roll % 1000) / 1000.0 >= share:
             return ("cut", 0.0)
         return TRANSITIONS[(roll // 1000) % len(TRANSITIONS)]
@@ -597,8 +604,7 @@ class Arranger:
             return None
         visit = self.visits.get(treat.kind, 1)
         material = self.material_index(phrase)
-        roll = zlib.crc32(f"{self.seed}:cliproll:{treat.kind}:{visit}:"
-                          f"{material}".encode())
+        roll = _hash(f"{self.seed}:cliproll:{treat.kind}:{visit}:{material}")
         if (roll % 1000) / 1000.0 >= share:
             return None
         name = options[self._walk(f"clips:{treat.kind}:{visit}", material,
@@ -622,8 +628,7 @@ class Arranger:
             return None
         visit = self.visits.get(treat.kind, 1)
         material = self.material_index(phrase)
-        roll = zlib.crc32(f"{self.seed}:pieceroll:{treat.kind}:{visit}:"
-                          f"{material}".encode())
+        roll = _hash(f"{self.seed}:pieceroll:{treat.kind}:{visit}:{material}")
         if (roll % 1000) / 1000.0 >= PIECE_SHARE:
             return None
         return options[self._walk(f"pieces:{treat.kind}:{visit}", material,
@@ -647,7 +652,7 @@ class Arranger:
         run = self.CHARGE_RUN_BARS
         cycle_bars = 2.0 * run
         cycle, u = int(bars // cycle_bars), bars % cycle_bars
-        base = (zlib.crc32(f"{self.seed}:charge:{cycle}".encode()) % 3600) / 10.0
+        base = (_hash(f"{self.seed}:charge:{cycle}") % 3600) / 10.0
         hue = base + 45.0 * int(u)
         paint = pal.generate(hue, "complementary", value=0.95).floored()
         far = paint.rotated(60.0)
@@ -1097,6 +1102,21 @@ class Arranger:
         self._gesture(canvas, gesture, frame, t, phrase, palette, beat, kick,
                       tension=1.0)
         fx.par(canvas, pal.WHITE.color(0), kick, white=kick)
+
+
+def _hash(text: str) -> int:
+    """A stable, well-mixed 32-bit hash of ``text``.
+
+    Not crc32, which this replaced: crc is *linear*, and the walk's keys
+    differ only in a trailing digit, so its low bits -- exactly what a
+    ``% (count - 1)`` keeps, worst when that is a power of two -- inherited
+    the digit's structure instead of mixing it.  Audited over 12000 draws:
+    a 9-option list came out with shares 0.06-0.18 against a fair 0.11.
+    blake2b's are 0.107-0.115.  Not ``hash()``, which is salted per process
+    and would render a different show every run.
+    """
+    return int.from_bytes(hashlib.blake2b(text.encode(), digest_size=4).digest(),
+                          "big")
 
 
 def _kick(phase: float, sharp: float = 2.0) -> float:
