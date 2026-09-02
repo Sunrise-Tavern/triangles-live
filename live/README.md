@@ -83,7 +83,7 @@ second, so the same eight ideas become pure functions
 
 The number is the pattern's density, ported unchanged from the offline show
 where it was tuned against real tracks; `effects.vocabulary(target)` picks the
-three nearest a section's energy, and refuses to strobe a quiet passage.
+five nearest a section's energy, and refuses to strobe a quiet passage.
 
 The rule that carried over intact: **lit arches must overlap.**  A comet whose
 tail is shorter than the gap between arches reads as 24 things blinking in
@@ -194,8 +194,11 @@ high band drives *colour intensity*: every palette is scaled 0.75x-1.25x by
 the high band's level over its own slow average (its *share* would read a
 breakdown as brighter than the drop, because the bass has left), and the brightest passages
 are also pulled a third of the way toward neutral, so a hi-hat-heavy break
-reads louder and whiter than a bass-heavy one of the same level; clips,
-which keep their own colours, take the gain as level.  *Drive depth* scales
+reads louder and whiter than a bass-heavy one of the same level.  A clip
+has no palette, so the same two halves are applied to its own frames: the
+gain as level, and the wash toward each pixel's own peak.  It keeps its hues
+and still goes white under a cymbal, where before it took the gain alone and
+sat flat beside the painted looks.  *Drive depth* scales
 all of it, 0 to 1.  The readout shows what the drive is seeing -- bass
 weight, air, and the rate the material is running at.  The gauges run
 whether the knob is on or not, so switching it on lands on settled values,
@@ -564,10 +567,14 @@ centre of the array, both ends slamming into the middle on the beat, the nets
 lit one after another.  `blob` and `sweep` are the two effects added for
 these; both, like everything else, take the frame through `geo`.
 
-Two **showpieces** own the whole rig for their stretch — tunnel and
-triangles telling one story — and sit in the rotation beside clips (15 % of
+Seven **showpieces** own the whole rig for their stretch — tunnel and
+triangles telling one story — and sit in the rotation beside clips (25 % of
 material stretches in the states that suit them), or on demand via the
-*Piece* knob (`auto` / `off` / by name).  Both share one eight-bar arc —
+*Piece* knob (`auto` / `off` / by name).  None of them branches on the state,
+but all of them scale their hits by the pump and the kick, so a piece drawn
+in a quiet passage arrives at that passage's own low end — which is what lets
+most of them serve three or four states rather than the two they were written
+for, and what got quiet off a single piece.  Both share one eight-bar arc —
 travel in from the back of the tunnel, hit the triangles, travel home — and
 both ride a bass **pump**: a peak-hold envelope of the measured kick (bass
 flux over its own average) that jumps on a hit and decays over about a bar,
@@ -753,7 +760,10 @@ it, both sized by the pump.  Which clips suit which
 state is *measured*, not tagged: `clips/index.json` records each clip's mean
 level and flicker (built once, in the background, and deployed with the
 clips), and each state draws from its own band of the ranking — the dimmest,
-stillest loops go to quiet, the brightest and busiest to hot.  Transitions
+stillest loops go to quiet, the brightest and busiest to hot.  The bands
+overlap generously (a clip serves 2.1 states on average): a set that sits in
+one state for minutes walks its whole pool, and a pool of a dozen came round
+to the same loops.  Transitions
 apply to clip phrases like any other look, and the same seed still renders
 the same show.
 
@@ -761,10 +771,11 @@ The one hand tag is `quiet_only` in `live.toml` (`[clips]`): those clips
 leave the ranking altogether — never under a track, whatever they measured —
 and the quiet state offers them on top of its own band.  So quiet draws from
 the calm end of the measured material *plus* the tagged loops, and every
-music state from the measured material alone.  A figurative loop (the cowboy
-walking the nets) is the case: a joke between tracks, noise under a drop, and
-bright enough that the ranking would put it in one.  The panel's **Clip** knob
-still plays any of them by hand.
+music state from the measured material alone.  The figurative loops (the
+cowboy walking the nets, the dancing gnome) are the case: a joke between
+tracks, noise under a drop, and busy enough that the ranking would put them in
+one — the gnome measures near the top of the library, in `hot`.  The panel's
+**Clip** knob still plays any of them by hand.
 
 ## Checking the orientation, after a remap
 
@@ -1116,9 +1127,11 @@ count does.
 
 ### The corridor on `auto`
 
-`vocabulary()` returns the **three** patterns nearest the energy the state
+`vocabulary()` returns the **five** patterns nearest the energy the state
 wants, and the corridor draws a different one each phrase rather than the
-nearest one every time.  This is the offline show's rule — *"every phrase draws
+nearest one every time.  Five rather than the original three because a state
+held for minutes exhausts a short list: the fifth neighbour is at most 0.12
+density further from the target than the fourth.  This is the offline show's rule — *"every phrase draws
 a different pattern, never repeating the previous one"* — and it exists because
 a single travelling comet repeated for ninety seconds reads as one idea however
 well it tracks the music.

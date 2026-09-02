@@ -105,9 +105,12 @@ NET_GESTURES: dict[str, tuple[str, ...]] = {
                "rain", "orbit", "big_bars", "big_wheel", "big_spiral",
                "big_ripples", "all_sweep", "all_ball", "all_wave", "all_fall",
                "all_diagonal", "all_scan"),
+    # The thinnest list of the four, and the state a long build sits in
+    # longest: four names that tighten well were brought up from cruising.
     BUILDING: ("wheel_up", "strobe_small", "bars_fast", "rain_fast",
                "checker", "spiral_fast", "big_wheel_up", "big_rain",
-               "all_rise", "all_scan_up", "all_squeeze"),
+               "all_rise", "all_scan_up", "all_squeeze",
+               "rings", "spiral", "big_spiral", "all_sweep"),
     HOT:      ("rings", "fast_wheel", "bars_fast", "flare", "checker",
                "halves", "apex_flash", "spiral_fast", "ripples_fast",
                "big_rings", "big_bars_fast", "big_wheel_fast", "big_apex",
@@ -142,14 +145,20 @@ TRANSITIONS: tuple[tuple[str, float], ...] = (
 #: which each paint their half.  Each name maps to the states it suits, and to
 #: a ``_piece_<name>`` method.  They join the rotation at PIECE_SHARE, and the
 #: panel's "Piece" knob forces one for a look.
+#: No piece branches on ``kind`` -- each paints the same wherever it is
+#: drawn -- but every one of them scales its hits by the pump and the kick,
+#: so a piece in a quiet passage arrives at its own low end.  That is what
+#: lets a name serve more than the two states it was written for.  Quiet
+#: had exactly one piece, which at piece_share meant a quarter of every
+#: quiet stretch was the swarm; it now has three.
 PIECES: dict[str, tuple[str, ...]] = {
     "charge": (CRUISING, BUILDING, HOT),
-    "dna": (CRUISING, HOT),
-    "volley": (CRUISING, HOT),
-    "tide": (CRUISING, BUILDING),
+    "dna": (QUIET, CRUISING, BUILDING, HOT),
+    "volley": (CRUISING, BUILDING, HOT),
+    "tide": (CRUISING, BUILDING, HOT),
     "swarm": (QUIET, CRUISING),
     "storm": (BUILDING, HOT),
-    "pendulum": (CRUISING, BUILDING),
+    "pendulum": (QUIET, CRUISING, BUILDING, HOT),
 }
 
 
@@ -1093,7 +1102,8 @@ class Arranger:
         the authored motion speeds up and slows down with the track; the
         level envelope is the state's -- the kick pulses it while cruising
         and hot, a build's flashes quicken with its tension, quiet breathes.
-        The clip's own colours are kept: that is what it is for.
+        The clip's own hues are kept: that is what it is for.  The highs
+        still reach it the way they reach a palette, as level and as white.
         """
         clip = self.clips.get(name) if self.clips is not None else None
         if clip is None:                # evicted or failed mid-phrase
@@ -1132,11 +1142,22 @@ class Arranger:
         else:
             envelope = 0.75 + 0.25 * kick
             bounce = 0.30 * pump
-        if self._drive_on:
-            # The clip keeps its own colours, so the highs reach it as level.
-            envelope *= self._colour_gain()[0]
+        gain, wash = self._colour_gain() if self._drive_on else (1.0, 0.0)
+        envelope *= gain
         canvas.nets *= envelope
         canvas.arches *= envelope
+        if wash > 0.0:
+            # The highs reach a palette as *both* halves of Palette.lit --
+            # louder and whiter.  A clip has no palette, so the same wash is
+            # applied to its own colours here: each pixel pulled toward the
+            # neutral of its own brightness, which is a cymbal reading white
+            # rather than the clip being recoloured.  Level alone (the gain,
+            # above) was all a clip used to get, so a hi-hat passage lifted
+            # every painted look and left the canned ones flat beside them.
+            for buffer in (canvas.nets, canvas.arches):
+                peak = buffer.max(axis=-1, keepdims=True)
+                buffer *= 1.0 - wash
+                buffer += wash * peak
         if bounce > 0.01:
             # The content itself bounces with the bass: a brightness wave
             # rolls apex-to-base through the triangles on each beat, and a

@@ -180,9 +180,15 @@ class Clips:
     # -- energy ------------------------------------------------------------ #
 
     #: Fraction of the ranked list each state draws from.  Bands overlap on
-    #: purpose -- a mid-energy clip may serve two states.
-    BANDS = {"quiet": (0.0, 0.30), "cruising": (0.20, 0.70),
-             "building": (0.45, 0.85), "hot": (0.65, 1.0)}
+    #: purpose -- a mid-energy clip may serve two or three states.  Widened
+    #: from (0.30/0.20-0.70/0.45-0.85/0.65) once the show had run a while:
+    #: a set that sits in one state for several minutes -- a long cruise, a
+    #: long build -- walked a pool of a dozen and came round to the same
+    #: loops.  The overlap is the point: each clip now serves 2.1 states on
+    #: average rather than 1.5, so a state's pool is wide enough to stay in
+    #: for a while.  Quiet's top edge is still well below the strobes.
+    BANDS = {"quiet": (0.0, 0.40), "cruising": (0.12, 0.78),
+             "building": (0.32, 0.92), "hot": (0.55, 1.0)}
 
     def build_index(self, background: bool = False) -> None:
         """Measure every clip's energy into clips/index.json.

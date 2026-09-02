@@ -214,8 +214,14 @@ DENSITY = {
 
 #: How many of the nearest patterns a phrase may choose from.  Three when the
 #: vocabulary was eight; with fourteen there are enough near neighbours at
-#: every energy to widen it without reaching for something wrong.
-VOCABULARY = 4
+#: every energy to widen it without reaching for something wrong.  Five for
+#: the same reason, measured: taking a fifth neighbour loosens the worst
+#: match by 0.12 density (at target 0.86) and less than that everywhere
+#: else, and a state held for minutes wants the extra neighbour more than
+#: it wants the tightest possible match.  Quiet is the narrowest case --
+#: its filter leaves six patterns eligible, so there this is four of six
+#: becoming five of six.
+VOCABULARY = 5
 
 
 def vocabulary(target: float, quiet: bool = False) -> list[str]:
