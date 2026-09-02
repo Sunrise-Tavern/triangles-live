@@ -97,6 +97,8 @@ const Preview = (() => {
 
   function bindCamera() {
     canvas.addEventListener('pointerdown', (e) => {
+      // A page may keep touch for itself (the game page steers by swipe).
+      if (hooks.touchOrbit === false && e.pointerType === 'touch') return;
       canvas.setPointerCapture(e.pointerId);
       canvas.dataset.drag = `${e.clientX},${e.clientY}`;
     });

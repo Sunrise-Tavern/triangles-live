@@ -72,6 +72,30 @@ for (const button of document.querySelectorAll('#pad button[data-dir]')) {
 document.getElementById('go').onclick = () => send('toggle');
 document.getElementById('reset').onclick = () => send('reset');
 
+// Swipe to steer on the preview: the natural phone control, and one that
+// does not need a thumb to find a button mid-game.  A finger that swipes
+// steers; a mouse still orbits (preview.js leaves touch alone here).
+(function swipes() {
+  const stage = document.getElementById('stage');
+  let start = null;
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    start = { x: e.clientX, y: e.clientY, at: performance.now() };
+  });
+  stage.addEventListener('pointerup', (e) => {
+    if (!start || e.pointerType !== 'touch') return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    const quick = performance.now() - start.at < 600;
+    start = null;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 24 || !quick) return;
+    const dir = Math.abs(dx) > Math.abs(dy)
+      ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    flash(dir);
+    send('turn', dir);
+  });
+  stage.addEventListener('pointercancel', () => { start = null; });
+})();
+
 // --------------------------------------------------------------------------
 // Rig knobs: game mode, speed, bounce -- ordinary settings
 // --------------------------------------------------------------------------
@@ -259,5 +283,6 @@ function setStatus(status) {
     drawPill: document.getElementById('draw'),
     onStatus: (body) => { setStatus(body.status); applySettings(body.settings); },
     onGame: applyState,
+    touchOrbit: false,          // a finger on the preview steers instead
   });
 })();

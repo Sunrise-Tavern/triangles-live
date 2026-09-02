@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Triangles &mdash; game</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -14,7 +14,7 @@
       <span id="link" class="pill bad">connecting</span>
       <span id="target" class="pill"></span>
       <span id="draw" class="pill"></span>
-      <span id="hint">drag to orbit &middot; wheel to zoom</span>
+      <span id="hint">drag to orbit &middot; wheel to zoom &middot; swipe to steer</span>
       <a class="pill" href="/">&larr; show panel</a>
     </div>
   </section>
@@ -61,11 +61,11 @@
       <label id="mode">
         <input id="game-mode" type="checkbox"> GAME MODE
       </label>
-      <div class="control">
+      <div class="control" id="c-speed">
         <label>Game speed (cells/s)<span id="v-speed"></span></label>
         <input id="game-speed" type="range" min="1" max="12" step="0.5">
       </div>
-      <div class="control">
+      <div class="control" id="c-bounce">
         <label>Music bounces the game<span id="v-bounce"></span></label>
         <input id="game-bounce" type="range" min="0" max="1" step="0.05">
       </div>
