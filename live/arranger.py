@@ -234,7 +234,9 @@ class Arranger:
         #: beat so a hat pattern lifts it without it flickering at the hat rate.
         #: ``_drive``: a beat count that runs 0.7x-1.3x the clock with the
         #: pump -- integrated, as the clip playhead is, so position never
-        #: jumps -- for the gestures to move on instead of the clock itself.
+        #: jumps -- for the gestures and showpieces to move on instead of
+        #: the clock itself.  A piece's arc then lands its hit where the
+        #: bass has carried it rather than exactly on a bar line.
         self._heavy = 0.0
         self._air = 0.0
         self._air_ref: float | None = None
@@ -303,8 +305,9 @@ class Arranger:
         return palette.lit(round(gain, 3), round(wash, 3))
 
     def _motion_beats(self, t: float) -> float:
-        """The beat count the net gestures run on: the drive when the knob
-        is on, the clock itself otherwise (the two coincide until it is)."""
+        """The beat count the net gestures and showpieces run on: the drive
+        when the knob is on, the clock itself otherwise (the two coincide
+        until it is)."""
         return self._drive if self._drive_on else self._beats(t)
 
     def _gauge(self, t: float, features) -> None:
@@ -652,7 +655,9 @@ class Arranger:
                    self.material_index(index))
             if len(self._piece_anchors) > 64:
                 self._piece_anchors.clear()
-            anchor = self._piece_anchors.setdefault(key, self._beats(t))
+            # Anchored in the same count the piece runs on -- the drive,
+            # when the knob is on -- or the arc would start mid-cycle.
+            anchor = self._piece_anchors.setdefault(key, self._motion_beats(t))
             look = (treat.kind, f"piece:{piece_name}", "piece", palette,
                     self.far_rotation_for(treat), treat, anchor)
         elif clip_name is not None:
@@ -814,13 +819,13 @@ class Arranger:
         """
         run_in, blow_bars, run_out = self.CHARGE_ARC
         cycle_bars = run_in + blow_bars + run_out
-        bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
+        bars = (self._motion_beats(t) - anchor) / max(1, self.clock.bar_length)
         cycle, u = int(bars // cycle_bars), bars % cycle_bars
         pump = self._pump
         punch = kick * (0.4 + 0.6 * pump)          # beat-shaped, bass-sized
         base = (_hash(f"{self.seed}:charge:{cycle}") % 3600) / 10.0
-        paint = pal.generate(base + 45.0 * int(u), "complementary",
-                             value=0.80 + 0.20 * punch).floored()
+        paint = self._coloured(pal.generate(base + 45.0 * int(u), "complementary",
+                                            value=0.80 + 0.20 * punch).floored())
         far = paint.rotated(60.0)
 
         G = canvas.all_geo
@@ -865,7 +870,7 @@ class Arranger:
         """
         run_in, bounce_bars, run_out = self.DNA_ARC
         cycle_bars = run_in + bounce_bars + run_out
-        beats = self._beats(t) - anchor
+        beats = self._motion_beats(t) - anchor
         bars = beats / max(1, self.clock.bar_length)
         u = bars % cycle_bars
 
@@ -915,7 +920,7 @@ class Arranger:
         hits.  Four bars a rally, two rallies a cycle."""
         pump = self._pump
         punch = kick * (0.4 + 0.6 * pump)
-        bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
+        bars = (self._motion_beats(t) - anchor) / max(1, self.clock.bar_length)
         unit = bars % 4.0
         G = canvas.all_geo
         turn = _kick(unit % 1.0, sharp=3.0) * (0.3 + 0.7 * pump)
@@ -946,7 +951,7 @@ class Arranger:
         two to drain."""
         pump = self._pump
         punch = kick * (0.4 + 0.6 * pump)
-        bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
+        bars = (self._motion_beats(t) - anchor) / max(1, self.clock.bar_length)
         u = bars % 8.0
         surge = 0.85 + 0.15 * float(np.sin(2 * np.pi * bars))    # the swell
         if u < 4.0:                          # flooding, back toward the mouth
@@ -977,8 +982,8 @@ class Arranger:
         bass scatters it: a heavy hit widens the cloud and thickens the
         sparks."""
         pump = self._pump
-        bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
-        beats = self._beats(t) - anchor
+        bars = (self._motion_beats(t) - anchor) / max(1, self.clock.bar_length)
+        beats = self._motion_beats(t) - anchor
         u = bars % 8.0
         if u < 3.0:
             centre = 1.0 - u / 3.0
@@ -1017,7 +1022,7 @@ class Arranger:
         is only as violent as the music.  Two bars gathering, four of
         strikes, two of afterglow."""
         pump = self._pump
-        bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
+        bars = (self._motion_beats(t) - anchor) / max(1, self.clock.bar_length)
         u = bars % 8.0
         beat_s = max(1e-6, 60.0 / self.bpm)
 
@@ -1055,7 +1060,7 @@ class Arranger:
         brightness, strike flash and pulse depth all ride the pump."""
         pump = self._pump
         punch = kick * (0.4 + 0.6 * pump)
-        bars = (self._beats(t) - anchor) / max(1, self.clock.bar_length)
+        bars = (self._motion_beats(t) - anchor) / max(1, self.clock.bar_length)
         G = canvas.all_geo
 
         swing = float(np.cos(2 * np.pi * bars))          # 1 = left end

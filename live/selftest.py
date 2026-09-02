@@ -1387,7 +1387,6 @@ def test_audio_drive(layout: Layout) -> str:
         st = Settings()
         st.audio_drive = drive
         st.drive_depth = depth
-        st.piece = "off"          # pieces stay on the clock by design
         arranger = Arranger(canvas, listener, state=StateMachine(), settings=st)
         out = np.zeros(layout.channel_count, dtype=np.uint8)
         frames, gauges = [], []

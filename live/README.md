@@ -182,10 +182,10 @@ scene hold · colour scheme override · shuffle seed · transitions · resting
 nets · audio drive and its depth · quiet and hot thresholds · build and drop sensitivity.  Presets are named JSON files under `live/presets/`, saved and loaded
 from the panel.
 
-*Bass drives motion, highs colour* (`audio_drive`, off by default) is an
-experiment in letting the measured spectrum shape the show beyond the beat
+*Bass drives motion, highs colour* (`audio_drive`, on by default) lets the
+measured spectrum shape the show beyond the beat
 and the state.  With it on, the low end drives how the material *evolves*:
-the net gestures and the corridor pattern run on a beat count that moves
+the net gestures, the corridor pattern and the showpieces run on a beat count that moves
 0.7x-1.3x the clock with the kick envelope (integrated, as the clip playhead
 already is, so nothing jumps), phrases turn over sooner when the passage has
 been carrying bass and linger when it has not (0.75x-1.25x), and the corridor
@@ -199,9 +199,13 @@ which keep their own colours, take the gain as level.  *Drive depth* scales
 all of it, 0 to 1.  The readout shows what the drive is seeing -- bass
 weight, air, and the rate the material is running at.  The gauges run
 whether the knob is on or not, so switching it on lands on settled values,
-and off the show is byte-identical to before.  Showpieces are left on the
-clock: their arcs land on bar lines by design and already ride the bass as
-level.
+and off the show is byte-identical to before the knob existed.  A showpiece
+on the drive lands its hit where the bass has carried it -- early after a
+heavy run-in, late after a light one -- rather than on the bar line: on the
+reference recording the charge's blow fell a mean 1.2 beats from the bar
+line with the drive on against 0.6 with it off (the anchor is the frame the
+material started on, not a bar line, so it was never exact).  The pump
+already sized the blows and bounces; now it paces them too.
 
 *Saturation* and *contrast* grade the whole rig — nets and corridor together
 — after the frame is painted: saturation 0 is grayscale, contrast above 1

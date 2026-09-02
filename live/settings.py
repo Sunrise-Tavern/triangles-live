@@ -86,11 +86,11 @@ class Settings:
     #: is: 0 restores the original behaviour, where it holds the bed wash and
     #: reads as frozen for a bar or a phrase while the corridor moves.
     rest_level: float = 0.4
-    #: Experimental.  Let the *measured* spectrum drive the show, not only
-    #: the beat: the low end pushes how fast the material moves and how
-    #: quickly it turns over, the high end lifts the colours' intensity.
-    #: Off, the show is exactly as before.
-    audio_drive: bool = False
+    #: Let the *measured* spectrum drive the show, not only the beat: the
+    #: low end pushes how fast the material -- gestures, corridor, pieces --
+    #: moves and how quickly it turns over, the high end lifts the colours'
+    #: intensity.  Off, the show is exactly as it was before the knob.
+    audio_drive: bool = True
     #: How far ``audio_drive`` is allowed to bend the show: 0 not at all,
     #: 1 the full range (motion 0.7x-1.3x, phrases 0.75x-1.25x, colour
     #: 0.75x-1.25x with a wash toward white on bright highs).
