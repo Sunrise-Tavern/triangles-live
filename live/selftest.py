@@ -70,7 +70,9 @@ def test_layout(layout: Layout) -> str:
           "no model -- a gap in the addressing")
 
     check(len(layout.arches) == 24, f"expected 24 arches, found {len(layout.arches)}")
-    check(len(layout.nets) == 7, f"expected 7 nets, found {len(layout.nets)}")
+    check(len(layout.nets) == 7,
+          f"expected 7 nets, found {len(layout.nets)} ({layout.nets}) -- an "
+          "overlay (shadow) model must be skipped, not adopted")
     check(all(layout[n].kind == "arch" for n in layout.arches), "Tunnel holds a non-arch")
     sizes = sorted({layout[n].nodes for n in layout.nets})
     check(sizes == [435, 465], f"nets should be 435 and 465 nodes, got {sizes}")

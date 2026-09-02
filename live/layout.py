@@ -408,6 +408,30 @@ def load_layout(rgb_effects: Path | None = None, networks: Path | None = None) -
         else:  # pragma: no cover - nothing else exists in this show yet
             raise LayoutError(f"{name}: unsupported DisplayAs {display!r}")
 
+    # Overlay (shadow) models: a model whose every channel is already owned
+    # by other models exists for xLights' renderer -- the vertex-mapped big
+    # triangle canvas the clip sequences draw on -- not for the wire.  The
+    # engine must skip it, or the canvas grows a phantom net and the channel
+    # map reports overlaps.
+    #
+    # Duplication is symmetric -- when the canvas covers the big nets, the
+    # big nets are just as "fully covered" as the canvas -- so coverage
+    # alone deleted the real fixtures too (measured: 3 nets survived).
+    # What separates them is membership: every real fixture belongs to a
+    # model group ("Big Triangle", "Tunnel", ...); an overlay canvas
+    # belongs to none.
+    grouped = {n.strip()
+               for g in root.findall("./modelGroups/modelGroup")
+               for n in (g.get("models") or "").split(",") if n.strip()}
+    claimed = np.zeros(max(m.end for m in models.values()) + 1, dtype=np.int32)
+    for m in models.values():
+        claimed[m.start:m.end + 1] += 1
+    overlays = [name for name, m in models.items()
+                if name not in grouped
+                and (claimed[m.start:m.end + 1] >= 2).all()]
+    for name in overlays:
+        del models[name]
+
     groups = {
         g.get("name"): [n.strip() for n in (g.get("models") or "").split(",") if n.strip()]
         for g in root.findall("./modelGroups/modelGroup")
