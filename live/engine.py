@@ -117,7 +117,7 @@ class Engine:
                  backend: str = "aubio",
                  thresholds: StateThresholds | None = None,
                  window: int = 2048, silence_dbfs: float = -70.0,
-                 session=None) -> None:
+                 session=None, quiet_clips: "list[str] | tuple[str, ...]" = ()) -> None:
         self.layout = layout or load_layout()
         self.settings = settings or Settings()
         self.fps = float(fps)
@@ -132,7 +132,8 @@ class Engine:
         #: Canned xLights loops: the panel's "Clip" knob and the arranger's
         #: rotation both draw on this.  Built before the script, which
         #: holds a reference.
-        self.clips = Clips(channel_count=self.layout.channel_count)
+        self.clips = Clips(channel_count=self.layout.channel_count,
+                           quiet_only=quiet_clips)
         CHOICES["clip"] = ["off", *self.clips.names]
         CHOICES["piece"] = ["auto", "off", *PIECES]
         # Energy measurements for the rotation; cheap when index.json is

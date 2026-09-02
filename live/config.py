@@ -97,6 +97,17 @@ class ShowConfig:
 
 
 @dataclass
+class ClipsConfig:
+    #: Clips the music rotation must not touch: they play only in the quiet
+    #: state, alongside whatever the energy ranking gives quiet anyway.  A
+    #: figurative loop (a cowboy walking the nets) reads as a joke between
+    #: tracks and as noise under a drop, and its measured brightness would
+    #: otherwise put it exactly there.  Names as in the panel's Clip knob
+    #: (the file's stem).
+    quiet_only: list[str] = field(default_factory=list)
+
+
+@dataclass
 class LogConfig:
     file: str = "logs/live.log"
     level: str = "info"
@@ -112,6 +123,7 @@ class Config:
     audio: AudioConfig = field(default_factory=AudioConfig)
     web: WebConfig = field(default_factory=WebConfig)
     show: ShowConfig = field(default_factory=ShowConfig)
+    clips: ClipsConfig = field(default_factory=ClipsConfig)
     log: LogConfig = field(default_factory=LogConfig)
     #: Where it came from, for `live doctor` to report.
     source: Path | None = None
@@ -154,6 +166,10 @@ class Config:
 
 
 def _coerce(kind: Any, value: Any, section: str, key: str) -> Any:
+    if str(kind) == "list[str]":
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            raise ValueError(f"[{section}] {key} must be a list of names")
+        return list(value)
     want = {"str": str, "int": int, "float": float, "bool": bool}.get(str(kind))
     if want is None:
         return value

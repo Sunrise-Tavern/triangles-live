@@ -18,7 +18,10 @@ gigabyte resident on a Pi.
 Clips also carry an *energy* (clips/index.json): how bright and how
 flickery the material is, measured from the frames themselves.  That is
 what lets the arranger put a slow dim loop in a quiet passage and a strobing
-one in a drop without anyone tagging files by hand.
+one in a drop without anyone tagging files by hand.  The one hand tag is
+``quiet_only`` (live.toml, ``[clips]``): names the rotation keeps out of
+the music entirely and offers only when the room is quiet -- a figurative
+loop that is a joke between tracks and noise under a drop.
 """
 
 from __future__ import annotations
@@ -69,9 +72,12 @@ class Clips:
     """
 
     def __init__(self, directory: Path | str | None = None,
-                 channel_count: int | None = None) -> None:
+                 channel_count: int | None = None,
+                 quiet_only: "list[str] | tuple[str, ...]" = ()) -> None:
         self.dir = Path(directory) if directory else CLIPS_DIR
         self.channel_count = channel_count
+        #: Names the rotation offers in the quiet state only (see vocabulary).
+        self.quiet_only: tuple[str, ...] = tuple(quiet_only)
         self.names: list[str] = []
         self._skipped: list[str] = []
         self._loaded: dict[str, Clip] = {}
@@ -97,6 +103,13 @@ class Clips:
                     self._skipped.append(path.stem)
                     continue
                 self.names.append(path.stem)
+        for name in self.quiet_only:
+            if name not in self.names:
+                # A typo in live.toml would otherwise just mean "no cowboy
+                # tonight", noticed by nobody.
+                log.warning("clips.quiet_only names %r, which is not a "
+                            "playable clip (have: %s)", name,
+                            ", ".join(self.names) or "none")
 
     def get(self, name: str) -> Clip | None:
         """The clip if it is ready; None otherwise (loading, off, unknown)."""
@@ -220,16 +233,24 @@ class Clips:
         Ranked by level + 4x flicker (flicker separates a strobe from a
         bright wash at the same mean) and cut by BANDS.  Empty until the
         index exists, which switches the rotation off rather than guessing.
+
+        ``quiet_only`` clips stand outside the ranking: they never reach a
+        music state whatever their energy, and quiet gets them all on top
+        of its band -- so a quiet passage draws from the calm end of the
+        measured material *plus* the tagged loops, and everything else from
+        the measured material alone.
         """
         with self._lock:
             index = getattr(self, "_index", None) or {}
+        quiet_only = [n for n in self.names if n in self.quiet_only]
         scored = sorted(
             (index[n]["level"] + 4.0 * index[n]["flicker"], n)
-            for n in self.names if n in index)
+            for n in self.names if n in index and n not in self.quiet_only)
+        extra = quiet_only if kind == "quiet" else []
         if not scored:
-            return []
+            return extra
         lo, hi = self.BANDS.get(kind, (0.0, 1.0))
         count = len(scored)
         picked = [n for rank, (_, n) in enumerate(scored)
                   if lo * (count - 1) <= rank <= hi * (count - 1)]
-        return picked or [scored[min(int(lo * count), count - 1)][1]]
+        return (picked or [scored[min(int(lo * count), count - 1)][1]]) + extra

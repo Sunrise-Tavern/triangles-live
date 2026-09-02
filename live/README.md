@@ -757,6 +757,15 @@ stillest loops go to quiet, the brightest and busiest to hot.  Transitions
 apply to clip phrases like any other look, and the same seed still renders
 the same show.
 
+The one hand tag is `quiet_only` in `live.toml` (`[clips]`): those clips
+leave the ranking altogether — never under a track, whatever they measured —
+and the quiet state offers them on top of its own band.  So quiet draws from
+the calm end of the measured material *plus* the tagged loops, and every
+music state from the measured material alone.  A figurative loop (the cowboy
+walking the nets) is the case: a joke between tracks, noise under a drop, and
+bright enough that the ranking would put it in one.  The panel's **Clip** knob
+still plays any of them by hand.
+
 ## Checking the orientation, after a remap
 
 Net geometry is taken from each model's world position in the xLights

@@ -78,6 +78,15 @@ blackout_on_start = false
 # for a bar or a phrase while the corridor keeps moving, as the offline show).
 rest_level = 0.4
 
+[clips]
+# Clips the music rotation leaves alone: never under a track, offered only
+# when the room is quiet, on top of whatever the energy ranking gives quiet
+# anyway.  A figurative loop (the cowboy) reads as a joke between tracks and
+# as noise under a drop, and its measured brightness would otherwise put it
+# there.  Names as in the panel's Clip knob (the file name without .fseq).
+# The panel's Clip knob still plays any of them by hand.
+quiet_only = ["moving_cowboy"]
+
 [log]
 file = "logs/live.log"
 level = "info"

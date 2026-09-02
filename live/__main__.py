@@ -363,7 +363,8 @@ def cmd_serve(args) -> int:
                     port=args.ddp_port, controller=args.controller or None,
                     audio=audio, backend=args.backend, window=config.audio.window,
                     silence_dbfs=config.audio.silence_dbfs, session=session,
-                    record=Path(args.record) if args.record else None)
+                    record=Path(args.record) if args.record else None,
+                    quiet_clips=config.clips.quiet_only)
     engine.settings.apply({
         "brightness": config.show.brightness,
         "gamma": config.show.gamma,

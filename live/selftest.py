@@ -181,6 +181,20 @@ def test_clips(layout: Layout) -> str:
         vocab = {k: clips.vocabulary(k) for k in ("quiet", "hot")}
         check(all(vocab.values()), f"empty vocabulary from the index: {vocab}")
 
+        # A quiet-only clip leaves the ranking: never under music, always
+        # on quiet's list -- however bright it measured.
+        tagged = Clips(root, channel_count=90, quiet_only=["packed", "nosuch"])
+        tagged.build_index()
+        check(tagged.names == ["packed", "plain"],
+              "tagging must not change what the panel offers")
+        for kind in ("cruising", "building", "hot"):
+            check(tagged.vocabulary(kind) == ["plain"],
+                  f"{kind} offered {tagged.vocabulary(kind)}; a quiet-only "
+                  "clip must not reach a music state")
+        check(tagged.vocabulary("quiet") == ["plain", "packed"],
+              f"quiet offered {tagged.vocabulary('quiet')}; it must get its "
+              "band plus the quiet-only clips")
+
         # And with clips in its hand the arranger plays one: same audio,
         # clip_share 1, the look must become a clip and stay deterministic.
         from .arranger import Arranger
@@ -1234,9 +1248,13 @@ def test_config(layout: Layout) -> str:
         path.write_text(
             '[output]\nhost = "10.1.2.3"\nfps = 30.0\n'
             '[web]\nport = 9099\n[show]\nbrightness = 0.5\n'
+            '[clips]\nquiet_only = ["moving_cowboy"]\n'
         )
         config = Config.load(path)
         check(config.output.host == "10.1.2.3", "host not read from the file")
+        check(config.clips.quiet_only == ["moving_cowboy"],
+              f"quiet_only not read from the file ({config.clips.quiet_only})")
+        check(Config().clips.quiet_only == [], "quiet_only must default to none")
         check(config.output.fps == 30.0, "fps not read from the file")
         check(config.output.port == 4048, "an unset value lost its default")
 
@@ -1260,6 +1278,13 @@ def test_config(layout: Layout) -> str:
             check("hsot" in str(exc), "a typo should be named in the error")
         else:
             raise Failure("an unknown setting was silently ignored")
+        bad.write_text('[clips]\nquiet_only = "moving_cowboy"\n')
+        try:
+            Config.load(bad)
+        except ValueError as exc:
+            check("quiet_only" in str(exc), "a bare string should be named")
+        else:
+            raise Failure("quiet_only accepted a bare string, not a list")
 
     missing = Config.load(Path(tmp) / "gone.toml")
     check(missing.output.fps == 40.0,
