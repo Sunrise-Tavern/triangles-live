@@ -224,6 +224,82 @@ Articulation at 0.5 reproduces the scripted show exactly; turning it up or down
 slides the corridor-pattern choice along the same density table the offline
 arranger uses.
 
+### Game mode: snake and Pac-Man on the triangles
+
+```
+http://<pi>:8080/game
+```
+
+Tick **Game mode** (on the game page, or the knob of the same name on the
+main panel, or press `G`) and the rig stops running the show: the nets
+become the screen and the corridor the scoreboard.  Untick it and the show
+resumes where it was -- the arranger was never stopped, only not painted.
+Blackout, master brightness and gamma still apply, and the preview shows the
+game as the Falcons see it.  The **Game** knob picks which game; both take
+the same controls.
+
+Controls are on the page: a D-pad, GO, New game, and the keys
+`↑←↓→` / `WASD`, `space` (start / pause), `R` (new game).  A phone works --
+the pad answers on touch-down.  Anyone on the network with the URL can play;
+the state goes out on the same WebSocket as the preview the moment the snake
+moves, so two screens agree.
+
+**Snake** plays on the big triangle cut into square cells: 14 across, 12
+down, 94 playable cells of about 20 pixels each on this layout.  Cells on
+the sloping edges that would catch only a pixel or two are void, and so is
+anything the snake could reach only diagonally.  Edges kill; so does the
+snake.  It starts three long in the middle, facing the longest free run,
+and the food is complementary to it in hue and pulses on the beat.  A bite
+flashes the board and sends a white pulse down the tunnel; the arches count
+the score from the front; a death washes everything red for a second and
+leaves the snake where it fell.  Every three bites the colour steps round
+the hue circle, so a long game is a journey and not a longer green.  The
+three small nets are a level meter meanwhile.
+
+**Pac-Man** plays on all seven nets: the whole array cut into 48 columns by
+15 rows, 212 cells of about 14 pixels, in four islands -- the three small
+triangles and the big one.  The gaps between them are *tunnels*: step off
+an island's edge and you carry on along the same row and come out on the
+next triangle, the way the side tunnels of the arcade board work, so the
+maze is one maze across the rig.  Walls are laid as pillars on every other
+row and column, some stretched into bars (seeded, so the same seed is the
+same maze), then opened up until every corridor connects and dead ends are
+rare.  You start in the middle of the big triangle; each small triangle
+releases a ghost from its middle, one every two seconds after a spawn (the
+nearest is one tunnel hop away, and without the stagger it reached a player
+who had not moved yet in 2.2 s); a power pellet sits at the far end of
+every island.  Ghosts chase four times in five and wander the fifth, flee
+while frightened, flash white for the last two seconds of it, and go home
+as eyes when eaten -- 200, 400, 800, 1600.  Three lives, a level every time
+the pellets run out, ten percent faster each.  Pac-Man himself is a
+sprite, not a cell: a disc nearly three cells across (about a hundred
+pixels) drawn straight onto the lattice, sliding between cells rather than
+jumping, with a wedge of a mouth toward the way he faces that opens and
+shuts once every two cells and gapes all the way round as he dies.  The
+ghosts are smaller discs and slide the same way; through a tunnel everyone
+simply reappears.  The corridor fills from the
+front as the pellets go, turns blue while the ghosts are edible, and
+flashes white for a ghost or red for a death.
+
+Two knobs, neither saved in a preset (a preset that boots the rig into a
+game of snake is nobody's intention):
+
+* **Game speed** -- cells a second for the player, 1 to 12.  It is counted
+  on show time, so it is exact at any frame rate, and pausing does not make
+  anyone sprint to catch up.  Ghosts run at 0.8 of it, 0.55 frightened.
+* **Music bounces the game** -- with audio in, the board's brightness rides
+  the measured kick (peak-held, decaying over about a bar, as the showpieces
+  do) and, in snake, the small nets fill with the level.  At 1 the board
+  swings by nearly half on every hit; at 0 it is steady.  Without audio
+  nothing bounces and only the food and the power pellets pulse, on the
+  scripted tempo.
+
+The games live in `game.py` and know nothing about channels: they paint
+float RGB into the same canvas an effect does, so they cannot address the
+wrong fixture either.  Adding a game means another class in `GAMES` with a
+`surface`, `input`, `advance`, `snapshot` and `paint`; the knob, the page
+and the API follow.
+
 ## What M4 adds
 
 ```

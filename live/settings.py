@@ -96,6 +96,19 @@ class Settings:
     #: 0.75x-1.25x with a wash toward white on bright highs).
     drive_depth: float = 1.0
 
+    # -- game mode --------------------------------------------------------- #
+    #: The nets become a screen for a game (:mod:`live.game`) and the show
+    #: is not rendered until this is off.  Never saved in a preset: a preset
+    #: that boots the rig into a game of snake is nobody's intention.
+    game_mode: bool = False
+    #: Which game: "snake" on the big triangle, "pacman" across every net.
+    game: str = "snake"
+    #: Cells a second the snake moves.
+    game_speed: float = 4.0
+    #: How much the music bounces the game: 0 steady, 1 the board's
+    #: brightness swings by nearly half on every kick.
+    game_bounce: float = 0.6
+
     # -- state machine (only meaningful when driven by audio) -------------- #
     #: Loudness, relative to a 45 s baseline, below which a passage is quiet.
     quiet_enter: float = 0.62
@@ -165,6 +178,10 @@ SCHEMA: dict[str, tuple] = {
     "rest_level": ("float", 0.0, 1.0, 0.01, "Resting nets"),
     "audio_drive": ("bool", None, None, None, "Bass drives motion, highs colour"),
     "drive_depth": ("float", 0.0, 1.0, 0.05, "Drive depth"),
+    "game_mode": ("bool", None, None, None, "Game mode"),
+    "game": ("choice", None, None, None, "Game"),
+    "game_speed": ("float", 1.0, 12.0, 0.5, "Game speed (cells/s)"),
+    "game_bounce": ("float", 0.0, 1.0, 0.05, "Music bounces the game"),
     "quiet_enter": ("float", 0.2, 1.2, 0.01, "Quiet threshold"),
     "hot_enter": ("float", 1.0, 2.0, 0.01, "Hot threshold"),
     "build_high_share": ("float", 0.2, 0.8, 0.01, "Build sensitivity"),
@@ -175,7 +192,8 @@ SCHEMA: dict[str, tuple] = {
 #: Filled in by :mod:`live.engine`, which owns the vocabularies.
 CHOICES: dict[str, list[str]] = {"pattern": ["auto"], "scene": ["auto"],
                                  "scheme": ["auto"], "clip": ["off"],
-                                 "piece": ["auto", "off"]}
+                                 "piece": ["auto", "off"],
+                                 "game": ["snake"]}
 
 
 def _coerce(key: str, raw: Any) -> Any:
@@ -234,7 +252,11 @@ def list_presets() -> list[str]:
 def save_preset(name: str, settings: Settings) -> Path:
     path = preset_path(name)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(settings.to_dict(), indent=2, sort_keys=True) + "\n")
+    # Game knobs are not a "look": a preset saved mid-game must not put the
+    # rig back into the game when it is loaded at the next show.
+    values = {k: v for k, v in settings.to_dict().items()
+              if not k.startswith("game_")}
+    path.write_text(json.dumps(values, indent=2, sort_keys=True) + "\n")
     return path
 
 

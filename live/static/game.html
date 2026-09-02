@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Triangles &mdash; game</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="game">
+<main>
+  <section id="stage">
+    <canvas id="preview"></canvas>
+    <div id="overlay">
+      <span id="link" class="pill bad">connecting</span>
+      <span id="target" class="pill"></span>
+      <span id="draw" class="pill"></span>
+      <span id="hint">drag to orbit &middot; wheel to zoom</span>
+      <a class="pill" href="/">&larr; show panel</a>
+    </div>
+  </section>
+
+  <section id="deck">
+    <div>
+      <h2>Board</h2>
+      <canvas id="board" width="420" height="360"></canvas>
+      <div id="state"></div>
+    </div>
+
+    <div>
+      <h2>Play</h2>
+      <select id="game-kind" title="which game"></select>
+      <div id="pad">
+        <button class="u" data-dir="up" title="up (&uarr; / W)">&#9650;</button>
+        <button class="l" data-dir="left" title="left (&larr; / A)">&#9664;</button>
+        <button class="go" id="go" title="start / pause (space)">GO</button>
+        <button class="r" data-dir="right" title="right (&rarr; / D)">&#9654;</button>
+        <button class="d" data-dir="down" title="down (&darr; / S)">&#9660;</button>
+      </div>
+      <div class="row">
+        <button id="reset" title="new game (R)">New game</button>
+      </div>
+    </div>
+
+    <div>
+      <h2>Score</h2>
+      <div id="score">
+        <div class="stat"><b id="g-score">0</b><small>score</small></div>
+        <div class="stat"><b id="g-best">0</b><small>best</small></div>
+        <div class="stat"><b id="g-third">3</b><small id="g-third-label">length</small></div>
+      </div>
+      <div id="keys">
+        <kbd>&uarr;</kbd><kbd>&larr;</kbd><kbd>&darr;</kbd><kbd>&rarr;</kbd> or
+        <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> steer &middot;
+        <kbd>space</kbd> start / pause &middot; <kbd>R</kbd> new game &middot;
+        <kbd>G</kbd> game mode
+      </div>
+    </div>
+
+    <div>
+      <h2>Rig</h2>
+      <label id="mode">
+        <input id="game-mode" type="checkbox"> GAME MODE
+      </label>
+      <div class="control">
+        <label>Game speed (cells/s)<span id="v-speed"></span></label>
+        <input id="game-speed" type="range" min="1" max="12" step="0.5">
+      </div>
+      <div class="control">
+        <label>Music bounces the game<span id="v-bounce"></span></label>
+        <input id="game-bounce" type="range" min="0" max="1" step="0.05">
+      </div>
+      <p id="why"></p>
+    </div>
+  </section>
+</main>
+<script src="/static/preview.js"></script>
+<script src="/static/game.js"></script>
+</body>
+</html>

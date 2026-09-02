@@ -195,6 +195,11 @@ class Canvas:
         r /= max(1e-6, float((r * self.net_mask[self.big]).max()))
         angle[:] = (np.arctan2(dy, dx) / (2 * np.pi)) % 1.0
         self.big_geo = NetGeometry(x, y, r, angle)
+        #: Width over height of the big triangle in its own plane (about
+        #: 1.16 on this rig), for anything that wants square cells on it.
+        #: Kept off ``big_geo.aspect`` on purpose: effects read that to
+        #: round their blobs, and changing it would change the show.
+        self.big_aspect = max(u_hi - u_lo, 1e-9) / max(v_hi - v_lo, 1e-9)
 
     def _all_geometry(self) -> None:
         """Every net as one surface: the whole array in the preview's frame.

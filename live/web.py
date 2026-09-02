@@ -137,6 +137,24 @@ class Server:
             raise web.HTTPBadRequest(text=str(exc)) from exc
         return web.json_response({"deleted": name, "presets": knobs.list_presets()})
 
+    # -- game -------------------------------------------------------------- #
+
+    async def get_game(self, request: web.Request) -> web.Response:
+        game = self.engine.game
+        return web.json_response({"board": game.describe(),
+                                  "state": game.snapshot(),
+                                  "game_mode": self.engine.settings.game_mode})
+
+    async def post_game(self, request: web.Request) -> web.Response:
+        """One input: {"action": "turn", "dir": "left"} or start/pause/toggle/reset."""
+        body = await request.json()
+        try:
+            state = self.engine.game.input(str(body.get("action", "")),
+                                           body.get("dir"))
+        except ValueError as exc:
+            raise web.HTTPBadRequest(text=str(exc)) from exc
+        return web.json_response({"state": state})
+
     # -- WebSocket --------------------------------------------------------- #
 
     async def websocket(self, request: web.Request) -> web.WebSocketResponse:
@@ -161,6 +179,7 @@ class Server:
         status_every = max(1, round(self.preview_fps / STATUS_HZ))
         tick = 0
         last: bytes | None = None
+        game_serial = -1
         loop = asyncio.get_running_loop()
         next_at = loop.time()
         try:
@@ -187,6 +206,13 @@ class Server:
                         "settings": self.engine.settings.to_dict(),
                         "generation": self.generation,
                     }))
+                # The game's state goes out the moment it changes -- a step,
+                # a turn, a reset -- at up to the frame rate, and never
+                # otherwise.  Polling the serial is one int read.
+                if self.engine.game.serial != game_serial:
+                    snapshot = self.engine.game.snapshot()
+                    game_serial = snapshot["serial"]
+                    await ws.send_str(json.dumps({"game": snapshot}))
                 tick += 1
         except (ConnectionResetError, asyncio.CancelledError):
             pass
@@ -197,6 +223,9 @@ class Server:
         app = web.Application()
         app.add_routes([
             web.get("/", self.index),
+            web.get("/game", self.game_page),
+            web.get("/api/game", self.get_game),
+            web.post("/api/game", self.post_game),
             web.get("/api/schema", self.get_schema),
             web.get("/api/geometry", self.get_geometry),
             web.post("/api/camera", self.post_camera),
@@ -213,6 +242,9 @@ class Server:
 
     async def index(self, request: web.Request) -> web.FileResponse:
         return web.FileResponse(STATIC / "index.html")
+
+    async def game_page(self, request: web.Request) -> web.FileResponse:
+        return web.FileResponse(STATIC / "game.html")
 
 
 def serve(engine: Engine, host: str = "0.0.0.0", port: int = 8080,

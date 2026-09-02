@@ -36,6 +36,7 @@ from .listener import Listener
 from .state import STATES, StateMachine, StateThresholds
 from .frame import Canvas
 from .fseq import FseqWriter
+from .game import GAMES, Game
 from .layout import Layout, load_layout
 from .script import SCENES, Script
 from .settings import CHOICES, Settings
@@ -45,6 +46,7 @@ from .timing import FrameClock
 # because this is where the effect and scene tables actually live.
 CHOICES["pattern"] = ["auto", *fx.PATTERNS]
 CHOICES["scheme"] = ["auto", *pal.SCHEMES]
+CHOICES["game"] = list(GAMES)
 # With audio the "scene" knob holds a *state*; without it, a script scene.
 CHOICES["scene"] = ["auto", *STATES, *(scene.kind for scene in SCENES)]
 
@@ -149,6 +151,10 @@ class Engine:
         else:
             self.script = Script(self.canvas, settings=self.settings, seed=seed)
         self.session = session
+        #: Game mode: the nets as a screen, the corridor as a scoreboard.
+        #: Owned here because the web layer feeds it input and the render
+        #: loop draws it; see :mod:`live.game`.
+        self.game = Game(self.canvas, seed=seed)
         self.status = EngineStatus(audio=audio is not None)
 
 
@@ -290,8 +296,24 @@ class Engine:
 
             out = self._buffers[self._which]
             clip = (self.clips.get(settings.clip)
-                    if settings.clip != "off" else None)
-            if clip is not None:
+                    if settings.clip != "off" and not settings.game_mode
+                    else None)
+            if settings.game_mode:
+                # The game owns the whole rig; the show and any clip are
+                # simply not rendered, and resume when the knob goes off.
+                # Blackout, brightness and gamma still apply below.
+                self._clip_anchor = None
+                self.status.clip = ""
+                features = (self.listener.features
+                            if self.listener is not None else None)
+                self.game.render(t, kind=settings.game,
+                                 speed=settings.game_speed,
+                                 bounce=settings.game_bounce,
+                                 features=features,
+                                 beat_phase=self.script.beat_phase(t))
+                self.canvas.to_channels(out, brightness=settings.brightness,
+                                        gamma=settings.gamma)
+            elif clip is not None:
                 # A canned loop, verbatim.  Anchored to when it was picked,
                 # so it starts from its first frame; the arranger underneath
                 # is simply not rendered, and resumes the moment the knob
@@ -388,6 +410,8 @@ class Engine:
         s.scene = scene.kind
         s.pattern = self.script.pattern_for(scene,
                                             self.script.phrase_index(t, scene))
+        if self.settings.game_mode:
+            s.scene, s.pattern = "game", "-"
         s.bpm = self.script.bpm
         s.beat_phase = round(self.script.beat_phase(t), 3)
         s.packets_sent = sum(t.sender.packets_sent for t in self.targets

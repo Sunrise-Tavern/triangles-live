@@ -1434,6 +1434,278 @@ def test_audio_drive(layout: Layout) -> str:
     return (f"on/off differ in {differing:.0%} of frames, both deterministic, "
             f"depth 0 is off; bass to {max(bass):.2f}, air {min(air):.2f}..{max(air):.2f}, "
             f"rate {min(rate):.2f}..{max(rate):.2f}, drive ended {lead:+.1f} beats off the clock")
+
+
+def test_game(layout: Layout) -> str:
+    """Game mode: the board is playable, the rules hold, the rig is painted."""
+    from .frame import Canvas
+    from .game import (DIRECTIONS, MIN_PIXELS, START_LENGTH, Board, Game,
+                       Snake, _OPPOSITE)
+
+    canvas = Canvas(layout)
+    board = Board(canvas)
+    check(board.count >= 60,
+          f"only {board.count} playable cells -- the board is too coarse to play")
+    check(board.covered >= 0.9,
+          f"only {board.covered:.0%} of the big nets' pixels belong to a cell")
+    lit = board.pixels[board.playable.reshape(-1)]
+    check(int(lit.min()) >= MIN_PIXELS,
+          f"a playable cell has {int(lit.min())} pixels, under {MIN_PIXELS}")
+    # Every cell reachable from the start: no diagonal-only islands.
+    seen = {board.centre()}
+    frontier = [board.centre()]
+    while frontier:
+        r, c = frontier.pop()
+        for dr, dc in DIRECTIONS.values():
+            n = (r + dr, c + dc)
+            if n in board and n not in seen:
+                seen.add(n)
+                frontier.append(n)
+    check(len(seen) == board.count,
+          f"{board.count - len(seen)} cells are unreachable from the start")
+
+    snake = Snake(board, seed=1)
+    check(len(snake.body) == START_LENGTH and snake.alive and not snake.running,
+          "a new snake should be three long, alive and waiting")
+    check(snake.step() == "idle", "the snake moved before it was started")
+    snake.running = True
+    head, facing = snake.head, snake.direction
+    check(snake.step() == "moved", "the first step did not move")
+    dr, dc = DIRECTIONS[facing]
+    check(snake.head == (head[0] + dr, head[1] + dc),
+          f"stepped {facing} from {head} and landed on {snake.head}")
+    snake.turn(_OPPOSITE[facing])
+    snake.step()
+    check(snake.direction == facing, "a reversal was honoured -- that is suicide")
+    # Food directly ahead: one bite grows the snake by one and moves the food.
+    dr, dc = DIRECTIONS[snake.direction]
+    snake.food = (snake.head[0] + dr, snake.head[1] + dc)
+    check(snake.food in board, "the test put food on a wall; pick another seed")
+    length = len(snake.body)
+    check(snake.step() == "ate", "walking onto the food did not eat it")
+    check(len(snake.body) == length + 1 and snake.score == 1,
+          f"after eating: length {len(snake.body)} (was {length}), score {snake.score}")
+    check(snake.food is not None and snake.food not in snake.body,
+          "the new food landed on the snake")
+    # Into a wall: dead within the board's width, and then inert.
+    outcome = "moved"
+    for _ in range(board.rows + board.cols):
+        outcome = snake.step()
+        if outcome == "died":
+            break
+    check(outcome == "died", "walking straight never hit a wall")
+    check(not snake.alive and not snake.running and snake.step() == "idle",
+          "a dead snake is still moving")
+    check(snake.best == 1, f"best score {snake.best} after a game of 1")
+    snake.reset()
+    check(snake.alive and snake.games == 2 and snake.score == 0,
+          "reset did not start a fresh game")
+
+    # The whole thing on the clock: at 8 cells/s over 1.5 s the snake takes
+    # about 11 steps, and the rig is painted every frame.
+    game = Game(canvas, seed=3)
+    game.input("turn", "left")
+    for i in range(60):
+        game.render(i / 40.0, speed=8.0)
+    snap = game.snapshot()
+    check(9 <= snap["steps"] <= 12 or not snap["alive"],
+          f"{snap['steps']} steps in 1.5 s at 8 cells/s")
+    big = canvas.nets[canvas.big]
+    check(float(big.max()) > 0.5, "the board is not lit")
+    small = canvas.nets[canvas.net_pair()[1]]
+    check(float(small.max()) > 0.05, "the small nets went dark in game mode")
+    arches = canvas.arches.max(axis=(1, 2))
+    check(int((arches > 0.1).sum()) == min(snap["score"], arches.size)
+          or game.current._ate_at > 1.5 - 0.7 or not snap["alive"],
+          f"{int((arches > 0.1).sum())} arches lit for a score of {snap['score']}")
+    game.input("pause")
+    game.render(5.0, speed=4.0)
+    first = canvas._source.copy()
+    game.render(5.0, speed=4.0)
+    check(np.array_equal(first, canvas._source),
+          "the same game at the same time painted two different frames")
+    try:
+        game.input("turn", "sideways")
+    except ValueError:
+        pass
+    else:
+        raise Failure("a bogus direction was accepted")
+
+    # Pac-Man: one maze across every triangle, joined by tunnels.
+    game.render(6.0, kind="pacman", speed=4.0)
+    check(game.snapshot()["game"] == "pacman", "the game knob did not switch")
+    pg = game.current
+    all_board, maze, pac = pg.board, pg.maze, pg.pac
+    check(all_board.surface == "all" and len(all_board.regions) == 4,
+          f"the all-nets board has {len(all_board.regions)} islands, not 4")
+    check(len(maze.distances(pac.start)) == len(maze.free),
+          f"{len(maze.free) - len(maze.distances(pac.start))} maze cells "
+          "are unreachable from the start")
+    tunnels = sum(1 for c in maze.free for n in maze.exits(c).values()
+                  if abs(n[0] - c[0]) + abs(n[1] - c[1]) > 1)
+    check(tunnels >= 8, f"only {tunnels} tunnel ends between the triangles")
+    dead = sum(1 for c in maze.free if len(maze.exits(c)) <= 1)
+    check(dead <= len(maze.free) // 8, f"{dead} dead ends in {len(maze.free)} cells")
+    check(len(maze.exits(pac.start)) >= 2, "the player starts boxed in")
+    check(len(set(pac.homes)) == 3 and pac.start not in pac.homes,
+          f"ghost homes {pac.homes} against start {pac.start}")
+    check(len(pac.pellets) == len(maze.free) - 4 and len(pac.power) == 4,
+          f"{len(pac.pellets)} pellets, {len(pac.power)} power pellets")
+    pac.running = True
+    first = next(iter(maze.exits(pac.cell)))
+    pac.turn(first)
+    check(pac.move() in ("moved", "pellet", "power") and pac.cell != pac.start,
+          "the first move went nowhere")
+    # A power pellet frightens every ghost; eating one then is worth 200.
+    power = next(iter(pac.power))
+    from_cell, via = next((c, d) for c in maze.free
+                          for d, n in maze.exits(c).items() if n == power)
+    pac.cell = pac.prev = from_cell
+    pac.turn(via)
+    check(pac.move() == "power", "walking onto a power pellet did not fire it")
+    check(all(g.mode == "fright" for g in pac.ghosts), "the ghosts are not frightened")
+    score = pac.score
+    pac.ghosts[0].cell = pac.cell
+    check(pac.collisions() == "ghost" and pac.ghosts[0].mode == "eyes"
+          and pac.score == score + 200, "a frightened ghost was not eaten")
+    pac.ghosts[1].mode = "chase"
+    pac.ghosts[1].cell = pac.cell
+    check(pac.collisions() == "died" and pac.lives == 2, "a ghost did not cost a life")
+    pac.pellets = {maze.exits(pac.cell)[first]} if first in maze.exits(pac.cell) \
+        else {next(iter(maze.exits(pac.cell).values()))}
+    pac.turn(next(d for d, n in maze.exits(pac.cell).items() if n in pac.pellets))
+    check(pac.move() == "clear" and pac.level == 2
+          and len(pac.pellets) == len(maze.free) - 4,
+          "clearing the pellets did not start the next level")
+    # Through the clock: a fresh game, steered along its first exit, moves
+    # and paints every net.
+    game.input("reset")
+    game.input("turn", next(iter(maze.exits(pac.start))))
+    for i in range(80):
+        game.render(10.0 + i / 40.0, kind="pacman", speed=6.0)
+    snap = game.snapshot()
+    check(snap["steps"] >= 1 or snap["over"], "Pac-Man did not move on the clock")
+    check(len(snap["pellets"]) == len(maze.free), "the pellet string is the wrong length")
+    lit_nets = int((canvas.nets.max(axis=(1, 2)) > 0.05).sum())
+    check(lit_nets == len(canvas.net_names),
+          f"only {lit_nets} of {len(canvas.net_names)} nets lit in Pac-Man")
+    # Pac-Man is a sprite, not a cell: a disc of ~100 pixels with a mouth
+    # that opens and shuts, so his pixel count swings as he moves.
+    game.input("reset")
+    game.input("turn", next(iter(maze.exits(pac.start))))
+    yellow = []
+    for i in range(40):
+        game.render(30.0 + i / 40.0, kind="pacman", speed=4.0)
+        n = canvas.nets
+        yellow.append(int(((n[..., 0] > 0.8) & (n[..., 1] > 0.6)
+                           & (n[..., 2] < 0.3)).sum()))
+    cell_px = int(np.median(all_board.pixels[all_board.playable.reshape(-1)]))
+    check(min(yellow) >= 3 * cell_px,
+          f"Pac-Man is {min(yellow)} pixels, a cell is {cell_px}: not a sprite")
+    check(max(yellow) - min(yellow) >= cell_px,
+          f"the mouth is not moving ({min(yellow)}..{max(yellow)} pixels)")
+    game.input("pause")
+    game.render(20.0, kind="pacman", speed=4.0)
+    first_frame = canvas._source.copy()
+    game.render(20.0, kind="pacman", speed=4.0)
+    check(np.array_equal(first_frame, canvas._source),
+          "the same Pac-Man at the same time painted two different frames")
+    game.render(21.0, kind="snake", speed=4.0)
+    check(game.snapshot()["game"] == "snake", "switching back to snake failed")
+
+    return asyncio.run(_game_web(
+        layout, f"snake {board.rows}x{board.cols}/{board.count} cells "
+                f"({board.covered:.0%} of pixels, ~{int(np.median(lit))} px), "
+                f"pac-man {all_board.rows}x{all_board.cols}/{len(maze.free)} "
+                f"free cells, {tunnels} tunnel ends, {dead} dead ends"))
+
+
+async def _game_web(layout: Layout, detail: str) -> str:
+    """Game mode through the daemon: the knob, the input API, the feed."""
+    import aiohttp
+    from aiohttp import web as aioweb
+
+    from .engine import Engine
+    from .web import Server
+
+    fps = 40.0
+    engine = Engine(layout, fps=fps)
+    server = Server(engine)
+    engine.start()
+    runner = aioweb.AppRunner(server.app())
+    await runner.setup()
+    site = aioweb.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = runner.addresses[0][1]
+    base = f"http://127.0.0.1:{port}"
+    try:
+        async with aiohttp.ClientSession() as http:
+            async with http.get(f"{base}/game") as r:
+                check(r.status == 200 and "game.js" in await r.text(),
+                      "/game does not serve the game page")
+            async with http.get(f"{base}/api/game") as r:
+                body = await r.json()
+            check(body["board"]["rows"] > 0 and len(body["board"]["cells"]) > 60,
+                  "/api/game does not describe the board")
+            check(body["game_mode"] is False, "game mode is on at boot")
+
+            await asyncio.sleep(8 / fps)
+            show = engine.frame.copy()
+            async with http.post(f"{base}/api/settings",
+                                 json={"game_mode": True}) as r:
+                check(r.status == 200, "game_mode rejected")
+            await asyncio.sleep(10 / fps)
+            check(not np.array_equal(show, engine.frame),
+                  "switching to game mode did not change the frame")
+            check(engine.status.scene == "game",
+                  f"status says scene {engine.status.scene!r} in game mode")
+
+            async with http.post(f"{base}/api/game",
+                                 json={"action": "turn", "dir": "left"}) as r:
+                check(r.status == 200, "a turn was rejected")
+                state = (await r.json())["state"]
+            check(state["running"], "an arrow key did not start the game")
+            async with http.post(f"{base}/api/game",
+                                 json={"action": "turn", "dir": "diagonal"}) as r:
+                check(r.status == 400, "a bogus direction was accepted")
+
+            async with http.ws_connect(f"{base}/ws") as ws:
+                # The first game message is the state as it stands; the
+                # snake's first step follows a quarter second later.
+                game = None
+                for _ in range(200):
+                    message = await asyncio.wait_for(ws.receive(), timeout=3.0)
+                    if message.type == aiohttp.WSMsgType.TEXT:
+                        body = json.loads(message.data)
+                        if "game" in body:
+                            game = body["game"]
+                            if game["steps"] >= 1:
+                                break
+                check(game is not None, "no game state over the WebSocket")
+                check(game["running"] and game["steps"] >= 1,
+                      "the WebSocket game state is not moving")
+
+            async with http.post(f"{base}/api/settings",
+                                 json={"game": "pacman"}) as r:
+                check(r.status == 200, "the game knob rejected pacman")
+            await asyncio.sleep(4 / fps)
+            async with http.get(f"{base}/api/game") as r:
+                body = await r.json()
+            check(body["board"]["game"] == "pacman" and body["board"]["walls"]
+                  and body["state"]["game"] == "pacman"
+                  and "pacman" in body["board"]["games"],
+                  "/api/game did not follow the game knob to pacman")
+            async with http.post(f"{base}/api/settings",
+                                 json={"game": "snake", "game_mode": False}) as r:
+                check(r.status == 200, "game_mode off rejected")
+            await asyncio.sleep(10 / fps)
+            check(engine.status.scene != "game", "the show did not come back")
+    finally:
+        await runner.cleanup()
+        engine.stop()
+    return detail
+
+
 TESTS = (
     ("channel map", test_layout),
     ("fseq round-trip", test_fseq_roundtrip),
@@ -1448,6 +1720,7 @@ TESTS = (
     ("fixed script", test_script),
     ("preview geometry", test_geometry),
     ("web UI + engine", test_web),
+    ("game mode", test_game),
     ("audio features", test_analysis),
     ("beat clock", test_clock),
     ("audio -> beats", test_beat_pipeline),
