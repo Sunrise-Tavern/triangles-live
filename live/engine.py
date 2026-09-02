@@ -76,6 +76,11 @@ class EngineStatus:
     free_running: bool = False
     energy: float = 0.0
     level: float = 0.0
+    #: The audio-drive gauges: bass weight and air, 0..1, and the rate the
+    #: material is moving at relative to the clock (1.0 with the knob off).
+    bass_drive: float = 0.0
+    air: float = 0.0
+    drive_rate: float = 1.0
     audio_lag_ms: float = 0.0
     reason: str = ""
 
@@ -369,6 +374,11 @@ class Engine:
             s.reason = report.reason or s.reason
             if self.listener.features is not None:
                 s.level = round(self.listener.features.level, 3)
+            gauges = getattr(self.script, "gauges", None)
+            if gauges is not None:
+                s.bass_drive = round(gauges["bass"], 3)
+                s.air = round(gauges["air"], 3)
+                s.drive_rate = round(gauges["rate"], 3)
         s.frames = clock.stats.frames
         s.fps = round(clock.stats.actual_fps, 2)
         s.late_frames = clock.stats.late_frames

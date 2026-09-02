@@ -109,6 +109,23 @@ class Palette:
         return Palette(f"{self.name}x{factor:.2f}",
                        np.clip(self.colors * factor, 0.0, 1.0))
 
+    def lit(self, gain: float, wash: float = 0.0) -> "Palette":
+        """Scale the colours' intensity by ``gain`` and pull them ``wash``
+        of the way toward a neutral of their own brightness.
+
+        This is the per-frame colour modulation for a spectrum-driven show:
+        bright highs make a palette both louder and whiter, the way a
+        cymbal reads brighter than a bass note.  ``gain`` 1 and ``wash`` 0
+        return the palette itself, so the transform is free when idle.
+        """
+        if gain == 1.0 and wash <= 0.0:
+            return self
+        colors = self.colors * gain
+        if wash > 0.0:
+            colors = colors * (1.0 - wash) + wash * colors.max(axis=-1, keepdims=True)
+        return Palette(f"{self.name}*{gain:.2f}/{wash:.2f}",
+                       np.clip(colors, 0.0, 1.0).astype(np.float32))
+
 
 def generate(hue: float, scheme: str = "analogous", *, value: float = 1.0,
              sat: float = 1.0, white: bool = False,

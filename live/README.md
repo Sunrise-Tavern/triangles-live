@@ -179,8 +179,29 @@ Output enable · blackout · master brightness · gamma · saturation ·
 contrast · corridor rate ·
 articulation · corridor pattern override · hue offset · hue lock · tempo ·
 scene hold · colour scheme override · shuffle seed · transitions · resting
-nets · quiet and hot thresholds · build and drop sensitivity.  Presets are named JSON files under `live/presets/`, saved and loaded
+nets · audio drive and its depth · quiet and hot thresholds · build and drop sensitivity.  Presets are named JSON files under `live/presets/`, saved and loaded
 from the panel.
+
+*Bass drives motion, highs colour* (`audio_drive`, off by default) is an
+experiment in letting the measured spectrum shape the show beyond the beat
+and the state.  With it on, the low end drives how the material *evolves*:
+the net gestures and the corridor pattern run on a beat count that moves
+0.7x-1.3x the clock with the kick envelope (integrated, as the clip playhead
+already is, so nothing jumps), phrases turn over sooner when the passage has
+been carrying bass and linger when it has not (0.75x-1.25x), and the corridor
+draws from a denser neighbourhood of patterns under a heavy low end.  The
+high band drives *colour intensity*: every palette is scaled 0.75x-1.25x by
+the high band's level over its own slow average (its *share* would read a
+breakdown as brighter than the drop, because the bass has left), and the brightest passages
+are also pulled a third of the way toward neutral, so a hi-hat-heavy break
+reads louder and whiter than a bass-heavy one of the same level; clips,
+which keep their own colours, take the gain as level.  *Drive depth* scales
+all of it, 0 to 1.  The readout shows what the drive is seeing -- bass
+weight, air, and the rate the material is running at.  The gauges run
+whether the knob is on or not, so switching it on lands on settled values,
+and off the show is byte-identical to before.  Showpieces are left on the
+clock: their arcs land on bar lines by design and already ride the bass as
+level.
 
 *Saturation* and *contrast* grade the whole rig — nets and corridor together
 — after the frame is painted: saturation 0 is grayscale, contrast above 1

@@ -86,6 +86,15 @@ class Settings:
     #: is: 0 restores the original behaviour, where it holds the bed wash and
     #: reads as frozen for a bar or a phrase while the corridor moves.
     rest_level: float = 0.4
+    #: Experimental.  Let the *measured* spectrum drive the show, not only
+    #: the beat: the low end pushes how fast the material moves and how
+    #: quickly it turns over, the high end lifts the colours' intensity.
+    #: Off, the show is exactly as before.
+    audio_drive: bool = False
+    #: How far ``audio_drive`` is allowed to bend the show: 0 not at all,
+    #: 1 the full range (motion 0.7x-1.3x, phrases 0.75x-1.25x, colour
+    #: 0.75x-1.25x with a wash toward white on bright highs).
+    drive_depth: float = 1.0
 
     # -- state machine (only meaningful when driven by audio) -------------- #
     #: Loudness, relative to a 45 s baseline, below which a passage is quiet.
@@ -154,6 +163,8 @@ SCHEMA: dict[str, tuple] = {
     "transitions": ("float", 0.0, 1.0, 0.05, "Transitions"),
     "pattern_hold": ("float", 1.0, 8.0, 1.0, "Pattern hold (phrases)"),
     "rest_level": ("float", 0.0, 1.0, 0.01, "Resting nets"),
+    "audio_drive": ("bool", None, None, None, "Bass drives motion, highs colour"),
+    "drive_depth": ("float", 0.0, 1.0, 0.05, "Drive depth"),
     "quiet_enter": ("float", 0.2, 1.2, 0.01, "Quiet threshold"),
     "hot_enter": ("float", 1.0, 2.0, 0.01, "Hot threshold"),
     "build_high_share": ("float", 0.2, 0.8, 0.01, "Build sensitivity"),

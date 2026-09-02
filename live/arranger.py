@@ -223,6 +223,24 @@ class Arranger:
         #: Per state, the (kind, visit, phrase) a pattern was chosen for and
         #: the pattern -- so the choice holds for the phrase.
         self._pattern_held: dict[str, tuple[tuple, str]] = {}
+        #: The spectrum gauges behind the ``audio_drive`` knob.  All three are
+        #: kept up every frame whether the knob is on or not, so switching it
+        #: on mid-set lands on settled values rather than a cold start.
+        #:
+        #: ``_heavy``: the pump averaged over about three seconds -- how much
+        #: low end the passage has been carrying, 0..1.  ``_air``: the high
+        #: band's level over its own slow average, mapped so 0 is "dull for
+        #: this track" and 1 "as bright as it gets", smoothed over about a
+        #: beat so a hat pattern lifts it without it flickering at the hat rate.
+        #: ``_drive``: a beat count that runs 0.7x-1.3x the clock with the
+        #: pump -- integrated, as the clip playhead is, so position never
+        #: jumps -- for the gestures to move on instead of the clock itself.
+        self._heavy = 0.0
+        self._air = 0.0
+        self._air_ref: float | None = None
+        self._drive = 0.0
+        self._drive_last: float | None = None
+        self._gauge_t: float | None = None
 
     # -- knobs and derived values ------------------------------------------ #
 
@@ -245,6 +263,90 @@ class Arranger:
     @property
     def bpm(self) -> float:
         return self.clock.tempo
+
+    # -- the audio-drive knob ----------------------------------------------- #
+
+    @property
+    def _drive_on(self) -> bool:
+        return bool(self.settings is not None and self.settings.audio_drive
+                    and self.settings.drive_depth > 0.0)
+
+    @property
+    def _depth(self) -> float:
+        return float(self.settings.drive_depth) if self._drive_on else 0.0
+
+    @property
+    def gauges(self) -> dict[str, float]:
+        """What the drive is reading, for the panel: bass weight, air,
+        and the rate the material is moving at relative to the clock."""
+        return {"bass": self._heavy, "air": self._air,
+                "rate": 1.0 + (0.6 * self._pump - 0.3) * self._depth}
+
+    def _colour_gain(self) -> tuple[float, float]:
+        """(gain, wash) the highs put on every palette this frame.
+
+        Centred on the track's own average brightness: a passage as bright
+        as usual paints as designed, dull ones sit at 0.75, the brightest
+        at 1.25 and a third of the way toward neutral -- loud *and* white.
+        """
+        depth = self._depth
+        if depth <= 0.0:
+            return 1.0, 0.0
+        gain = 1.0 + depth * 0.5 * (self._air - 0.5)
+        wash = depth * 0.6 * max(0.0, self._air - 0.5)
+        return gain, wash
+
+    def _coloured(self, palette):
+        if palette is None or not self._drive_on:
+            return palette
+        gain, wash = self._colour_gain()
+        return palette.lit(round(gain, 3), round(wash, 3))
+
+    def _motion_beats(self, t: float) -> float:
+        """The beat count the net gestures run on: the drive when the knob
+        is on, the clock itself otherwise (the two coincide until it is)."""
+        return self._drive if self._drive_on else self._beats(t)
+
+    def _gauge(self, t: float, features) -> None:
+        """Advance the spectrum gauges by one frame."""
+        dt = 0.0 if self._gauge_t is None else max(0.0, t - self._gauge_t)
+        self._gauge_t = t
+        if features is not None:
+            # The high band's *level* (as amplitude) over its own slow mean,
+            # not its share of the spectrum: the share rises whenever the
+            # bass leaves, so it read a breakdown as brighter than the drop
+            # (sessions/bpm: quiet 1.23x, hot 1.02x).  The level orders with
+            # the music -- quiet 0.89x, cruising 0.86x, building 1.09x, hot
+            # 1.17x -- and runs p10 0.58x to p90 1.72x, so 0.45x maps to dull
+            # and 1.65x to as bright as it gets, with the median near 0.5.
+            amp = float(np.sqrt(max(float(getattr(features, "high", 0.0)), 0.0)))
+            if self._air_ref is None:
+                self._air_ref = max(amp, 1e-6)
+            self._air_ref += (amp - self._air_ref) * min(1.0, dt / 20.0)
+            raw = min(1.0, max(0.0, (amp / max(self._air_ref, 1e-9) - 0.45) / 1.2))
+            # Smoothed symmetrically over about a beat: fast enough to lift
+            # with a hat pattern arriving, slow enough not to flicker at the
+            # hat rate.  A fast-attack/slow-release follower was tried first
+            # and sat at 0.70 mean, which made the show 9% brighter with the
+            # knob on than off -- not what an A/B should compare.
+            self._air += (raw - self._air) * min(1.0, dt / 0.3)
+        self._heavy += (self._pump - self._heavy) * min(1.0, dt / 3.0)
+
+        beats = self._beats(t)
+        if self._drive_last is None:
+            self._drive, self._drive_last = beats, beats
+        step = beats - self._drive_last
+        self._drive_last = beats
+        if not self._drive_on:
+            # Track the clock exactly, so switching on starts from here.
+            self._drive = beats
+        elif 0.0 < step < 4.0:
+            self._drive += step * (1.0 + (0.6 * self._pump - 0.3) * self._depth)
+        else:
+            # A relock moved the beat index: pass the jump through unchanged
+            # so the drive keeps its offset to the clock rather than running
+            # a whole bar at 1.3x.
+            self._drive += step
 
     @property
     def duration(self) -> float:
@@ -288,6 +390,9 @@ class Arranger:
         rate = self.settings.corridor_rate if self.settings else 1.0
         span = (max(0.5, treat.pattern_bars / max(rate, 1e-3))
                 * self.clock.bar_length * 60.0 / max(self.bpm, 1e-3))
+        # Under the drive a heavy low end turns the material over sooner
+        # and a light one lets it linger: 0.75x to 1.25x the span.
+        span *= 1.0 + self._depth * (0.25 - 0.5 * self._heavy)
         started, count = self._phrase
         if started is None:
             self._phrase = (t, 0)
@@ -466,6 +571,10 @@ class Arranger:
         trust = self.clock.confidence
         target = ((fx.DENSITY[treat.pattern] + (articulation - 0.5))
                   * (0.5 + 0.5 * trust) + self.escalation(treat))
+        # Under the drive the low end also has a say in how busy the
+        # corridor is: a passage carrying more bass than it has lately
+        # draws from a denser neighbourhood, one carrying less a sparser.
+        target += self._depth * 0.3 * (self._heavy - 0.4)
         candidates = fx.vocabulary(min(max(target, 0.0), 1.0), quiet=treat.quiet)
         # The walk is keyed on the visit as well, so a return does not replay
         # the same sequence of patterns in the same order.
@@ -505,6 +614,7 @@ class Arranger:
                    if features_now is not None else 0.0)
         self._pump = max(decayed, instant)
         self._pump_t = t
+        self._gauge(t, features_now)
 
         if self.machine.state != self._last_state:
             self.journey += 1
@@ -597,6 +707,11 @@ class Arranger:
         bar = self.clock.bar_phase(t)
         kick = _kick(beat)
         features = self.features
+        # The highs colour every palette this frame -- here, after the look
+        # is chosen, because the palette's name is part of a look's identity
+        # and a per-frame palette in the look would read as a change of
+        # material forty times a second.
+        palette = self._coloured(palette)
 
         if name.startswith("clip:"):
             self._paint_clip(canvas, name[5:], kind, t, anchor, beat, kick)
@@ -606,6 +721,13 @@ class Arranger:
                                                 palette, beat, kick, features)
             return
 
+        if self._drive_on:
+            # The corridor pattern and the phrase-driven gestures move on the
+            # drive too: the phrase is shifted by however far the drive has
+            # run ahead of or behind the clock, in phrases.
+            lead = self._drive - self._beats(t)
+            phrase = (phrase + lead / (self.clock.bar_length
+                                        * self._phrase_bars(treat))) % 1.0
         far = palette.rotated(far_degrees)
         levels = fx.PATTERNS[name](
             len(canvas.arch_names), phrase,
@@ -1005,6 +1127,9 @@ class Arranger:
         else:
             envelope = 0.75 + 0.25 * kick
             bounce = 0.30 * pump
+        if self._drive_on:
+            # The clip keeps its own colours, so the highs reach it as level.
+            envelope *= self._colour_gain()[0]
         canvas.nets *= envelope
         canvas.arches *= envelope
         if bounce > 0.01:
@@ -1069,7 +1194,7 @@ class Arranger:
                  tension: float = 0.0) -> None:
         """Paint one net gesture.  The bed and the par stay with the state."""
         beat_s = max(1e-6, 60.0 / self.bpm)
-        beats = self._beats(t)
+        beats = self._motion_beats(t)
         if name == "plasma":
             fx.plasma(canvas, palette, t, scale=2.5, speed=0.35, level=0.7)
         elif name == "twinkle":

@@ -259,6 +259,11 @@ function setStatus(status) {
     put('s-conf', status.confidence.toFixed(2));
     put('s-barconf', status.bar_confidence.toFixed(2));
     put('s-bar', status.bar);
+    // The audio-drive gauges: what the low and high end are reading as, and
+    // how fast the material is running against the clock as a result.
+    put('s-bass', status.bass_drive.toFixed(2));
+    put('s-air', status.air.toFixed(2));
+    put('s-rate', `${status.drive_rate.toFixed(2)}x`);
     document.querySelector('#bar i').style.width =
       `${(1 - status.bar_phase) * 100}%`;
     document.getElementById('why').textContent = status.free_running
@@ -266,6 +271,7 @@ function setStatus(status) {
       : (status.reason ? `state: ${status.reason}` : '');
   } else {
     put('s-conf', '—'); put('s-barconf', '—'); put('s-bar', '—');
+    put('s-bass', '—'); put('s-air', '—'); put('s-rate', '—');
     document.getElementById('why').textContent = 'scripted show — no audio input';
   }
   document.getElementById('target').textContent = status.target;

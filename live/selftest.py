@@ -1360,6 +1360,80 @@ def test_multi_target(layout: Layout) -> str:
 
 
 
+def test_audio_drive(layout: Layout) -> str:
+    """The drive knob must change the show, stay deterministic, keep its
+    gauges in range, and cost nothing while off."""
+    from .arranger import Arranger
+    from .audio import ArraySource
+    from .listener import Listener
+    from .settings import Settings
+    from .state import StateMachine
+    from .verify import arc_track
+
+    base = pal.generate(200.0, "triadic", white=True)
+    check(base.lit(1.0, 0.0) is base, "lit(1, 0) must return the palette itself")
+    lit = base.lit(1.25, 0.3)
+    check(np.isfinite(lit.colors).all() and lit.colors.max() <= 1.0,
+          "lit palette out of range")
+    dull = base.lit(0.75, 0.0)
+    check(np.allclose(dull.colors, base.colors * 0.75), "lit gain is not a scale")
+
+    audio, _ = arc_track()
+    audio = audio[: 44100 * 30]
+
+    def run(drive: bool, depth: float = 1.0):
+        canvas = Canvas(layout)
+        listener = Listener(ArraySource(audio))
+        st = Settings()
+        st.audio_drive = drive
+        st.drive_depth = depth
+        st.piece = "off"          # pieces stay on the clock by design
+        arranger = Arranger(canvas, listener, state=StateMachine(), settings=st)
+        out = np.zeros(layout.channel_count, dtype=np.uint8)
+        frames, gauges = [], []
+        now, index = 0.0, 0
+        for block in listener.source.blocks():
+            f = listener.step(block)
+            arranger.machine.push(f)
+            while now <= f.t:
+                arranger.render(index, now)
+                check(np.isfinite(canvas._source).all(), "drive: NaN or inf")
+                if index % 41 == 0:
+                    canvas.to_channels(out)
+                    frames.append(out.copy())
+                    gauges.append(arranger.gauges)
+                index += 1
+                now += 1.0 / 40.0
+        return np.stack(frames), gauges, arranger
+
+    off_a, gauges_off, _ = run(False)
+    off_b, _, _ = run(False)
+    check(np.array_equal(off_a, off_b), "the show is not deterministic with the drive off")
+    check(all(g["rate"] == 1.0 for g in gauges_off),
+          "with the drive off the rate must read exactly 1.0")
+    on_a, gauges_on, arranger = run(True)
+    on_b, _, _ = run(True)
+    check(np.array_equal(on_a, on_b), "the show is not deterministic with the drive on")
+    check(not np.array_equal(on_a, off_a), "the drive changes nothing")
+    differing = float((on_a != off_a).any(axis=1).mean())
+    check(differing > 0.5,
+          f"the drive only touched {differing:.0%} of sampled frames")
+    zero, _, _ = run(True, depth=0.0)
+    check(np.array_equal(zero, off_a), "depth 0 must be the same show as off")
+
+    bass = [g["bass"] for g in gauges_on]
+    air = [g["air"] for g in gauges_on]
+    rate = [g["rate"] for g in gauges_on]
+    check(all(0.0 <= b <= 1.0 for b in bass), "bass gauge out of 0..1")
+    check(all(0.0 <= a <= 1.0 for a in air), "air gauge out of 0..1")
+    check(all(0.7 - 1e-6 <= r <= 1.3 + 1e-6 for r in rate),
+          f"drive rate outside 0.7..1.3 ({min(rate):.2f}..{max(rate):.2f})")
+    check(max(bass) > 0.1 and max(air) > 0.3 and min(air) < max(air) - 0.2,
+          f"gauges never moved: bass to {max(bass):.2f}, air {min(air):.2f}..{max(air):.2f}")
+    lead = arranger._drive - arranger._drive_last
+    return (f"on/off differ in {differing:.0%} of frames, both deterministic, "
+            f"depth 0 is off; bass to {max(bass):.2f}, air {min(air):.2f}..{max(air):.2f}, "
+            f"rate {min(rate):.2f}..{max(rate):.2f}, drive ended {lead:+.1f} beats off the clock")
 TESTS = (
     ("channel map", test_layout),
     ("fseq round-trip", test_fseq_roundtrip),
@@ -1381,6 +1455,7 @@ TESTS = (
     ("state machine", test_state_machine),
     ("long drop", test_long_drop),
     ("arranger", test_arranger),
+    ("audio drive", test_audio_drive),
     ("config", test_config),
     ("doctor", test_doctor),
 )
