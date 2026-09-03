@@ -105,6 +105,10 @@ class Features:
     #: is on.
     kick: float
     #: RMS over a slow *mean* -- 1.0 is "about as loud as usual lately".
+    #: Exactly 1.0 while the baseline has heard nothing, and the baseline is
+    #: dropped whenever silence is confirmed: after a silent room "usual
+    #: lately" is not the noise floor, it is nothing, and the next track must
+    #: set it from its own first block rather than be measured against hiss.
     energy: float
     #: RMS over a slowly-decaying *peak* -- 1.0 is "as loud as this set gets".
     #: The mean chases the music, which compresses exactly the distinction that
@@ -214,6 +218,7 @@ class Analyzer:
         self._profile_alpha = 1.0 - float(np.exp(-block_s / novelty_tau_s))
         self._novelty_mean = _Ema(flux_tau_s * 4, block_s, initial=1e-6)
         self._baseline = _Ema(baseline_s, block_s, initial=0.0)
+        self._baseline_s, self._block_s = baseline_s, block_s
         # The peak tracks a *smoothed* level, not the raw RMS.  Following raw
         # RMS with a fast attack measures crest factor -- the gap between a
         # kick and the gap after it -- which is a property of the mix, not of
@@ -276,6 +281,19 @@ class Analyzer:
         smooth = self._smooth_rms.push(rms)
         smooth_input = self._smooth_input.push(block.input_rms)
         silent = smooth_input < self._silence_rms
+        if silent:
+            # Confirmed silence invalidates "as loud as usual lately", because
+            # lately there was nothing.  Not merely *pausing* the baseline,
+            # which is what the gate below does: the gate only starts once
+            # `silent` is true, and `silent` runs on a 3-second smoothed
+            # level, so the first seconds of a silent stretch are still
+            # taught to the baseline.  It then sits on the noise floor for as
+            # long as the room stays quiet, and the next track reads against
+            # hiss -- measured, energy 19146 on the first bar, which put the
+            # opening of the arc into `hot` and kept it there for 95% of the
+            # track.  Dropping the average is the honest answer: the next
+            # track sets it from its own first block.
+            self._baseline = _Ema(self._baseline_s, self._block_s, initial=0.0)
         baseline = self._baseline.value
         # Silence must not teach the baseline anything.  Letting it meant that
         # starting the engine before the music left the baseline at the noise
@@ -315,7 +333,11 @@ class Analyzer:
                   if smooth_input > 1e-9 else -120.0),
             near_floor=smooth_input < self._floor_rms,
             warm=min(1.0, self._baseline.count / self._baseline._warm),
-            energy=rms / max(baseline, 1e-6),
+            # Neutral until the baseline has heard anything at all.  Without
+            # this the divide-by-epsilon on the first audible block reads as
+            # thousands, and the state machine's smoothed energy carries that
+            # spike for seconds after the number itself has recovered.
+            energy=(rms / max(baseline, 1e-6)) if self._baseline.count else 1.0,
             level=smooth / max(self._peak, 1e-6),
             bass_share=smoothed_bands["bass"] / total_bands,
             high_share=smoothed_bands["high"] / total_bands,

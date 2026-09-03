@@ -1318,10 +1318,48 @@ def test_silence_floor(layout: Layout) -> str:
     check(states - {QUIET, SILENT},
           f"the arc must still reach the music states, only saw {states}")
 
+    # ...and a track that starts *after* a silent stretch must not be
+    # measured against the hiss that preceded it.
+    rng = np.random.default_rng(3)
+    gain = AutoGain()
+    gain.peak = gain.target / gain.ceiling
+    analyzer = Analyzer(silence_dbfs=gate)
+    machine = StateMachine(block_s=block_s)
+    i = 0
+    for _ in range(int(60.0 / block_s)):
+        raw = (rng.standard_normal(BLOCKSIZE) * 10.0 ** (floor / 20.0)).astype(np.float32)
+        # The machine must see the silence too: its own smoothed energy is
+        # what carries a poisoned baseline into the first bars of the track.
+        machine.push(analyzer.push(Block(samples=gain.apply(raw),
+                                         t=i * block_s, index=i,
+                                         gain=gain.gain)))
+        i += 1
+    after: list[str] = []
+    first_energy = None
+    for j in range(len(audio) // BLOCKSIZE):
+        raw = audio[j * BLOCKSIZE:(j + 1) * BLOCKSIZE].astype(np.float32)
+        f = analyzer.push(Block(samples=gain.apply(raw), t=i * block_s, index=i,
+                                gain=gain.gain))
+        report = machine.push(f)
+        if first_energy is None and not f.silent:
+            first_energy = report.energy
+        after.append(machine.state)
+        i += 1
+    check(first_energy is not None and first_energy < 3.0,
+          f"the first bar after silence read energy {first_energy:.0f}: the "
+          f"machine is still carrying an energy formed during the silence, "
+          f"when 'as loud as usual lately' meant nothing at all")
+    hot_share = after.count("hot") / len(after)
+    check(hot_share < 0.45,
+          f"{hot_share:.0%} of the arc read as hot after a silent minute "
+          f"-- with no silence before it the same arc is about 27% -- so a "
+          f"track that follows silence is being measured against hiss")
+
     return (f"dead feed at {floor} dBFS reads {dead.dbfs:.0f} dBFS through "
             f"{dead_gain.gain:.0f}x gain and reaches {SILENT}; +{FLOOR_MARGIN_DB:.0f} dB "
             f"is held at {QUIET}; the arc still reaches "
-            f"{', '.join(sorted(states - {QUIET}))}")
+            f"{', '.join(sorted(states - {QUIET}))}, and after a silent "
+            f"minute opens at energy {first_energy:.1f} with {hot_share:.0%} hot")
 
 
 def test_config(layout: Layout) -> str:
