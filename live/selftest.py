@@ -280,6 +280,25 @@ def test_clips(layout: Layout) -> str:
               "the walk-on paints the same frame as the rest look")
         check(walk.max() > 0, "the walk-on painted nothing at all")
 
+        # And the room is never dark across either boundary.  Sampled at the
+        # real frame rate, because the blackout this pins was 25-75 ms: the
+        # walk-on used to fade *itself* toward nothing without the rest look
+        # painted underneath, so the rig reached total output 0 every time a
+        # loop walked on or off.
+        clip_s = Arranger.IDLE_CLIP_S
+        out8 = np.zeros(layout.channel_count, dtype=np.uint8)
+        totals = []
+        for edge in (gap, gap + clip_s):
+            for k in range(int(-3 * 40), int(3 * 40)):
+                cv.clear()
+                idle._silent(edge + k / 40.0)
+                totals.append(int(cv.to_channels(out8).sum()))
+        lit = np.array(totals, dtype=np.float64)
+        check(lit.min() > 0.25 * np.median(lit),
+              f"the rig dropped to {lit.min() / np.median(lit):.2f}x its "
+              f"normal output crossing a walk-on boundary -- it must "
+              f"cross-fade with the rest look, never through black")
+
         # Untagged, silence is the rest look and nothing else.
         plainly = Arranger(Canvas(layout), Listener(ArraySource(audio)),
                            state=StateMachine(), settings=Settings(),

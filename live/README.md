@@ -795,9 +795,14 @@ enough that the ranking would put them in one — the gnome measures near the
 top of the library, in `hot`.
 
 In silence the rest look is still the default: each tagged loop takes a turn
-for `IDLE_CLIP_S` (30 s) out of every `IDLE_GAP_S + IDLE_CLIP_S` (75 s),
-fading in and out over a second at each end and held at about half level, so
-the walk-on belongs to the idle rather than interrupting it.  It plays on
+for `IDLE_CLIP_S` (30 s) out of every `IDLE_GAP_S + IDLE_CLIP_S` (75 s), held
+at about half level, so the walk-on belongs to the idle rather than
+interrupting it.  It **cross-fades** with the rest look over `IDLE_FADE_S`
+(2 s) at each end — the rest look keeps painting underneath, and the clip is
+mixed over it.  Fading the clip alone toward nothing left the rig genuinely
+black for 25–75 ms at every boundary (measured: total output 0), because
+there was nothing painted beneath it.  A corridor that goes dark reads as a
+fault, which is the same reason the idle sweep never fully closes.  It plays on
 **wall time**, not beats — in silence the beat clock is free-running on no
 evidence, so there is nothing to lock to.  The panel's **Clip** knob still
 plays any of them by hand at any time.

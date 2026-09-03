@@ -1184,6 +1184,14 @@ class Arranger:
     #: programme.  Each tagged clip takes its turn.
     IDLE_GAP_S = 45.0
     IDLE_CLIP_S = 30.0
+    #: The walk-on cross-fades with the rest look over this long at each end.
+    #: It is a *cross*-fade and not a fade of the clip alone: fading the clip
+    #: toward nothing left the rig genuinely black for 25-75 ms at every
+    #: boundary (measured: total output 0), because the rest look underneath
+    #: was not being painted.  Nothing here should ever reach black -- a
+    #: corridor that goes dark reads as a fault, which is the same reason the
+    #: idle sweep never fully closes.
+    IDLE_FADE_S = 2.0
 
     def _silent_clip(self, t: float):
         """(clip, seconds into it) for this moment of silence, or None.
@@ -1209,22 +1217,6 @@ class Arranger:
 
     def _silent(self, t: float) -> None:
         canvas = self.canvas
-        playing = self._silent_clip(t)
-        if playing is not None:
-            clip, seconds = playing
-            canvas.from_channels(clip.frame_at(seconds))
-            # Held below the clip's own level and breathing with the same
-            # slow swell as the rest look, so the walk-on belongs to the
-            # idle rather than interrupting it.  It also fades in and out
-            # over a second at each end -- a figure that appears at full
-            # brightness in a resting room reads as a fault.
-            edge = min(1.0, seconds, max(0.0, self.IDLE_CLIP_S - seconds))
-            breath = 0.5 + 0.5 * float(np.sin(2 * np.pi * t
-                                              / (self.IDLE_SWEEP_S / 2)))
-            level = edge * (0.55 + 0.10 * breath)
-            canvas.nets *= level
-            canvas.arches *= level
-            return
         offset = self.settings.hue_offset if self.settings else 0.0
         lock = self.settings.hue_lock if self.settings else False
         drift = 0.0 if lock else 360.0 * (t / self.IDLE_HUE_S)
@@ -1245,6 +1237,30 @@ class Arranger:
         fx.plasma(canvas, palette, t, scale=1.6, speed=0.06, level=0.45)
         breath = 0.5 + 0.5 * float(np.sin(2 * np.pi * t / (self.IDLE_SWEEP_S / 2)))
         fx.par(canvas, palette.color(0), 0.10 + 0.08 * breath)
+
+        # The walk-on rides *over* the rest look, cross-faded, so the room is
+        # never dark between the two.
+        playing = self._silent_clip(t)
+        if playing is None:
+            return
+        clip, seconds = playing
+        weight = min(1.0, seconds / self.IDLE_FADE_S,
+                     max(0.0, self.IDLE_CLIP_S - seconds) / self.IDLE_FADE_S)
+        if weight <= 0.0:
+            return
+        if self._scratch is None:
+            self._scratch = Canvas(canvas.layout)
+        self._scratch.clear()
+        self._scratch.from_channels(clip.frame_at(seconds))
+        # Held below the clip's own level and breathing with the same slow
+        # swell as the rest look, so the walk-on belongs to the idle rather
+        # than interrupting it.
+        level = weight * (0.55 + 0.10 * breath)
+        canvas.nets *= 1.0 - weight
+        canvas.nets += self._scratch.nets * level
+        canvas.arches *= 1.0 - weight
+        canvas.arches += self._scratch.arches * level
+        canvas.par *= 1.0 - weight
 
     def _rest(self, canvas: Canvas, targets: slice, t: float, palette) -> None:
         """Give the group that is not leading something to do.
