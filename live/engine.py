@@ -312,6 +312,8 @@ class Engine:
                                  bounce=settings.game_bounce,
                                  features=features,
                                  beat_phase=self.script.beat_phase(t))
+                if settings.saturation != 1.0 or settings.contrast != 1.0:
+                    self.canvas.grade(settings.saturation, settings.contrast)
                 self.canvas.to_channels(out, brightness=settings.brightness,
                                         gamma=settings.gamma)
             elif clip is not None:
@@ -323,7 +325,19 @@ class Engine:
                         or self._clip_anchor[0] != clip.name):
                     self._clip_anchor = (clip.name, t)
                 frame_ = clip.frame_at(t - self._clip_anchor[1])
-                if settings.brightness != 1.0 or settings.gamma != 1.0:
+                if settings.saturation != 1.0 or settings.contrast != 1.0:
+                    # Saturation and contrast are the operator's knobs, not
+                    # the author's -- the same argument that already lets
+                    # brightness and gamma touch a clip -- and they are
+                    # labelled as grading the whole rig.  Leaving the knob
+                    # path ungraded meant picking a clip by hand visibly
+                    # changed the grade of the room, which only became
+                    # obvious once the defaults stopped being 1.0/1.0.
+                    self.canvas.from_channels(frame_)
+                    self.canvas.grade(settings.saturation, settings.contrast)
+                    self.canvas.to_channels(out, brightness=settings.brightness,
+                                            gamma=settings.gamma)
+                elif settings.brightness != 1.0 or settings.gamma != 1.0:
                     scale = (np.arange(256, dtype=np.float32) / 255.0)
                     if settings.gamma != 1.0:
                         scale **= settings.gamma
@@ -331,6 +345,7 @@ class Engine:
                                   0, 255).astype(np.uint8)
                     out[:] = lut[frame_]
                 else:
+                    # Neutral grade: the frame goes to the wire verbatim.
                     out[:] = frame_
                 self.status.clip = clip.name
             else:

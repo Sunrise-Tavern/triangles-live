@@ -215,7 +215,13 @@ already sized the blows and bounces; now it paces them too.
 pushes darks down and brights up about the midpoint.  The rig runs
 saturation **2.0** and contrast **1.40** by default — the LEDs read washed
 out against the design at 1.0/1.0.  Set both to 1.0 to grade nothing, which
-also costs nothing: the grade is skipped entirely at those values.  *Pattern hold* is how
+also costs nothing: the grade is skipped entirely at those values, and a
+clip then reaches the wire byte-for-byte as authored.
+
+They are *global*, and that means everything the rig puts out: the show, a
+clip picked by hand on the **Clip** knob, and game mode alike.  Saturation
+and contrast are the operator's, not the author's — the same argument that
+has always let master brightness and gamma touch a clip.  *Pattern hold* is how
 many phrases the corridor pattern and net gesture are
 kept for — the colour still moves every phrase, the material only every
 `pattern_hold` of them.  *Shuffle seed* reseeds every deterministic choice the show makes — which
