@@ -39,10 +39,21 @@ class Block:
     samples: np.ndarray     # float32, length blocksize
     t: float                # show time of the first sample, seconds
     index: int
+    #: What :class:`AutoGain` multiplied these samples by, so a consumer can
+    #: recover the level at the *input*.  Every relative measure downstream
+    #: wants the gained samples -- that is the point of the gain -- but the
+    #: one absolute measure, the silence gate, must not move when the gain
+    #: does, or it is testing a different threshold every minute.
+    gain: float = 1.0
 
     @property
     def rms(self) -> float:
         return float(np.sqrt(np.mean(self.samples.astype(np.float64) ** 2)))
+
+    @property
+    def input_rms(self) -> float:
+        """RMS as it arrived at the sound card, before any auto-gain."""
+        return self.rms / max(self.gain, 1e-9)
 
 
 class AudioSource(Protocol):
@@ -138,6 +149,9 @@ class FileSource:
                 samples = np.frombuffer(raw, dtype=np.float32).copy()
                 if self.gain is not None:
                     samples = self.gain.apply(samples)
+                    applied = self.gain.gain
+                else:
+                    applied = 1.0
                 t = index * self.blocksize / self.samplerate
                 if self.realtime:
                     # Absolute deadline, so a slow consumer cannot make the
@@ -145,7 +159,7 @@ class FileSource:
                     delay = started + t - time.perf_counter()
                     if delay > 0:
                         time.sleep(delay)
-                yield Block(samples=samples, t=t, index=index)
+                yield Block(samples=samples, t=t, index=index, gain=applied)
                 index += 1
             self.close()
             if not self.loop:
@@ -242,10 +256,12 @@ class LineInSource:
                 samples = self._queue.get(timeout=1.0)
             except queue.Empty:
                 continue
+            applied = 1.0
             if self.gain is not None:
                 samples = self.gain.apply(samples)
+                applied = self.gain.gain
             yield Block(samples=samples, t=index * self.blocksize / self.samplerate,
-                        index=index)
+                        index=index, gain=applied)
             index += 1
 
     def close(self) -> None:

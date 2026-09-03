@@ -36,7 +36,8 @@ SAMPLERATE = 44100
 #: the raw levels needed to second-guess it.
 FEATURE_FIELDS = ("t", "rms", "peak", "energy", "level", "bass", "mid", "high",
                   "bass_share", "high_share", "flux", "onset", "kick",
-                  "novelty", "centroid", "baseline", "warm", "silent")
+                  "novelty", "centroid", "baseline", "warm", "silent",
+                  "dbfs", "near_floor")
 CLOCK_FIELDS = ("tempo", "confidence", "beat", "bar", "beat_phase", "bar_phase",
                 "locked", "free_running", "since_beat")
 STATE_FIELDS = ("energy", "slope", "brightness")

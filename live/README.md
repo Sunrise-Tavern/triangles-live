@@ -472,18 +472,35 @@ initialised to it; peak-to-median "peakiness" put room tone at 1.09 and a real
 breakdown at 1.16, too thin to split.
 
 `./live.sh doctor`, run with nothing playing, measures your input and tells you
-what to set.  Two details still matter:
+what to set.  Three details still matter:
 
 * it applies to the **3-second smoothed** level, not per-block RMS — the median
   block of a click track is digitally silent (−180 dBFS) because most blocks
   fall between the clicks, so a per-block threshold calls busy music silent;
+* it is measured at the **input, before auto-gain** — the gain lifts a quiet
+  feed by up to 12× over about eight minutes, so a gate on the gained signal
+  walks up with it and no fixed number stays both above the floor and below
+  the music.  This is also what makes doctor's recommendation comparable with
+  what the analyser actually tests: doctor reads the raw device;
 * **silence never teaches the loudness baseline anything**, which is what
   stopped the first track after a silent start reading as 20× normal.
+
+Just above the gate is a second band, `FLOOR_MARGIN_DB` (12 dB) wide, that
+counts as `near_floor`: hiss, hum, a room between sets.  A signal in it holds
+the show **down** to quiet and never pushes it up — the music states stay the
+music's decision.  It exists because every other cue is a ratio: a steady
+noise floor normalises to `energy` ≈ 1.2 and `level` ≈ 1.0, which reads
+exactly like a track.
 
 | input | `silence_dbfs` |
 |---|---|
 | line feed from the XR16 (the rig) | −70 (default) |
+| line feed from the Onyx Artist (measured 2026-09-03) | −61 |
 | room mic, or Spotify via loopback in a noisy room | ≈ −45 |
+
+Take the number from doctor rather than from this table — a −92 set by hand
+sat 23 dB *below* the rig's actual floor, so silence was never once detected
+and the show ran an hour of `cruising` on hiss.
 
 The idle look is deliberately not a show: one smooth swell travelling the
 corridor over 48 s, a very slow plasma, hue drifting one turn per five minutes,

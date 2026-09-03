@@ -286,10 +286,25 @@ class StateMachine:
                 return self._enter(SILENT, "no signal")
             return ""
         was_silent, self._quiet_for = self._quiet_for > 0.0, 0.0
+        # Above the silence gate, but only just: hiss, hum, or a room between
+        # sets.  Every measure below this line is a *ratio* -- energy against
+        # a baseline, level against a peak, the band shares against each
+        # other -- so a steady noise floor normalises to energy ~1.2 and
+        # level ~1.0 and reads exactly like a track (measured at the rig: an
+        # hour of `cruising` with nothing plugged into the desk).  Absolute
+        # level is the only cue that can tell them apart, so it is allowed to
+        # hold the show down to quiet -- never to push it up, which stays the
+        # music's job.
         if self.state == SILENT:
             # Music is back.  Leave immediately -- waiting out a dwell timer
-            # here means the first bars of a track play to a dark room.
-            return self._enter(CRUISING, "signal returned")
+            # here means the first bars of a track play to a dark room.  A
+            # signal that is only just off the floor is not a track, though,
+            # and leaving straight to cruising would flap: cruising, then the
+            # check below pulls it to quiet, then silence again.
+            return self._enter(QUIET if features.near_floor else CRUISING,
+                               "signal returned")
+        if features.near_floor and self.state != QUIET:
+            return self._enter(QUIET, "level at the noise floor")
 
         held = self._now - self.entered_at
 
@@ -326,6 +341,8 @@ class StateMachine:
                 # quiet -- waits here for the level to actually step down.
                 return ""
 
+        if features.near_floor:
+            return ""                      # held at quiet until a real level
         if self._energy < self.t.quiet_enter:
             return self._enter(QUIET, "energy below floor")
         if self.state == QUIET and self._energy < self.t.quiet_leave:

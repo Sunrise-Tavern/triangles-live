@@ -55,7 +55,12 @@ window = 2048
 #        mic, where the noise floor is only a few dB below quiet music and no
 #        threshold can separate them
 # Run `./live.sh doctor` with nothing playing and it will tell you what to set.
-silence_dbfs = -92.0
+# Measured at the rig with ./live.sh doctor and nothing playing: the line
+# feed's own floor is -68.6 dBFS rms, so this sits 8 dB above it.  The old
+# -92 was 23 dB *below* the floor, which meant silence was never once
+# detected and the show ran on hiss.  Re-measure if the desk or the cable
+# changes; doctor prints the number to put here.
+silence_dbfs = -61.0
 
 [web]
 bind = "0.0.0.0"

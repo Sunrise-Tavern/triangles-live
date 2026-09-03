@@ -1233,6 +1233,97 @@ def test_arranger(layout: Layout) -> str:
             f"{arranger._changes} look changes with transitions, deterministic")
 
 
+def test_silence_floor(layout: Layout) -> str:
+    """A dead feed must read as silence, however hard auto-gain pulls on it.
+
+    The bug this pins: the silence gate ran on the *gained* signal, so
+    auto-gain -- which lifts a quiet input by up to 12x -- walked the noise
+    floor up toward the threshold over about eight minutes.  Every other
+    feature is a ratio and normalises a steady floor to energy ~1.2 and
+    level ~1.0, indistinguishable from a track, so nothing else could catch
+    it: the rig ran an hour of `cruising` with nothing playing.
+    """
+    from .analysis import Analyzer, FLOOR_MARGIN_DB
+    from .audio import AutoGain, Block, BLOCKSIZE, SAMPLERATE
+    from .state import CRUISING, QUIET, SILENT, StateMachine
+
+    gate = -61.0                     # what doctor recommends at the rig
+    floor = -68.6                    # ...for this measured line feed
+    block_s = BLOCKSIZE / SAMPLERATE
+
+    def run(dbfs: float, seconds: float = 20.0):
+        rng = np.random.default_rng(7)
+        gain = AutoGain()
+        # Start where a quiet room leaves it: peak decayed until the gain is
+        # pinned at its ceiling, which is the state the rig was actually in.
+        gain.peak = gain.target / gain.ceiling
+        analyzer = Analyzer(silence_dbfs=gate)
+        machine = StateMachine(block_s=block_s)
+        amp = 10.0 ** (dbfs / 20.0)
+        feature = None
+        for i in range(int(seconds / block_s)):
+            raw = (rng.standard_normal(BLOCKSIZE) * amp).astype(np.float32)
+            samples = gain.apply(raw)
+            feature = analyzer.push(Block(samples=samples, t=i * block_s,
+                                          index=i, gain=gain.gain))
+            machine.push(feature)
+        return gain, feature, machine
+
+    dead_gain, dead, machine = run(floor)
+    check(dead_gain.gain > 11.0,
+          f"auto-gain should be at its ceiling on a dead feed, got "
+          f"{dead_gain.gain:.1f}x")
+    check(dead.silent,
+          f"a {floor} dBFS feed under a {gate} dBFS gate must read silent; "
+          f"input measured {dead.dbfs:.1f} dBFS at {dead_gain.gain:.1f}x gain")
+    check(abs(dead.dbfs - floor) < 2.0,
+          f"the reported level must be the input's, not the gained one: "
+          f"{dead.dbfs:.1f} dBFS for a {floor} dBFS feed")
+    check(machine.state == SILENT,
+          f"a dead feed must reach {SILENT}, not {machine.state} "
+          f"(energy {dead.energy:.2f}, level {dead.level:.2f} -- both blind "
+          f"to absolute level, which is the point)")
+
+    # Just above the gate is still not music: hiss, hum, a room between sets.
+    _, hum, machine = run(gate + FLOOR_MARGIN_DB / 2.0)
+    check(not hum.silent, "a signal above the gate must not read as silence")
+    check(hum.near_floor,
+          f"{hum.dbfs:.1f} dBFS is within {FLOOR_MARGIN_DB:.0f} dB of the "
+          f"{gate} dBFS gate and must read as near the floor")
+    check(machine.state == QUIET,
+          f"a near-floor signal must be held at {QUIET}, got {machine.state}")
+
+    # Real music must be untouched by any of this -- and adversarially so,
+    # with the gain pinned at the ceiling, which is where a quiet room left
+    # it just before the track started.
+    from .verify import arc_track
+
+    audio, _ = arc_track()
+    gain = AutoGain()
+    gain.peak = gain.target / gain.ceiling
+    analyzer = Analyzer(silence_dbfs=gate)
+    machine = StateMachine(block_s=block_s)
+    states, floors = set(), 0
+    for i in range(len(audio) // BLOCKSIZE):
+        raw = audio[i * BLOCKSIZE:(i + 1) * BLOCKSIZE].astype(np.float32)
+        music = analyzer.push(Block(samples=gain.apply(raw), t=i * block_s,
+                                    index=i, gain=gain.gain))
+        machine.push(music)
+        states.add(machine.state)
+        floors += int(music.near_floor)
+    check(floors == 0,
+          f"real music read as near the floor in {floors} blocks -- the "
+          f"guard is catching a feed it must never catch")
+    check(SILENT not in states, f"real music reached {SILENT}")
+    check(states - {QUIET, SILENT},
+          f"the arc must still reach the music states, only saw {states}")
+
+    return (f"dead feed at {floor} dBFS reads {dead.dbfs:.0f} dBFS through "
+            f"{dead_gain.gain:.0f}x gain and reaches {SILENT}; +{FLOOR_MARGIN_DB:.0f} dB "
+            f"is held at {QUIET}; the arc still reaches "
+            f"{', '.join(sorted(states - {QUIET}))}")
+
+
 def test_config(layout: Layout) -> str:
     """The file configures the rig; a flag still overrides it for one run."""
     from .__main__ import build_parser
@@ -1751,6 +1842,7 @@ TESTS = (
     ("beat clock", test_clock),
     ("audio -> beats", test_beat_pipeline),
     ("bar tracking", test_downbeat),
+    ("silence floor", test_silence_floor),
     ("state machine", test_state_machine),
     ("long drop", test_long_drop),
     ("arranger", test_arranger),

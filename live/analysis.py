@@ -33,6 +33,13 @@ WINDOW = 2048
 #: note change from a hi-hat, few enough that noise averages out.
 NOVELTY_BANDS = 16
 
+#: How far above the silence gate the input can be and still not be music.
+#: A feed carrying a track sits tens of dB above its own floor; this band
+#: just above the floor is hiss, hum, or a room between sets.  12 dB is
+#: deliberately narrow -- it must never catch a genuinely quiet feed, only a
+#: dead one -- and it only ever holds the show *down* to quiet, never up.
+FLOOR_MARGIN_DB = 12.0
+
 #: How far below the running baseline a block counts as silence, rather than
 #: as a quiet passage worth learning from.
 SILENCE_GATE = 0.05
@@ -56,6 +63,12 @@ SILENCE_GATE = 0.05
 #: So it is configurable, and `live doctor` measures your input and tells you
 #: what to set.  The default suits the rig's line feed from the XR16.  A room
 #: mic wants roughly -45.
+#:
+#: Measured at the **input**, before auto-gain.  This is not a detail: the
+#: gain lifts a quiet feed by up to 12x over about eight minutes, so a gate
+#: on the gained signal walks up with it and no fixed number stays both
+#: above the floor and below the music.  It is also the only reading that
+#: can be compared with what doctor measures, which is the raw device.
 SILENCE_DBFS = -70.0
 
 #: Applied to the smoothed level, never per-block RMS: the median block of a
@@ -118,6 +131,16 @@ class Features:
     #: relative measure can tell them apart.  Configurable; `live doctor`
     #: measures your input and says what to set.
     silent: bool
+    #: The smoothed level at the *input*, dBFS -- before auto-gain, so it is
+    #: comparable with what `live doctor` measures and does not drift as the
+    #: gain rides.  The only absolute level in these features.
+    dbfs: float
+    #: Close enough to the noise floor that this cannot be music at any real
+    #: level, whatever the relative measures say.  Every other cue here is a
+    #: ratio and therefore blind to absolute level: a noise floor normalises
+    #: to energy ~1.2 and level ~1.0, which reads exactly like a track.  This
+    #: is what stops a silent room being called `cruising`.
+    near_floor: bool
     #: How much of the baseline's window has actually been heard, 0..1.
     #: Until this is near 1 the loudness baseline is a small, unrepresentative
     #: sample, and "loud for this set" does not mean anything yet -- the very
@@ -196,7 +219,18 @@ class Analyzer:
         # kick and the gap after it -- which is a property of the mix, not of
         # the section.  Measured that way a verse and a drop both read 0.85.
         self._smooth_rms = _Ema(3.0, block_s, initial=0.0)
+        # The same smoothing on the level *at the input*.  The silence gate
+        # runs on this one: auto-gain lifts a quiet feed by up to 12x, so a
+        # gate on the gained signal is testing a threshold that moves with
+        # how long the room has been quiet -- measured, a -85 dBFS floor
+        # reaches the analyzer at -63 dBFS after seven minutes of silence,
+        # and no fixed number can sit both above the floor and below the
+        # music.  `live doctor` measures the input, so this is also the only
+        # reading its recommendation can be compared against.
+        self._smooth_input = _Ema(3.0, block_s, initial=0.0)
         self._silence_rms = 10.0 ** (silence_dbfs / 20.0)
+        #: ...and the level below which the room cannot be more than quiet.
+        self._floor_rms = 10.0 ** ((silence_dbfs + FLOOR_MARGIN_DB) / 20.0)
         # Short window: energy-weighting is what makes the shares robust, so
         # the smoothing only has to steady them, not rescue them.  Long enough
         # and the drop arrives before the band shape catches up.
@@ -240,7 +274,8 @@ class Analyzer:
         # quiet feed from the desk would fall entirely below it, and the
         # baseline would never learn anything at all.
         smooth = self._smooth_rms.push(rms)
-        silent = smooth < self._silence_rms
+        smooth_input = self._smooth_input.push(block.input_rms)
+        silent = smooth_input < self._silence_rms
         baseline = self._baseline.value
         # Silence must not teach the baseline anything.  Letting it meant that
         # starting the engine before the music left the baseline at the noise
@@ -276,6 +311,9 @@ class Analyzer:
             kick=kick_flux / max(kick_mean, 1e-9),
             novelty=raw_novelty / max(novelty_mean, 1e-9),
             silent=silent,
+            dbfs=(20.0 * float(np.log10(smooth_input))
+                  if smooth_input > 1e-9 else -120.0),
+            near_floor=smooth_input < self._floor_rms,
             warm=min(1.0, self._baseline.count / self._baseline._warm),
             energy=rms / max(baseline, 1e-6),
             level=smooth / max(self._peak, 1e-6),
