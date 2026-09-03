@@ -181,19 +181,22 @@ def test_clips(layout: Layout) -> str:
         vocab = {k: clips.vocabulary(k) for k in ("quiet", "hot")}
         check(all(vocab.values()), f"empty vocabulary from the index: {vocab}")
 
-        # A quiet-only clip leaves the ranking: never under music, always
-        # on quiet's list -- however bright it measured.
-        tagged = Clips(root, channel_count=90, quiet_only=["packed", "nosuch"])
+        # A silent-only clip leaves the ranking altogether: never under any
+        # music state however bright it measured, and it is the *only* thing
+        # the silent state offers.
+        tagged = Clips(root, channel_count=90, silent_only=["packed", "nosuch"])
         tagged.build_index()
         check(tagged.names == ["packed", "plain"],
               "tagging must not change what the panel offers")
-        for kind in ("cruising", "building", "hot"):
+        for kind in ("quiet", "cruising", "building", "hot"):
             check(tagged.vocabulary(kind) == ["plain"],
-                  f"{kind} offered {tagged.vocabulary(kind)}; a quiet-only "
-                  "clip must not reach a music state")
-        check(tagged.vocabulary("quiet") == ["plain", "packed"],
-              f"quiet offered {tagged.vocabulary('quiet')}; it must get its "
-              "band plus the quiet-only clips")
+                  f"{kind} offered {tagged.vocabulary(kind)}; a silent-only "
+                  "clip must not reach any music state -- quiet included")
+        check(tagged.vocabulary("silent") == ["packed"],
+              f"silent offered {tagged.vocabulary('silent')}; it must get the "
+              "tagged clips and nothing else")
+        check(Clips(root, channel_count=90).vocabulary("silent") == [],
+              "with nothing tagged, silence must stay the rest look")
 
         # And with clips in its hand the arranger plays one: same audio,
         # clip_share 1, the look must become a clip and stay deterministic.
@@ -248,10 +251,47 @@ def test_clips(layout: Layout) -> str:
         looks_b, sample_b = run()
         check(np.array_equal(sample_a, sample_b),
               "the show with clips is not deterministic")
+
+        # The silent state is where a tagged loop walks on -- and the only
+        # place it does.  The rest look stays the default between walk-ons.
+        silent_clips = Clips(root, channel_count=layout.channel_count,
+                             silent_only=["rig"])
+        silent_clips.build_index()
+        silent_clips.preload()
+        cv = Canvas(layout)
+        idle = Arranger(cv, Listener(ArraySource(audio)),
+                        state=StateMachine(), settings=Settings(),
+                        clips=silent_clips)
+        gap = Arranger.IDLE_GAP_S
+        check(idle._silent_clip(gap * 0.5) is None,
+              "the rest look must hold for the whole gap")
+        playing = idle._silent_clip(gap + 5.0)
+        check(playing is not None and playing[0].name == "rig",
+              f"the tagged loop must walk on after {gap:.0f}s of silence, "
+              f"got {playing}")
+        check(abs(playing[1] - 5.0) < 1e-6,
+              f"the loop must start at its first frame, not {playing[1]:.2f}s in")
+
+        cv.clear(); idle._silent(gap * 0.5); rest = cv.to_channels(
+            np.zeros(layout.channel_count, dtype=np.uint8)).copy()
+        cv.clear(); idle._silent(gap + 5.0); walk = cv.to_channels(
+            np.zeros(layout.channel_count, dtype=np.uint8)).copy()
+        check(not np.array_equal(rest, walk),
+              "the walk-on paints the same frame as the rest look")
+        check(walk.max() > 0, "the walk-on painted nothing at all")
+
+        # Untagged, silence is the rest look and nothing else.
+        plainly = Arranger(Canvas(layout), Listener(ArraySource(audio)),
+                           state=StateMachine(), settings=Settings(),
+                           clips=Clips(root, channel_count=layout.channel_count))
+        check(all(plainly._silent_clip(x) is None
+                  for x in (0.0, gap + 5.0, 3 * gap)),
+              "with nothing tagged, silence must never play a clip")
+
     return ("zstd and plain fseq round-trip, lazy load off the render "
             "thread, wrong-layout clip refused, loop wraps; from_channels "
             "is the gather backwards; the rotation plays a clip and stays "
-            "deterministic")
+            "deterministic; a silent_only loop walks on in silence only")
 
 
 def test_pieces(layout: Layout) -> str:
@@ -1377,13 +1417,13 @@ def test_config(layout: Layout) -> str:
         path.write_text(
             '[output]\nhost = "10.1.2.3"\nfps = 30.0\n'
             '[web]\nport = 9099\n[show]\nbrightness = 0.5\n'
-            '[clips]\nquiet_only = ["moving_cowboy"]\n'
+            '[clips]\nsilent_only = ["moving_cowboy"]\n'
         )
         config = Config.load(path)
         check(config.output.host == "10.1.2.3", "host not read from the file")
-        check(config.clips.quiet_only == ["moving_cowboy"],
-              f"quiet_only not read from the file ({config.clips.quiet_only})")
-        check(Config().clips.quiet_only == [], "quiet_only must default to none")
+        check(config.clips.silent_only == ["moving_cowboy"],
+              f"silent_only not read from the file ({config.clips.silent_only})")
+        check(Config().clips.silent_only == [], "silent_only must default to none")
         check(config.output.fps == 30.0, "fps not read from the file")
         check(config.output.port == 4048, "an unset value lost its default")
 
@@ -1407,13 +1447,13 @@ def test_config(layout: Layout) -> str:
             check("hsot" in str(exc), "a typo should be named in the error")
         else:
             raise Failure("an unknown setting was silently ignored")
-        bad.write_text('[clips]\nquiet_only = "moving_cowboy"\n')
+        bad.write_text('[clips]\nsilent_only = "moving_cowboy"\n')
         try:
             Config.load(bad)
         except ValueError as exc:
-            check("quiet_only" in str(exc), "a bare string should be named")
+            check("silent_only" in str(exc), "a bare string should be named")
         else:
-            raise Failure("quiet_only accepted a bare string, not a list")
+            raise Failure("silent_only accepted a bare string, not a list")
 
     missing = Config.load(Path(tmp) / "gone.toml")
     check(missing.output.fps == 40.0,

@@ -784,15 +784,23 @@ to the same loops.  Transitions
 apply to clip phrases like any other look, and the same seed still renders
 the same show.
 
-The one hand tag is `quiet_only` in `live.toml` (`[clips]`): those clips
-leave the ranking altogether — never under a track, whatever they measured —
-and the quiet state offers them on top of its own band.  So quiet draws from
-the calm end of the measured material *plus* the tagged loops, and every
-music state from the measured material alone.  The figurative loops (the
-cowboy walking the nets, the dancing gnome) are the case: a joke between
-tracks, noise under a drop, and busy enough that the ranking would put them in
-one — the gnome measures near the top of the library, in `hot`.  The panel's
-**Clip** knob still plays any of them by hand.
+The one hand tag is `silent_only` in `live.toml` (`[clips]`): those clips
+leave the ranking altogether — never under a track, whatever they measured,
+and never in any music state including quiet — and they are the only thing
+the **silent** state plays.  So every music state draws from the measured
+material alone, and the room between sets is the one place the tagged loops
+appear.  The figurative loops (the cowboy walking the nets, the dancing
+gnome) are the case: a joke between sets, noise under a drop, and busy
+enough that the ranking would put them in one — the gnome measures near the
+top of the library, in `hot`.
+
+In silence the rest look is still the default: each tagged loop takes a turn
+for `IDLE_CLIP_S` (30 s) out of every `IDLE_GAP_S + IDLE_CLIP_S` (75 s),
+fading in and out over a second at each end and held at about half level, so
+the walk-on belongs to the idle rather than interrupting it.  It plays on
+**wall time**, not beats — in silence the beat clock is free-running on no
+evidence, so there is nothing to lock to.  The panel's **Clip** knob still
+plays any of them by hand at any time.
 
 ## Checking the orientation, after a remap
 

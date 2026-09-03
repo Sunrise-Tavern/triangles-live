@@ -1176,8 +1176,55 @@ class Arranger:
     IDLE_SWEEP_S = 48.0
     IDLE_HUE_S = 300.0
 
+    #: The `silent_only` loops are the one exception to that, and they live
+    #: here and nowhere else.  A walking cowboy or a dancing gnome is a joke
+    #: between sets; under a track it is noise, and its measured brightness
+    #: would otherwise rank it into a drop.  Long gap, short walk-on: the
+    #: rest look stays the default and the loop is the punchline, not the
+    #: programme.  Each tagged clip takes its turn.
+    IDLE_GAP_S = 45.0
+    IDLE_CLIP_S = 30.0
+
+    def _silent_clip(self, t: float):
+        """(clip, seconds into it) for this moment of silence, or None.
+
+        Wall time throughout, like everything else in the idle look: there
+        is no beat clock worth following here -- it is free-running on no
+        evidence -- so a clip cannot be beat-locked the way the rotation's
+        are.  It simply plays at its authored speed.
+        """
+        if self.clips is None:
+            return None
+        names = self.clips.vocabulary(SILENT)
+        if not names:
+            return None
+        cycle = self.IDLE_GAP_S + self.IDLE_CLIP_S
+        u = t % (cycle * len(names))
+        which = int(u // cycle)
+        into = u - which * cycle
+        if into < self.IDLE_GAP_S:
+            return None
+        clip = self.clips.get(names[which])       # None while it loads
+        return None if clip is None else (clip, into - self.IDLE_GAP_S)
+
     def _silent(self, t: float) -> None:
         canvas = self.canvas
+        playing = self._silent_clip(t)
+        if playing is not None:
+            clip, seconds = playing
+            canvas.from_channels(clip.frame_at(seconds))
+            # Held below the clip's own level and breathing with the same
+            # slow swell as the rest look, so the walk-on belongs to the
+            # idle rather than interrupting it.  It also fades in and out
+            # over a second at each end -- a figure that appears at full
+            # brightness in a resting room reads as a fault.
+            edge = min(1.0, seconds, max(0.0, self.IDLE_CLIP_S - seconds))
+            breath = 0.5 + 0.5 * float(np.sin(2 * np.pi * t
+                                              / (self.IDLE_SWEEP_S / 2)))
+            level = edge * (0.55 + 0.10 * breath)
+            canvas.nets *= level
+            canvas.arches *= level
+            return
         offset = self.settings.hue_offset if self.settings else 0.0
         lock = self.settings.hue_lock if self.settings else False
         drift = 0.0 if lock else 360.0 * (t / self.IDLE_HUE_S)

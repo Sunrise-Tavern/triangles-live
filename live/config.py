@@ -104,7 +104,7 @@ class ClipsConfig:
     #: tracks and as noise under a drop, and its measured brightness would
     #: otherwise put it exactly there.  Names as in the panel's Clip knob
     #: (the file's stem).
-    quiet_only: list[str] = field(default_factory=list)
+    silent_only: list[str] = field(default_factory=list)
 
 
 @dataclass
