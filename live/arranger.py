@@ -1146,7 +1146,19 @@ class Arranger:
         # The playhead runs on a bass-scaled rate: the authored motion pushes
         # harder when the low end does, eases off in a lull.  Integrated, not
         # multiplied -- position must stay continuous as the rate moves.
+        #
+        # Scaled by the drive depth like everything else the low end paces.
+        # It used to ignore the knob: clips kept riding the bass by +/-35%
+        # with `audio_drive` off and at `drive_depth` 0, which is more bend
+        # than the drive itself applies and flatly contrary to a knob whose
+        # 0 means "not at all".  Written as a lerp rather than the tidier
+        # 1 + (0.70 * pump - 0.35) * depth because that form is a unit in
+        # the last place off the original at depth 1, and this one is
+        # bit-identical there -- the fseq comparison is only an oracle while
+        # the rig's own settings render exactly the show they did before.
         pump = self._pump
+        drive = self._depth if self._drive_on else 0.0
+        rate = (0.65 + 0.70 * pump) * drive + (1.0 - drive)
         now_beats = self._beats(t)
         key = (name, round(anchor, 4))
         if len(self._clip_heads) > 64:
@@ -1162,7 +1174,7 @@ class Arranger:
             self._clip_heads[key] = (now_beats, 0.0)
         last, position = self._clip_heads[key]
         if now_beats > last:            # a transition paints twice per frame
-            position += (now_beats - last) * (0.65 + 0.70 * pump)
+            position += (now_beats - last) * rate
             self._clip_heads[key] = (now_beats, position)
         canvas.from_channels(clip.frame_at_beats(position))
 

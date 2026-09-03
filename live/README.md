@@ -783,14 +783,22 @@ rsync like the code does.
 
 Clips are also **in the music rotation**: some phrases play a clip instead
 of a painted look — the *Clips in rotation* knob is the share (default 0.3,
-0 switches it off).  A chosen clip **runs to the end of its loop**, over as
+0 switches it off).  Under the drive a clip is paced by the lows and
+coloured by the highs, exactly as the painted looks are: the playhead
+integrates 0.65–1.35× with the pump (measured on the arc, the rate tracks it
+at r = +1.00), and the highs reach it as level *and* as white — full air
+takes the painted saturation from 1.00 to 0.70, the same 0.6 × (air − 0.5)
+a palette gets.  Both are scaled by *drive depth*, and at 0 the playhead
+runs at exactly 1.0: it used to keep riding the bass whatever the knob said,
+a ±35% bend from a control whose 0 means "not at all".  A chosen clip
+**runs to the end of its loop**, over as
 many spans as that takes: a span is about sixteen bars and the clips are
 thirty-two, so cutting at the boundary showed a quarter of every sequence
 and never what it built to.  Only a change of state interrupts — a drop
 cannot wait out the back half of a loop.  A clip phrase is beat-locked — the playhead
 integrates a bass-scaled rate (0.65–1.35× the 128 BPM reference speed, from
-the pump), so the authored motion pushes harder when the low end does and
-eases off in a lull — and enveloped by the state: the kick pulses it while
+the pump, and scaled by the drive depth), so the authored motion pushes harder
+when the low end does and eases off in a lull — and enveloped by the state: the kick pulses it while
 cruising and hot, a build's flashes quicken with its tension, quiet
 breathes.  On top, the content *bounces*: a brightness wave rolls apex to
 base through the triangles on each beat and a ripple runs the tunnel with

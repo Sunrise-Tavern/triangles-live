@@ -258,32 +258,53 @@ def test_clips(layout: Layout) -> str:
         # as the clock revises the tempo, so nearly every frame minted a new
         # key and restarted the clip at frame 0.  Measured on the rig, the
         # playhead never passed 9 beats of a 128-beat loop.
-        cv2 = Canvas(layout)
-        lst2 = Listener(ArraySource(audio))
-        st2 = Settings(); st2.clip_share = 1.0; st2.piece_share = 0.0
-        arr2 = Arranger(cv2, lst2, state=StateMachine(), settings=st2,
-                        clips=rig_clips)
-        anchors: dict[str, set] = {}
-        reach, now2, k = 0.0, 0.0, 0
-        for block in lst2.source.blocks():
-            fe = lst2.step(block); arr2.machine.push(fe)
-            while now2 <= fe.t:
-                arr2.render(k, now2)
-                lk = arr2._look
-                if lk is not None and lk[1].startswith("clip:"):
-                    anchors.setdefault(lk[1], set()).add(round(lk[6], 4))
-                    head = arr2._clip_heads.get((lk[1][5:], round(lk[6], 4)))
-                    if head is not None:
-                        reach = max(reach, head[1])
-                k += 1; now2 += 1.0 / 40.0
-        if anchors:
-            most = max(len(v) for v in anchors.values())
-            check(most <= 8,
-                  f"one clip look took {most} different anchors -- the "
-                  f"playhead is being re-keyed and restarted, not advancing")
-            check(reach > 8.0,
-                  f"the clip playhead only reached {reach:.1f} beats; it is "
-                  f"restarting rather than playing through")
+        def playhead(depth: float):
+            """(distinct anchors, beats reached, observed rate range)."""
+            cv2 = Canvas(layout)
+            lst2 = Listener(ArraySource(audio))
+            st2 = Settings(); st2.clip_share = 1.0; st2.piece_share = 0.0
+            st2.audio_drive = True; st2.drive_depth = depth
+            arr2 = Arranger(cv2, lst2, state=StateMachine(), settings=st2,
+                            clips=rig_clips)
+            seen: dict[str, set] = {}
+            rates, prev, reach, now2, k = [], {}, 0.0, 0.0, 0
+            for block in lst2.source.blocks():
+                fe = lst2.step(block); arr2.machine.push(fe)
+                while now2 <= fe.t:
+                    arr2.render(k, now2)
+                    lk = arr2._look
+                    if lk is not None and lk[1].startswith("clip:"):
+                        key = (lk[1][5:], round(lk[6], 4))
+                        seen.setdefault(lk[1], set()).add(key[1])
+                        head = arr2._clip_heads.get(key)
+                        if head is not None:
+                            if key in prev and head[0] - prev[key][0] > 1e-9:
+                                rates.append((head[1] - prev[key][1])
+                                             / (head[0] - prev[key][0]))
+                            prev[key] = head
+                            reach = max(reach, head[1])
+                    k += 1; now2 += 1.0 / 40.0
+            most = max((len(v) for v in seen.values()), default=0)
+            return most, reach, (min(rates, default=1.0), max(rates, default=1.0))
+
+        most, reach, span = playhead(1.0)
+        check(most <= 8,
+              f"one clip look took {most} different anchors -- the "
+              f"playhead is being re-keyed and restarted, not advancing")
+        check(reach > 8.0,
+              f"the clip playhead only reached {reach:.1f} beats; it is "
+              f"restarting rather than playing through")
+        # Pace comes from the low end: the playhead integrates 0.65-1.35x
+        # with the pump, so at full depth it must actually vary.
+        check(span[0] < 0.80 and span[1] > 1.20,
+              f"the clip playhead ran {span[0]:.2f}..{span[1]:.2f}x -- it is "
+              f"not being paced by the bass")
+        # ...and the drive knob has to reach it.  It used to not: clips kept
+        # riding the bass at depth 0, a bigger bend than the drive applies.
+        _, _, flat = playhead(0.0)
+        check(abs(flat[0] - 1.0) < 1e-9 and abs(flat[1] - 1.0) < 1e-9,
+              f"at drive depth 0 the clip playhead still ran "
+              f"{flat[0]:.3f}..{flat[1]:.3f}x; 'not at all' must mean it")
 
         # The silent state is where a tagged loop walks on -- and the only
         # place it does.  The rest look stays the default between walk-ons.
@@ -1679,6 +1700,7 @@ def test_audio_drive(layout: Layout) -> str:
           f"the drive only touched {differing:.0%} of sampled frames")
     zero, _, _ = run(True, depth=0.0)
     check(np.array_equal(zero, off_a), "depth 0 must be the same show as off")
+
 
     bass = [g["bass"] for g in gauges_on]
     air = [g["air"] for g in gauges_on]
