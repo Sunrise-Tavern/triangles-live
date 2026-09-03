@@ -212,8 +212,10 @@ already sized the blows and bounces; now it paces them too.
 
 *Saturation* and *contrast* grade the whole rig — nets and corridor together
 — after the frame is painted: saturation 0 is grayscale, contrast above 1
-pushes darks down and brights up about the midpoint.  Both sit at 1.0 by
-default, where they cost nothing and change nothing.  *Pattern hold* is how
+pushes darks down and brights up about the midpoint.  The rig runs
+saturation **2.0** and contrast **1.40** by default — the LEDs read washed
+out against the design at 1.0/1.0.  Set both to 1.0 to grade nothing, which
+also costs nothing: the grade is skipped entirely at those values.  *Pattern hold* is how
 many phrases the corridor pattern and net gesture are
 kept for — the colour still moves every phrase, the material only every
 `pattern_hold` of them.  *Shuffle seed* reseeds every deterministic choice the show makes — which
@@ -584,6 +586,15 @@ centre of the array, both ends slamming into the middle on the beat, the nets
 lit one after another.  `blob` and `sweep` are the two effects added for
 these; both, like everything else, take the frame through `geo`.
 
+Every showpiece is painted over a dim, slowly moving **bed** on the
+triangles — a slow plasma with one swell rolling apex to base every six
+seconds, scaled by `rest_level`.  Most of the pieces spend most of their arc
+in the tunnel and left the nets unlit: measured, `dna`, `volley`, `charge`
+and `swarm` sat at a mean net output of 0.017–0.056 against 0.13–0.44 for
+the three that carry a wash of their own, and dark triangles beside a
+running corridor read as a fault rather than as rest.  The bed is painted
+first and in add mode, so a piece that does light the nets simply covers it.
+
 Seven **showpieces** own the whole rig for their stretch — tunnel and
 triangles telling one story — and sit in the rotation beside clips (25 % of
 material stretches in the states that suit them), or on demand via the
@@ -766,7 +777,11 @@ rsync like the code does.
 
 Clips are also **in the music rotation**: some phrases play a clip instead
 of a painted look — the *Clips in rotation* knob is the share (default 0.3,
-0 switches it off).  A clip phrase is beat-locked — the playhead
+0 switches it off).  A chosen clip **runs to the end of its loop**, over as
+many spans as that takes: a span is about sixteen bars and the clips are
+thirty-two, so cutting at the boundary showed a quarter of every sequence
+and never what it built to.  Only a change of state interrupts — a drop
+cannot wait out the back half of a loop.  A clip phrase is beat-locked — the playhead
 integrates a bass-scaled rate (0.65–1.35× the 128 BPM reference speed, from
 the pump), so the authored motion pushes harder when the low end does and
 eases off in a lull — and enveloped by the state: the kick pulses it while

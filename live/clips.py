@@ -62,6 +62,16 @@ class Clip:
         """The frame ``beats`` into the loop, at the reference tempo's rate."""
         return self.frame_at(beats * 60.0 / self.REFERENCE_BPM)
 
+    @property
+    def loop_beats(self) -> float:
+        """How many beats one pass of the loop takes at the reference tempo.
+
+        The rotation holds a clip for this long rather than cutting it at a
+        phrase boundary: a 60 s sequence -- 128 beats here -- shown for eight
+        bars never gets to what it was drawn to do.
+        """
+        return len(self.frames) / max(self.fps, 1e-6) * self.REFERENCE_BPM / 60.0
+
 
 class Clips:
     """The clip library: names for the panel, lazy loading for the engine.

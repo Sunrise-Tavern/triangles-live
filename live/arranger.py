@@ -229,6 +229,10 @@ class Arranger:
         #: Per clip stretch: (last beat count, playhead position in beats).
         #: The playhead integrates a bass-scaled rate, so it cannot jump.
         self._clip_heads: dict[tuple, tuple[float, float]] = {}
+        #: (name, stretch id) of the clip the rotation is currently letting
+        #: run.  A clip is held until its loop completes rather than cut at
+        #: the next phrase boundary -- see clip_for.
+        self._clip_stretch: tuple[str, int] | None = None
         #: Per state, the (kind, visit, phrase) a pattern was chosen for and
         #: the pattern -- so the choice holds for the phrase.
         self._pattern_held: dict[str, tuple[tuple, str]] = {}
@@ -642,6 +646,9 @@ class Arranger:
                                     if self.settings else 4.0)))
             count = self._phrase[1]
             self._phrase = (t, (count // hold + 1) * hold)
+            # ...and a held clip is part of that material: the drop cannot
+            # wait for the back half of a loop.
+            self._clip_stretch = None
 
         _, treat, phrase = self.locate(t)
         if treat.kind == SILENT:
@@ -674,8 +681,14 @@ class Arranger:
             # at the phrase start, so it begins at its first frame and its
             # authored rhythm rides the clock.
             self.gesture = "clip"
-            anchor = self._beats(self._phrase[0] if self._phrase[0] is not None
-                                 else t)
+            # The stretch id, not a beat count.  The anchor is what keys the
+            # playhead, and `_beats(phrase start)` wobbles in its third
+            # decimal from frame to frame as the clock revises the tempo --
+            # so almost every frame minted a fresh key and restarted the clip
+            # at frame 0.  Measured, the playhead never passed 9 beats of a
+            # 128-beat loop: the clips were juddering on the spot rather than
+            # playing.  An integer per stretch cannot drift.
+            anchor = float(self._clip_stretch[1]) if self._clip_stretch else 0.0
             look = (treat.kind, f"clip:{clip_name}", "clip", palette,
                     self.far_rotation_for(treat), treat, anchor)
         else:
@@ -731,6 +744,7 @@ class Arranger:
             self._paint_clip(canvas, name[5:], kind, t, anchor, beat, kick)
             return
         if name.startswith("piece:"):
+            self._piece_bed(canvas, palette, t)
             getattr(self, f"_piece_{name[6:]}")(canvas, kind, t, anchor,
                                                 palette, beat, kick, features)
             return
@@ -766,12 +780,29 @@ class Arranger:
         the clips whose *measured* energy suits the state.  A clip that is
         not decoded yet is skipped for this stretch (the loader is already
         on it) rather than waited for.
+
+        Once chosen it runs to the end of its loop, over as many spans as
+        that takes.  A pattern_hold span is about sixteen bars; the clips are
+        128 beats -- thirty-two bars -- so cutting at the span boundary
+        showed a quarter of every sequence and never what it built to.  The
+        one thing that still interrupts is a change of state: a drop cannot
+        wait out the back half of a loop, and render() drops the hold there.
         """
         if self.clips is None or treat.kind == SILENT:
+            self._clip_stretch = None
             return None
         share = self.settings.clip_share if self.settings else 0.3
         if share <= 0.0:
+            self._clip_stretch = None
             return None
+        if self._clip_stretch is not None:
+            name, stretch = self._clip_stretch
+            clip = self.clips.get(name)
+            _, position = self._clip_heads.get((name, float(stretch)),
+                                               (0.0, 0.0))
+            if clip is not None and position < clip.loop_beats:
+                return name
+            self._clip_stretch = None
         options = self.clips.vocabulary(treat.kind)
         if not options:
             return None
@@ -782,7 +813,10 @@ class Arranger:
             return None
         name = options[self._walk(f"clips:{treat.kind}:{visit}", material,
                                   len(options))]
-        return name if self.clips.get(name) is not None else None
+        if self.clips.get(name) is None:
+            return None
+        self._clip_stretch = (name, material)
+        return name
 
     def piece_for(self, treat: Treatment, phrase: int) -> str | None:
         """The showpiece this stretch plays, or None.
@@ -1116,7 +1150,11 @@ class Arranger:
         now_beats = self._beats(t)
         key = (name, round(anchor, 4))
         if len(self._clip_heads) > 64:
-            self._clip_heads.clear()
+            # Keep the one that is playing: clearing it outright restarted
+            # the clip mid-loop, which is the judder this whole path exists
+            # to avoid.
+            self._clip_heads = {k: v for k, v in self._clip_heads.items()
+                                if k == key}
         if key not in self._clip_heads:
             # Seed the head on first sight -- with a non-stored default the
             # advance test compared now against now forever and the clip
@@ -1261,6 +1299,35 @@ class Arranger:
         canvas.arches *= 1.0 - weight
         canvas.arches += self._scratch.arches * level
         canvas.par *= 1.0 - weight
+
+    def _piece_bed(self, canvas: Canvas, palette, t: float) -> None:
+        """A dim, slowly moving bed on the triangles, under a showpiece.
+
+        Most of the pieces spend most of their arc in the tunnel -- the comet
+        running in, the helix travelling, the rally mid-rally -- and leave the
+        nets unlit while the corridor is busy.  Measured over the arc, mean
+        net output was 0.017-0.056 for `dna`, `volley`, `charge` and `swarm`
+        against 0.13-0.44 for `tide`, `storm` and `pendulum`, which carry a
+        wash of their own.  Dark triangles beside a running corridor read as a
+        fault rather than as rest.
+
+        Painted *before* the piece and in add mode, so a piece that does light
+        the nets simply covers it.  Deliberately slow: this is the same
+        judgement as ``_rest`` and the idle look -- it has to read as
+        breathing, never as an effect competing with the piece.
+        """
+        level = self.settings.rest_level if self.settings else 0.4
+        if level <= 0.0:
+            return
+        pump = self._pump
+        fx.plasma(canvas, palette.dimmed(0.55), t, scale=2.0, speed=0.18,
+                  level=level * (0.85 + 0.50 * pump))
+        # ...and one slow swell rolling apex to base, so the bed moves rather
+        # than merely glows.  Six seconds a pass, off the beat clock on
+        # purpose: anything beat-locked here competes with the piece.
+        phase = (t / 6.0) % 1.0
+        wave = np.exp(-((canvas.net_y - phase) * 2.2) ** 2)
+        canvas.nets *= (0.55 + 0.70 * wave)[..., None]
 
     def _rest(self, canvas: Canvas, targets: slice, t: float, palette) -> None:
         """Give the group that is not leading something to do.

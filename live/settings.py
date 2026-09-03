@@ -36,9 +36,9 @@ class Settings:
     #: 1.0 is linear, matching the Falcon's DefaultGammaUnderFullControl=1.
     gamma: float = 1.0
     #: Colour saturation over the whole rig: 0 grayscale, 1 as designed.
-    saturation: float = 1.0
+    saturation: float = 2.0
     #: Contrast about the midpoint: 1 as designed, above it punchier.
-    contrast: float = 1.0
+    contrast: float = 1.40
 
     # -- arrangement ------------------------------------------------------- #
     #: Multiplies how many corridor phrases fit in a scene.  Lower = slower

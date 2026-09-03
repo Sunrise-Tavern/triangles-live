@@ -252,6 +252,39 @@ def test_clips(layout: Layout) -> str:
         check(np.array_equal(sample_a, sample_b),
               "the show with clips is not deterministic")
 
+        # A clip's playhead must actually advance.  It is keyed on the
+        # look's anchor, and that anchor used to be a beat count taken from
+        # the phrase start -- which wobbles in its third decimal every frame
+        # as the clock revises the tempo, so nearly every frame minted a new
+        # key and restarted the clip at frame 0.  Measured on the rig, the
+        # playhead never passed 9 beats of a 128-beat loop.
+        cv2 = Canvas(layout)
+        lst2 = Listener(ArraySource(audio))
+        st2 = Settings(); st2.clip_share = 1.0; st2.piece_share = 0.0
+        arr2 = Arranger(cv2, lst2, state=StateMachine(), settings=st2,
+                        clips=rig_clips)
+        anchors: dict[str, set] = {}
+        reach, now2, k = 0.0, 0.0, 0
+        for block in lst2.source.blocks():
+            fe = lst2.step(block); arr2.machine.push(fe)
+            while now2 <= fe.t:
+                arr2.render(k, now2)
+                lk = arr2._look
+                if lk is not None and lk[1].startswith("clip:"):
+                    anchors.setdefault(lk[1], set()).add(round(lk[6], 4))
+                    head = arr2._clip_heads.get((lk[1][5:], round(lk[6], 4)))
+                    if head is not None:
+                        reach = max(reach, head[1])
+                k += 1; now2 += 1.0 / 40.0
+        if anchors:
+            most = max(len(v) for v in anchors.values())
+            check(most <= 8,
+                  f"one clip look took {most} different anchors -- the "
+                  f"playhead is being re-keyed and restarted, not advancing")
+            check(reach > 8.0,
+                  f"the clip playhead only reached {reach:.1f} beats; it is "
+                  f"restarting rather than playing through")
+
         # The silent state is where a tagged loop walks on -- and the only
         # place it does.  The rest look stays the default between walk-ons.
         silent_clips = Clips(root, channel_count=layout.channel_count,
@@ -332,6 +365,7 @@ def test_pieces(layout: Layout) -> str:
         st.piece = name
         arranger = Arranger(canvas, listener, state=StateMachine(), settings=st)
         arches = nets = 0.0
+        net_frames: list[float] = []
         now, index = 0.0, 0
         for block in listener.source.blocks():
             f = listener.step(block)
@@ -341,6 +375,7 @@ def test_pieces(layout: Layout) -> str:
                 check(np.isfinite(canvas._source).all(), f"{name}: NaN or inf")
                 arches = max(arches, float(canvas.arches.max()))
                 nets = max(nets, float(canvas.nets.max()))
+                net_frames.append(float(canvas.nets.mean()))
                 index += 1
                 now += 1.0 / 40.0
         check(arranger._look is not None and arranger._look[1] == f"piece:{name}",
@@ -348,6 +383,16 @@ def test_pieces(layout: Layout) -> str:
               f"({arranger._look and arranger._look[1]})")
         check(arches > 0.5, f"{name}: the tunnel never lit ({arches:.2f})")
         check(nets > 0.5, f"{name}: the triangles never lit ({nets:.2f})")
+        # `max` alone let four pieces through with the triangles dark for
+        # most of their arc while the corridor ran -- reported from the rig.
+        # What matters is the floor, not the peak: measured, dna, volley,
+        # charge and swarm sat at a mean net output of 0.017-0.056 against
+        # 0.13-0.44 for the three that carry a wash of their own.
+        floor = float(np.percentile(np.array(net_frames), 5))
+        check(floor > 0.015,
+              f"{name}: the triangles are dark for much of the arc "
+              f"(5th-percentile net output {floor:.4f}) while the corridor "
+              f"runs -- the piece needs the slow bed under it")
         details.append(name)
     return f"{', '.join(details)}: tunnel and triangles both lit, held via the knob"
 
