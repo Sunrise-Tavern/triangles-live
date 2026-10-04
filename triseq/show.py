@@ -7,13 +7,41 @@ raises instead of silently emitting a sequence full of dead element names.
 
 from __future__ import annotations
 
+import os
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# The show folder is the parent of generated/.
-SHOW_DIR = Path(__file__).resolve().parent.parent.parent
-RGB_EFFECTS = SHOW_DIR / "xlights_rgbeffects.xml"
+#: Points at the xLights show folder -- the one holding
+#: ``xlights_rgbeffects.xml`` and ``xlights_networks.xml``.  The code lives in
+#: its own repo, so the show can be anywhere.
+ENV_VAR = "TRIANGLES_SHOW_DIR"
+#: Where the code used to live: <show folder>/<this repo>/.  Still the fallback,
+#: so a checkout dropped inside the show folder needs no setup at all.
+PARENT_DIR = Path(__file__).resolve().parent.parent.parent
+HOW_TO_POINT = f"Point at the xLights show folder with {ENV_VAR}=/path/to/show."
+
+_configured: Path | None = None
+
+
+def set_show_dir(path: str | Path | None) -> None:
+    """Use this folder when the environment does not name one (live.toml)."""
+    global _configured
+    _configured = Path(path).expanduser() if path else None
+
+
+def show_dir() -> Path:
+    """The xLights show folder: environment, then config, then the parent."""
+    if os.environ.get(ENV_VAR):
+        return Path(os.environ[ENV_VAR]).expanduser()
+    if _configured is not None:
+        return _configured
+    return PARENT_DIR
+
+
+def rgb_effects_path() -> Path:
+    return show_dir() / "xlights_rgbeffects.xml"
+
 
 # Group holding the corridor of triangle arches, front to back.
 TUNNEL_GROUP = "Tunnel"
@@ -57,12 +85,9 @@ class Show:
 
 
 def load_show(rgb_effects: Path | None = None) -> Show:
-    path = Path(rgb_effects) if rgb_effects else RGB_EFFECTS
+    path = Path(rgb_effects) if rgb_effects else rgb_effects_path()
     if not path.exists():
-        raise ShowError(
-            f"Could not find {path}.\n"
-            "This script expects to live in <show folder>/generated/."
-        )
+        raise ShowError(f"Could not find {path}.\n{HOW_TO_POINT}")
 
     root = ET.parse(path).getroot()
 

@@ -81,6 +81,14 @@ class WebConfig:
 
 
 @dataclass
+class XLightsConfig:
+    #: The xLights show folder (``xlights_rgbeffects.xml``,
+    #: ``xlights_networks.xml``).  Relative to this file; empty = the folder
+    #: this repo sits in.  ``TRIANGLES_SHOW_DIR`` in the environment beats it.
+    show_dir: str = ""
+
+
+@dataclass
 class ShowConfig:
     brightness: float = 1.0
     gamma: float = 1.0
@@ -119,6 +127,7 @@ class LogConfig:
 
 @dataclass
 class Config:
+    xlights: XLightsConfig = field(default_factory=XLightsConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     audio: AudioConfig = field(default_factory=AudioConfig)
     web: WebConfig = field(default_factory=WebConfig)
@@ -157,6 +166,15 @@ class Config:
                 setattr(target, key, _coerce(known[key].type, value, section.name, key))
         config.source = chosen
         return config
+
+    def show_dir(self) -> Path | None:
+        """``[xlights] show_dir`` as a path, relative to the config file."""
+        if not self.xlights.show_dir:
+            return None
+        path = Path(self.xlights.show_dir).expanduser()
+        if not path.is_absolute():
+            path = (self.source.parent if self.source else ROOT) / path
+        return path
 
     def to_dict(self) -> dict[str, Any]:
         return {

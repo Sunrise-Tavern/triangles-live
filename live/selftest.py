@@ -1524,6 +1524,12 @@ def test_config(layout: Layout) -> str:
               "--config must be accepted after the subcommand too, or the "
               "unit file's ExecStart line fails")
 
+        check(config.show_dir() is None,
+              "an unset show_dir must leave the show folder to the fallback")
+        path.write_text('[xlights]\nshow_dir = "../show"\n')
+        check(Config.load(path).show_dir() == Path(tmp) / "../show",
+              "a relative show_dir must resolve against the config file")
+
         bad = Path(tmp) / "bad.toml"
         bad.write_text('[output]\nhsot = "typo"\n')
         try:

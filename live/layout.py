@@ -30,10 +30,8 @@ from pathlib import Path
 
 import numpy as np
 
-# The show folder is the parent of generated/ (same convention as triseq.show).
-SHOW_DIR = Path(__file__).resolve().parent.parent.parent
-RGB_EFFECTS = SHOW_DIR / "xlights_rgbeffects.xml"
-NETWORKS = SHOW_DIR / "xlights_networks.xml"
+# Where the show folder is comes from one place, shared with the generator.
+from triseq.show import HOW_TO_POINT, rgb_effects_path, show_dir
 
 TUNNEL_GROUP = "Tunnel"
 
@@ -322,13 +320,11 @@ def _polyline_t(nodes: int, seg_counts: list[int]) -> np.ndarray:
 
 
 def load_layout(rgb_effects: Path | None = None, networks: Path | None = None) -> Layout:
-    rgb_path = Path(rgb_effects) if rgb_effects else RGB_EFFECTS
-    net_path = Path(networks) if networks else NETWORKS
+    rgb_path = Path(rgb_effects) if rgb_effects else rgb_effects_path()
+    net_path = Path(networks) if networks else show_dir() / "xlights_networks.xml"
     if not rgb_path.exists():
-        raise LayoutError(
-            f"Could not find {rgb_path}.  live/ expects to live in "
-            "<show folder>/generated/."
-        )
+        raise LayoutError(f"Could not find {rgb_path}.  {HOW_TO_POINT}  "
+                          "Or set [xlights] show_dir in live.toml.")
 
     controllers = _controllers(net_path)
     root = ET.parse(rgb_path).getroot()

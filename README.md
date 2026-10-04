@@ -1,3 +1,36 @@
+# triangles-live
+
+Music-driven lighting for the Triangles rig, in two halves that share the rig
+but not the code:
+
+- **`live/`** -- the live engine: listens to the DJ feed and drives the Falcons
+  over DDP in real time.  Operator's guide: [`live/README.md`](live/README.md).
+- **`triseq/`** -- the offline generator: song in, xLights `.xsq` out.  The
+  rest of this file is its guide.
+
+`AGENTS.md` is the map of the whole repo.
+
+## The xLights show folder
+
+Both halves read the rig from an xLights show folder, which is **not** in this
+repo: `xlights_rgbeffects.xml` (models, groups, geometry) and, for the live
+engine, `xlights_networks.xml` (controllers and addressing).  Tell them where it
+is, first match wins:
+
+1. `TRIANGLES_SHOW_DIR=/path/to/show` in the environment
+2. `[xlights] show_dir` in `live.toml` (live engine only; relative to the file)
+3. the folder this repo sits in -- a checkout inside the show folder needs nothing
+
+```bash
+export TRIANGLES_SHOW_DIR=~/xLights/Triangles
+./live.sh doctor          # the "layout" line says which folder it read
+```
+
+## License
+
+GPL-3.0 (see `LICENSE`).  `effect_registry.json` is derived from xLights'
+source, which is GPL-3.0.
+
 # Music-driven sequence generator
 
 Takes a song, analyses it, and writes an xLights `.xsq` that lands on the beat —

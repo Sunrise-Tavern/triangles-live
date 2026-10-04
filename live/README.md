@@ -26,6 +26,10 @@ At the rig, that first line becomes:
 ./live.sh serve --ddp auto                    # both Falcons, from the layout
 ```
 
+Everything reads the rig from the xLights show folder, which lives outside
+this repo -- set `[xlights] show_dir` in `live.toml` (or `TRIANGLES_SHOW_DIR`)
+to point at it.  `./live.sh doctor` names the folder it read.
+
 `live.sh` is the same wrapper idea as `run.sh` — it just runs `python -m live`
 inside `.venv`.  Nothing here needs anything the offline generator did not
 already install; numpy is the only dependency.

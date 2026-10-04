@@ -96,7 +96,9 @@ LIVE_PLAN.md     design + milestones + measured numbers + open issues
 - aubio's BPM readout is biased ~+1.3 %; the clock uses it only for octave and real tempo changes.
 - aubio's per-beat confidence is not a clean signal (0.0 through intros and clicks); only a *run* of low readings means "no pulse".
 - `bar_length` is hardcoded to 4; non-4/4 material is unusable.
-- The layout is read from `../xlights_rgbeffects.xml` at startup. Nets are
+- The layout is read from the xLights show folder at startup (not in this
+  repo; `TRIANGLES_SHOW_DIR`, else `[xlights] show_dir` in live.toml, else
+  the repo's parent folder -- resolved in `triseq/show.py`). Nets are
   padded to the widest node map in the canvas (`Canvas.net_mask`); "Big
   Triangle" is nets 5-8 and the small group is whatever is left
   (`Canvas.net_pair`). Both families are "RGB Nodes" now -- the Falcon does

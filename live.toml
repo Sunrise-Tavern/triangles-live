@@ -6,6 +6,12 @@
 #
 # A command-line flag beats this file; this file beats the built-in default.
 
+[xlights]
+# The xLights show folder: xlights_rgbeffects.xml and xlights_networks.xml are
+# read from here.  Relative to this file; "~" works.  Empty = the folder this
+# repo sits in.  TRIANGLES_SHOW_DIR in the environment beats this.
+show_dir = ""
+
 [output]
 # "auto" = send to every DDP controller in xlights_networks.xml, each getting
 # the slice of the show it owns.  The rig is two Falcons -- nets on

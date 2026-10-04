@@ -67,12 +67,14 @@ def check_layout(report: Report) -> None:
         layout = load_layout()
     except Exception as exc:                       # noqa: BLE001
         report.add("layout", FAIL, f"{type(exc).__name__}: {exc}",
-                   "this must run from <show folder>/generated/")
+                   "set TRIANGLES_SHOW_DIR, or [xlights] show_dir in live.toml, "
+                   "to the xLights show folder")
         return
     orphans = layout.unaddressed()
+    from triseq.show import show_dir
     report.add("layout", OK,
                f"{len(layout.models)} models, {layout.channel_count} channels, "
-               f"{len(layout.arches)} arches")
+               f"{len(layout.arches)} arches, from {show_dir()}")
     if orphans:
         report.add("addressing", WARN,
                    f"{len(orphans)} models outside every controller "

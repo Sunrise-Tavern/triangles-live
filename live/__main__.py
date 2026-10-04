@@ -19,6 +19,8 @@ import time
 import numpy as np
 from pathlib import Path
 
+from triseq.show import set_show_dir
+
 from .ddp import DDP_PORT, DEFAULT_CHANNELS_PER_PACKET, DDPSender
 from .fake_falcon import FakeFalcon
 from .audio import AutoGain, FileSource, LineInSource
@@ -929,6 +931,8 @@ def main(argv: list[str] | None = None) -> int:
     except (ValueError, OSError) as exc:
         print(f"config: {exc}", file=sys.stderr)
         return 2
+
+    set_show_dir(config.show_dir())
 
     args = build_parser(config).parse_args(argv)
     args.config_obj = config

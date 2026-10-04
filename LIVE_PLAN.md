@@ -80,7 +80,7 @@ mp3 (sim) / line-in (rig)
         ─ presets: named JSON snapshots of all knobs, load/save
 ```
 
-Layout: `generated/live/` alongside `triseq/`. Reuse: `show.py`, `palettes.py`,
+Layout: `live/` alongside `triseq/`. Reuse: `show.py`, `palettes.py`,
 corridor pattern library, section→treatment recipes, density/articulation logic.
 `analysis.py`/`structure.py` are **not** reused — they are offline by design.
 

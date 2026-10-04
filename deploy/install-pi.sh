@@ -6,8 +6,11 @@
 # and none of them run at the rig.
 #
 #   sudo apt install git
-#   git clone <this repo> && cd Triangles/generated
+#   git clone <this repo> triangles-live && cd triangles-live
 #   ./deploy/install-pi.sh
+#
+# The show folder (xlights_rgbeffects.xml, xlights_networks.xml) travels
+# separately: copy it to the Pi and set [xlights] show_dir in live.toml.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 DIR="$(pwd)"
@@ -51,7 +54,8 @@ echo "==> Preflight"
 cat <<NOTES
 
 Next:
-  1. Edit live.toml -- [output] host = "auto" sends to every Falcon in
+  1. Edit live.toml -- [xlights] show_dir is the xLights show folder
+     (copied over from the Mac), [output] host = "auto" sends to every Falcon in
      xlights_networks.xml (nets 192.168.1.20, corridor 192.168.1.30), and
      [audio] device is the USB interface.  Find it with:
          ./live.sh listen --devices
